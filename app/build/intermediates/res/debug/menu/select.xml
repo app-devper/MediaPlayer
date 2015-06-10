@@ -1,0 +1,10 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto" >
+
+    <item
+        android:id="@+id/icAdd"
+        android:icon="@drawable/ic_content_add"
+        android:title="ADD"
+        app:showAsAction="ifRoom|withText"/>
+
+</menu><!-- From: file:/Users/worawit/AndroidstudioProjects/MediaPlayer/app/src/main/res/menu/select.xml -->

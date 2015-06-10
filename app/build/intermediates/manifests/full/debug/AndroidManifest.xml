@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.dlna"
+    android:versionCode="32"
+    android:versionName="@string/pref_value_version" >
+
+    <uses-sdk
+        android:minSdkVersion="14"
+        android:targetSdkVersion="14" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WRITE_INTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <application
+        android:name="com.dlna.activity.AppController"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/AppTheme" >
+        <activity
+            android:name="com.dlna.activity.MainHomeActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="@string/app_name" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.dlna.activity.ContentActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="Media Server" >
+        </activity>
+        <activity
+            android:name="com.dlna.activity.SettingActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="Setting" >
+        </activity>
+        <activity
+            android:name="com.dlna.activity.ImageActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:theme="@android:style/Theme.NoTitleBar" >
+        </activity>
+        <activity
+            android:name="com.dlna.activity.MusicPlayerActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="Player" >
+        </activity>
+        <activity
+            android:name="com.dlna.activity.MusicRemoteActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="Controller" >
+        </activity>
+        <activity
+            android:name="com.dlna.activity.RenderListActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="Media Renderer" >
+        </activity>
+        <activity
+            android:name="com.dlna.activity.PlayListActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="PlayList" >
+        </activity>
+        <activity
+            android:name="com.dlna.activity.ControlRemoteActivity"
+            android:configChanges="orientation|keyboardHidden"
+            android:label="Control" >
+        </activity>
+        <activity android:name="com.dlna.activity.SettingPreferenceActivity" >
+        </activity>
+        <activity android:name="com.dlna.activity.SelectMediaActivity" >
+        </activity>
+
+        <receiver
+            android:name="com.dlna.activity.ServerNotification"
+            android:exported="false" >
+            <intent-filter>
+                <action android:name="APPSERVER_STARTED" />
+                <action android:name="APPSERVER_STOPPED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name="com.dlna.activity.RequestStartStopReceiver"
+            android:exported="true" >
+            <intent-filter>
+                <action android:name="ACTION_START_APPSERVER" />
+                <action android:name="ACTION_STOP_APPSERVER" />
+            </intent-filter>
+        </receiver>
+
+        <service android:name="com.dlna.activity.FindUpnpService" />
+        <service android:name="com.dlna.activity.ServerUpnpService" />
+        <service
+            android:name="com.dlna.activity.MusicService"
+            android:enabled="true" />
+
+        <activity
+            android:name="com.google.android.gms.ads.AdActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize" />
+
+        <meta-data
+            android:name="com.google.android.gms.version"
+            android:value="@integer/google_play_services_version" />
+    </application>
+
+</manifest>

@@ -1,0 +1,15 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto" >
+
+    <item
+        android:id="@+id/share"
+        android:icon="@drawable/ic_action_share"
+        app:showAsAction="ifRoom|withText"
+        android:title="SHARE"/>
+    <item
+        android:id="@+id/playlist"
+        android:icon="@drawable/ic_playlist"
+        app:showAsAction="ifRoom|withText"
+        android:title="PLAYLIST"/>
+
+</menu><!-- From: file:/Users/worawit/AndroidstudioProjects/MediaPlayer/app/src/main/res/menu/player.xml -->

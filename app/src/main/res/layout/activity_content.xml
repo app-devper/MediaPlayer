@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:ads="http://schemas.android.com/apk/res-auto"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent"
+    android:background="@color/bg_ishare"
+    android:orientation="vertical" >
+
+    <RelativeLayout
+        android:id="@+id/playList"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/adView"
+        android:layout_alignParentTop="true"
+        android:orientation="vertical" >
+
+        <ListView
+            android:id="@+id/contentList"
+            android:layout_width="match_parent"
+            android:layout_height="265dp"
+            android:layout_alignParentBottom="true"
+            android:layout_alignParentTop="true"
+            android:listSelector="@drawable/list_selector" >
+        </ListView>
+
+        <RelativeLayout
+            android:id="@+id/dialogPlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_alignParentLeft="true"
+            android:background="@color/color_gray_light"
+            android:visibility="gone"
+            android:clickable="true"
+            android:padding="3dip" >
+
+            <ImageView
+                android:id="@+id/dialogImg"
+                android:layout_width="40dip"
+                android:layout_height="40dip"
+                android:src="@drawable/ic_launcher" />
+
+            <ImageView
+                android:id="@+id/dialogBtn"
+                android:layout_width="40dip"
+                android:layout_height="40dip"
+                android:layout_alignParentRight="true"
+                android:layout_alignParentTop="true"
+                android:clickable="true"
+                android:src="@drawable/btn_pause" />
+
+            <TextView
+                android:id="@+id/dialogName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toLeftOf="@+id/dialogBtn"
+                android:layout_toRightOf="@+id/dialogImg"
+                android:gravity="center|left"
+                android:layout_marginLeft="5dp"
+                android:singleLine="true"
+                android:text="Rihanna "
+                android:textColor="#292929"
+                android:textSize="22dip"
+                android:textStyle="bold"
+                android:typeface="sans" />
+
+        </RelativeLayout>
+    </RelativeLayout>
+
+    <com.google.android.gms.ads.AdView
+        android:id="@+id/adView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentLeft="true"
+        ads:adSize="BANNER"
+        ads:adUnitId="ca-app-pub-8092647504892778/6426254447" >
+    </com.google.android.gms.ads.AdView>
+
+</RelativeLayout>

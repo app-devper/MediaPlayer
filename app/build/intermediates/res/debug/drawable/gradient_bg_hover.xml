@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+  <!-- Gradient BgColor for listrow Selected -->
+  <gradient
+      android:startColor="#bfd22b"
+      android:centerColor="#bfd22b"
+      android:endColor="#bfd22b"
+      android:angle="270" />
+</shape><!-- From: file:/Users/worawit/AndroidstudioProjects/MediaPlayer/app/src/main/res/drawable/gradient_bg_hover.xml -->

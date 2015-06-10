@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <item
+        android:id="@android:id/background"
+        android:drawable="@drawable/img_seekbar_bg">
+    </item>
+    <item android:id="@android:id/secondaryProgress">
+        <clip>
+            <shape>
+                <gradient
+                    android:angle="270"
+                    android:centerColor="#80127fb1"
+                    android:centerY="0.75"
+                    android:endColor="#a004638f"
+                    android:startColor="#80028ac8" />
+            </shape>
+        </clip>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape>
+                <gradient
+                    android:angle="270"
+                    android:centerColor="#BFD22B"
+                    android:endColor="#BFD22B"
+                    android:startColor="#BFD22B" />
+            </shape>
+        </clip>
+    </item>
+
+</layer-list>
