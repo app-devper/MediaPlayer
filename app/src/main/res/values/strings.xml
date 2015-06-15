@@ -12,7 +12,7 @@
     <string name="pref_about">ABOUT</string>
     <string name="pref_version">App version</string>
     <string name="pref_sum_clear">Remove all cache image this software</string>
-    <string name="pref_value_version">3.1</string>
+    <string name="pref_value_version">3.2</string>
     <string name="pref_key_clear">clear</string>
     <string name="running_label">Media Server</string>
     <string name="running_summary_stopped">Toggle the state of the server</string>
