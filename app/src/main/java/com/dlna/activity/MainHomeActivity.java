@@ -4,10 +4,8 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 import org.fourthline.cling.android.AndroidUpnpService;
-import org.fourthline.cling.model.meta.Device;
 import org.fourthline.cling.model.meta.LocalDevice;
 import org.fourthline.cling.model.meta.RemoteDevice;
-import org.fourthline.cling.model.meta.Service;
 import org.fourthline.cling.registry.DefaultRegistryListener;
 import org.fourthline.cling.registry.Registry;
 
@@ -71,8 +69,6 @@ public class MainHomeActivity extends ActionBarActivity implements ActionBar.Tab
 		}
 	};
 
-	protected Device<?, ?, ?> cDevice;
-	protected Service<?, ?> cServices;
 	private AdRequest adRequest;
 	private SectionsPagerAdapter mSectionsPagerAdapter;
 	private ViewPager mViewPager;
