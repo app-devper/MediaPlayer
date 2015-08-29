@@ -14,7 +14,7 @@ import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.ListView;
 
-import com.appdevper.R;
+import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.activity.ContentActivity;
 import com.appdevper.mediaplayer.app.ShareData;
 import com.appdevper.mediaplayer.adater.DeviceListAdapter;

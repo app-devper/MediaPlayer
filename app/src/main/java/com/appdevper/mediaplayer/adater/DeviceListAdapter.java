@@ -1,6 +1,6 @@
 package com.appdevper.mediaplayer.adater;
 
-import com.appdevper.R;
+import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.loader.ImageLoader;
 import com.appdevper.mediaplayer.util.DeviceItem;
 

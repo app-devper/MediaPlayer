@@ -12,7 +12,7 @@ import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
-import com.appdevper.R;
+import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.app.ShareData;
 import com.appdevper.mediaplayer.loader.ImageLoader;
 import com.appdevper.mediaplayer.util.DeviceItem;

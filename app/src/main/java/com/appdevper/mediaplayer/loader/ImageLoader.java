@@ -23,7 +23,7 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.widget.ImageView;
 
-import com.appdevper.R;
+import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.util.Utils;
 
 public class ImageLoader {

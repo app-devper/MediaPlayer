@@ -20,7 +20,7 @@ import org.fourthline.cling.model.types.DeviceType;
 import org.fourthline.cling.model.types.UDADeviceType;
 import org.fourthline.cling.model.types.UDN;
 
-import com.appdevper.R;
+import com.appdevper.mediaplayer.R;
 
 import android.content.Context;
 import android.graphics.Bitmap;
