@@ -48,7 +48,6 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
 	static public final String ACTION_STARTED = "APPSERVER_STARTED";
 	static public final String ACTION_STOPPED = "APPSERVER_STOPPED";
 	static public final String ACTION_FAILEDTOSTART = "APPSERVER_FAILEDTOSTART";
-
 	static public final String ACTION_START_SERVER = "ACTION_START_APPSERVER";
 	static public final String ACTION_STOP_SERVER = "ACTION_STOP_APPSERVER";
 
@@ -144,7 +143,6 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
 				if (!ModelUtil.ANDROID_EMULATOR && isListeningForConnectivityChanges()) {
 					unregisterReceiver(((AndroidWifiSwitchableRouter) upnpService.getRouter()).getBroadcastReceiver());
 				}
-
 				new Shutdown().execute(upnpService);
 
 			}
