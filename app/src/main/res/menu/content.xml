@@ -1,6 +1,5 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto" >
-
+      xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/c_select"
         android:icon="@drawable/ic_content_add"
@@ -11,5 +10,4 @@
         android:icon="@drawable/ic_toplay"
         android:title="PLAYER"
         app:showAsAction="ifRoom|withText"/>
-
 </menu>

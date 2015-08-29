@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent" >
 
-	<com.dlna.adater.ImageSlideViewPager
+	<com.appdevper.mediaplayer.adater.ImageSlideViewPager
 	    android:id="@+id/image_silde_pager"
 	    android:layout_width="match_parent"
 	    android:layout_height="match_parent"/>

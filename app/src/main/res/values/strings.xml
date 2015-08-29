@@ -38,8 +38,8 @@ Thanks for using Media Server (App Media Server)!\n\n\
 This application allows you to run media server on your android device. This means that any
 program can access the media files on your device while the Media server is running.\n\n
 \
-If something is not working the way you expect it to, please report it to Kak App.
-(catalogx@gmail.com).\n\n\</string>
+If something is not working the way you expect it to, please report it to Appdevper.
+(worawit.bs@gmail.com).\n\n\</string>
     <string name="about_dlg_title">Media Server About</string>
     <string name="about_dlg_message"><b>Description: </b> Media Server (App Media Server) allows you to run an media server on your android device.\n\n\ <b>License: </b>  GNU General Public License v3.0\n\n</string>
     <string name="notif_server_starting">Starting at %s</string>
