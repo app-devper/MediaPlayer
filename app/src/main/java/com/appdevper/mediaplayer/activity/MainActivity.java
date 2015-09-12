@@ -44,10 +44,10 @@ import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.InterstitialAd;
 
-public class MainHomeActivity extends ActionBarActivity implements ActionBar.TabListener {
+public class MainActivity extends ActionBarActivity implements ActionBar.TabListener {
 
 	private DeviceListRegistryListener deviceListRegistryListener;
-	private final static String LOGTAG = MainHomeActivity.class.getSimpleName();
+	private final static String LOGTAG = MainActivity.class.getSimpleName();
 	private ServiceConnection serviceConnection = new ServiceConnection() {
 
 		public void onServiceConnected(ComponentName className, IBinder service) {
@@ -115,7 +115,7 @@ public class MainHomeActivity extends ActionBarActivity implements ActionBar.Tab
 
 		bindService(new Intent(this, FindUpnpService.class), serviceConnection, Context.BIND_AUTO_CREATE);
 
-		adRequest = new AdRequest.Builder().addTestDevice("FC30F813719E71A110A143F708B6C212").addTestDevice(AdRequest.DEVICE_ID_EMULATOR).build();
+		adRequest = new AdRequest.Builder().addTestDevice(AdRequest.DEVICE_ID_EMULATOR).build();
 		adView.loadAd(adRequest);
 		
 		interstitialAd = new InterstitialAd(this);
