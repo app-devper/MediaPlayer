@@ -29,7 +29,7 @@ public class ImagePagerAdapter extends FragmentStatePagerAdapter {
         this.activity = act;
         this.listPath = list;
         imageLoader = new ImageLoader(activity.getApplicationContext());
-        imageLoader.setReferer(refer);
+
     }
 
     public ImagePagerAdapter(FragmentManager fm) {

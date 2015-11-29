@@ -77,7 +77,7 @@ public class ServerSettings {
 
 	public static ArrayList<String> getSelectId() {
 		String json = getSharedPreferences().getString("select_id", null);
-		ArrayList<String> urls = new ArrayList<String>();
+		ArrayList<String> urls = new ArrayList<>();
 		if (json != null) {
 			try {
 				JSONArray a = new JSONArray(json);
@@ -93,8 +93,7 @@ public class ServerSettings {
 	}
 
 	private static SharedPreferences getSharedPreferences() {
-		final Context context = AppController.getAppContext();
-		return PreferenceManager.getDefaultSharedPreferences(context);
+		return PreferenceManager.getDefaultSharedPreferences(AppMediaPlayer.getAppContext());
 	}
 
 }

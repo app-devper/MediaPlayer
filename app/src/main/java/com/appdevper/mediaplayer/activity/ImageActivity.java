@@ -15,14 +15,10 @@ import com.appdevper.mediaplayer.util.ContentItem;
 public class ImageActivity extends FragmentActivity {
 
 	private static final String TAG = "ImageActivity";
-
 	private ViewPager imageSliderPager;
-
 	private ArrayList<String> listPath;
-
 	private ImagePagerAdapter mPagerAdapter;
 	private ArrayList<ContentItem> sList;
-
 	private int select = 0;
 
 	@Override
@@ -34,7 +30,7 @@ public class ImageActivity extends FragmentActivity {
 
 		sList = ShareData.aContentImage;
 		select = getIntent().getExtras().getInt("position");
-		listPath = new ArrayList<String>();
+		listPath = new ArrayList<>();
 
 		for (int i = 0; i < sList.size(); i++) {
 

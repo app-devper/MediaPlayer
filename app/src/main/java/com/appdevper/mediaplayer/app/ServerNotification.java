@@ -16,74 +16,73 @@ import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
 public class ServerNotification extends BroadcastReceiver {
-	private static final String TAG = ServerNotification.class.getSimpleName();
+    private static final String TAG = ServerNotification.class.getSimpleName();
 
-	private final int NOTIFICATIONID = 7890;
+    private final int NOTIFICATIONID = 7890;
 
-	@Override
-	public void onReceive(Context context, Intent intent) {
-		Log.d(TAG, "onReceive broadcast: " + intent.getAction());
-		if (intent.getAction().equals(ServerUpnpService.ACTION_STARTED)) {
-			setupNotification(context);
-		} else if (intent.getAction().equals(ServerUpnpService.ACTION_STOPPED)) {
-			clearNotification(context);
-		}
-	}
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        Log.d(TAG, "onReceive broadcast: " + intent.getAction());
+        if (intent.getAction().equals(ServerUpnpService.ACTION_STARTED)) {
+            setupNotification(context);
+        } else if (intent.getAction().equals(ServerUpnpService.ACTION_STOPPED)) {
+            clearNotification(context);
+        }
+    }
 
-	@SuppressWarnings("deprecation")
-	@SuppressLint("NewApi")
-	private void setupNotification(Context context) {
-		Log.d(TAG, "Setting up the notification");
-		// Get NotificationManager reference
-		String ns = Context.NOTIFICATION_SERVICE;
-		NotificationManager nm = (NotificationManager) context.getSystemService(ns);
+    @SuppressLint("NewApi")
+    private void setupNotification(Context context) {
+        Log.d(TAG, "Setting up the notification");
+        // Get NotificationManager reference
+        String ns = Context.NOTIFICATION_SERVICE;
+        NotificationManager nm = (NotificationManager) context.getSystemService(ns);
 
-		// Instantiate a Notification
-		int icon = R.drawable.ic_stat_done;
-		CharSequence tickerText = String.format(context.getString(R.string.notif_server_starting), ServerSettings.getDeviceName());
-		long when = System.currentTimeMillis();
+        // Instantiate a Notification
+        int icon = R.drawable.ic_stat_done;
+        CharSequence tickerText = String.format(context.getString(R.string.notif_server_starting), ServerSettings.getDeviceName());
+        long when = System.currentTimeMillis();
 
-		// Define Notification's message and Intent
-		CharSequence contentTitle = context.getString(R.string.notif_title);
-		CharSequence contentText = String.format(context.getString(R.string.notif_text), ServerSettings.getDeviceName());
+        // Define Notification's message and Intent
+        CharSequence contentTitle = context.getString(R.string.notif_title);
+        CharSequence contentText = String.format(context.getString(R.string.notif_text), ServerSettings.getDeviceName());
 
-		Intent notificationIntent = new Intent(context, SettingPreferenceActivity.class);
-		notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-		PendingIntent contentIntent = PendingIntent.getActivity(context, 0, notificationIntent, 0);
+        Intent notificationIntent = new Intent(context, SettingPreferenceActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent contentIntent = PendingIntent.getActivity(context, 0, notificationIntent, 0);
 
-		int stopIcon = android.R.drawable.ic_menu_close_clear_cancel;
-		CharSequence stopText = context.getString(R.string.notif_stop_text);
-		Intent stopIntent = new Intent(ServerUpnpService.ACTION_STOP_SERVER);
-		PendingIntent stopPendingIntent = PendingIntent.getBroadcast(context, 0, stopIntent, PendingIntent.FLAG_ONE_SHOT);
+        //int stopIcon = android.R.drawable.ic_menu_close_clear_cancel;
+        //CharSequence stopText = context.getString(R.string.notif_stop_text);
+        //Intent stopIntent = new Intent(ServerUpnpService.ACTION_STOP_SERVER);
+        //PendingIntent stopPendingIntent = PendingIntent.getBroadcast(context, 0, stopIntent, PendingIntent.FLAG_ONE_SHOT);
 
-		NotificationCompat.Builder nb = new NotificationCompat.Builder(context) //
-				.setContentTitle(contentTitle) //
-				.setContentText(contentText) //
-				.setContentIntent(contentIntent) //
-				.setSmallIcon(icon) //
-				.setTicker(tickerText) //
-				.setWhen(when) //
-				.setOngoing(true);
+        NotificationCompat.Builder nb = new NotificationCompat.Builder(context) //
+                .setContentTitle(contentTitle) //
+                .setContentText(contentText) //
+                .setContentIntent(contentIntent) //
+                .setSmallIcon(icon) //
+                .setTicker(tickerText) //
+                .setWhen(when) //
+                .setOngoing(true);
 
-		Notification notification = null;
-		if (VERSION.SDK_INT >= VERSION_CODES.JELLY_BEAN) {
-			nb.addAction(stopIcon, stopText, stopPendingIntent);
-			notification = nb.build();
-		} else {
-			notification = nb.getNotification();
-		}
+        Notification notification = null;
+        if (VERSION.SDK_INT >= VERSION_CODES.JELLY_BEAN) {
+            //nb.addAction(stopIcon, stopText, stopPendingIntent);
+            notification = nb.build();
+        } else {
+            notification = nb.getNotification();
+        }
 
-		// Pass Notification to NotificationManager
-		nm.notify(NOTIFICATIONID, notification);
+        // Pass Notification to NotificationManager
+        nm.notify(NOTIFICATIONID, notification);
 
-		Log.d(TAG, "Notication setup done");
-	}
+        Log.d(TAG, "Notication setup done");
+    }
 
-	private void clearNotification(Context context) {
-		Log.d(TAG, "Clearing the notifications");
-		String ns = Context.NOTIFICATION_SERVICE;
-		NotificationManager nm = (NotificationManager) context.getSystemService(ns);
-		nm.cancelAll();
-		Log.d(TAG, "Cleared notification");
-	}
+    private void clearNotification(Context context) {
+        Log.d(TAG, "Clearing the notifications");
+        String ns = Context.NOTIFICATION_SERVICE;
+        NotificationManager nm = (NotificationManager) context.getSystemService(ns);
+        nm.cancelAll();
+        Log.d(TAG, "Cleared notification");
+    }
 }

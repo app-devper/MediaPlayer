@@ -29,15 +29,12 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 
 public class MediaServer {
-
-    private InetSocketAddress inetSocket;
-    // private Server server;
-    private UDN udn = new UDN("Kak-MediaServer");
+    private UDN udn = new UDN("Devper-MediaServer");
     private LocalDevice localDevice;
 
     private final static String deviceType = "MediaServer";
     private final static int version = 1;
-    private final static String LOGTAG = "iKak-MediaServer";
+    private final static String LOGTAG = "Devper-MediaServer";
     private final static int port = 8192;
     private InetAddress localAddress;
     private Context c;
@@ -49,7 +46,7 @@ public class MediaServer {
         this.localAddress = localAddress;
 
         DeviceType type = new UDADeviceType(deviceType, version);
-        DeviceDetails details = new DeviceDetails(name, new ManufacturerDetails(android.os.Build.MANUFACTURER), new ModelDetails("iKak", "MediaServer Android", "v1"));
+        DeviceDetails details = new DeviceDetails(name, new ManufacturerDetails(android.os.Build.MANUFACTURER), new ModelDetails("App Devper", "Android MediaServer ", "v1"));
 
         LocalService<ContentDirectoryService> service = new AnnotationLocalServiceBinder().read(ContentDirectoryService.class);
         service.setManager(new DefaultServiceManager<>(service, ContentDirectoryService.class));
@@ -57,7 +54,6 @@ public class MediaServer {
         Icon[] ic = new Icon[]{createDefaultDeviceIcon()};
 
         localDevice = new LocalDevice(new DeviceIdentity(udn), type, details, ic, service);
-
 
         Log.v(LOGTAG, "MediaServer device created: ");
         Log.v(LOGTAG, "friendly name: " + details.getFriendlyName());
@@ -86,35 +82,6 @@ public class MediaServer {
     public void stop() {
         hServer.stop();
     }
-
-//    class StartServer extends AsyncTask<String, Void, Void> {
-//        @Override
-//        protected Void doInBackground(String... svcs) {
-//            server = new Server(inetSocket);
-//            try {
-//                ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-//                context.setContextPath("/");
-//                server.setHandler(context);
-//                //context.addServlet(new ServletHolder(new HelloServlet()), "/*");
-//                server.start();
-//
-//                server.join();
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//                System.exit(-1);
-//            }
-//            return null;
-//        }
-//    }
-
-//    public void stop() {
-//        try {
-//            server.stop();
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//            server = null;
-//        }
-//    }
 
     protected Icon createDefaultDeviceIcon() {
 

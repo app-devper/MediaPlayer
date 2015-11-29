@@ -10,7 +10,6 @@ import java.util.ArrayList;
 
 public class ShareData {
 
-	private static AndroidUpnpService upnpService;
 	private static Device<?, ?, ?> device;
 	private static DeviceItem rDevice = null;
 	private static ArrayList<DeviceItem> renList;
@@ -24,14 +23,6 @@ public class ShareData {
 
 	public static void setcList(ArrayList<ContentItem> cList) {
 		ShareData.aContent = cList;
-	}
-
-	public static AndroidUpnpService getUpnpService() {
-		return upnpService;
-	}
-
-	public static void setUpnpService(AndroidUpnpService upnpService) {
-		ShareData.upnpService = upnpService;
 	}
 
 	public static Device<?, ?, ?> getDevice() {

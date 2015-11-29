@@ -1,188 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:ads="http://schemas.android.com/apk/res-auto"
+<!--
+  Copyright (C) 2014 The Android Open Source Project
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+  -->
+<android.support.v4.widget.DrawerLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:custom="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#292929" >
+    android:fitsSystemWindows="true"
+    tools:context=".MusicPlayerActivity">
 
-    <LinearLayout
-        android:id="@+id/songThumbnail"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_above="@+id/songControl"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentRight="true"
-        android:layout_alignParentTop="true"
-        android:gravity="center" >
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
 
-        <LinearLayout
-            android:id="@+id/imgThumbnail"
+        <include android:id="@+id/toolbar"
+                 layout="@layout/include_toolbar"/>
+
+        <FrameLayout
+            android:id="@+id/container"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:gravity="center" >
+            android:layout_below="@+id/toolbar"
+            android:layout_above="@+id/controls_container"/>
 
-            <ImageView
-                android:id="@+id/imgPlay"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:src="@drawable/adele" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <LinearLayout
-        android:id="@+id/songControl"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:layout_above="@+id/adView"
-        android:layout_alignParentLeft="true"
-        android:gravity="center"
-        android:orientation="vertical" >
-
-        <LinearLayout
-            android:id="@+id/player_header_bg"
-            android:layout_width="fill_parent"
-            android:layout_height="60dip"
-            android:orientation="vertical"
-            android:paddingLeft="5dp"
-            android:paddingRight="5dp" >
-
-            <TextView
-                android:id="@+id/songTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:gravity="center"
-                android:paddingLeft="16dp"
-                android:text=""
-                android:textColor="#FFFFFF"
-                android:textSize="16dp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/subTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center"
-                android:paddingLeft="10dp"
-                android:text=""
-                android:textColor="#FFFFFF"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/timerDisplay"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="10dp"
-            android:layout_marginLeft="20dp"
-            android:layout_marginRight="20dp" >
-
-            <TextView
-                android:id="@+id/songCurrentDurationLabel"
-                android:layout_width="fill_parent"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="left"
-                android:textColor="#eeeeee"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/songTotalDurationLabel"
-                android:layout_width="fill_parent"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="right"
-                android:textColor="#BFD22B"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <SeekBar
-            android:id="@+id/songProgressBar"
+        <android.support.v7.widget.CardView
+            android:id="@+id/controls_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="20dp"
-            android:layout_marginLeft="20dp"
-            android:layout_marginRight="20dp"
-            android:paddingLeft="15dp"
-            android:paddingRight="15dp"
-            android:progressDrawable="@drawable/seekbar_progress"
-            android:thumb="@drawable/seek_handler" />
+            android:layout_alignParentBottom="true"
+            custom:cardElevation="8dp">
 
-        <LinearLayout
-            android:id="@+id/player_footer_bg"
-            android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:gravity="center"
-            android:scrollbars="none" >
+            <fragment android:name="com.appdevper.mediaplayer.ui.PlaybackControlsFragment"
+                      android:id="@+id/fragment_playback_controls"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_alignParentBottom="true"
+                      tools:layout="@layout/fragment_playback_controls"/>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:orientation="horizontal"
-                android:paddingLeft="5dp"
-                android:paddingRight="5dp" >
+        </android.support.v7.widget.CardView>
 
-                <ImageView
-                    android:id="@+id/btnRepeat"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@null"
-                    android:clickable="true"
-                    android:src="@drawable/btn_repeat" />
+    </RelativeLayout>
 
-                <ImageView
-                    android:id="@+id/btnBackward"
-                    android:layout_width="45dp"
-                    android:layout_height="45dp"
-                    android:background="@null"
-                    android:clickable="true"
-                    android:src="@drawable/btn_backward" />
+    <include layout="@layout/include_drawerlist"/>
 
-                <ImageView
-                    android:id="@+id/btnPlay"
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:background="@null"
-                    android:clickable="true"
-                    android:src="@drawable/btn_play" />
-
-                <ImageView
-                    android:id="@+id/btnStop"
-                    android:layout_width="60dp"
-                    android:layout_height="60dp"
-                    android:background="@null"
-                    android:clickable="true"
-                    android:src="@drawable/btn_stop" />
-
-                <ImageView
-                    android:id="@+id/btnForward"
-                    android:layout_width="45dp"
-                    android:layout_height="45dp"
-                    android:background="@null"
-                    android:clickable="true"
-                    android:src="@drawable/btn_forward" />
-
-                <ImageView
-                    android:id="@+id/btnShuffle"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="@null"
-                    android:clickable="true"
-                    android:src="@drawable/btn_shuffle" />
-            </LinearLayout>
-        </LinearLayout>
-    </LinearLayout>
-
-    <com.google.android.gms.ads.AdView
-        android:id="@+id/adView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentLeft="true"
-        ads:adSize="BANNER"
-        ads:adUnitId="ca-app-pub-8092647504892778/6426254447" >
-    </com.google.android.gms.ads.AdView>
-
-</RelativeLayout>
+</android.support.v4.widget.DrawerLayout>

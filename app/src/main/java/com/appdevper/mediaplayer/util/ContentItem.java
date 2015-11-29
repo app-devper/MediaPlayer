@@ -24,126 +24,110 @@ import java.net.URI;
 import java.util.List;
 
 public class ContentItem {
-	private Device device;
-	private Service service;
-	private DIDLObject content;
-	private String id;
-	private Boolean isContainer;
-    public int DefaultResource;
-    private String ClassName;
+    private Device device;
+    private Service service;
+    private DIDLObject content;
+    private String id;
+    private Boolean isContainer;
+    private int defaultResource;
+    private String className;
     private String type = "";
-    private String ResourceUri;
-    private String MimeType;
-    private String Subtitle="";
-    private long Size;
-    private String ArtworkUri;
-    private MusicTrack MusicItem;
-    private String Duration=""; 
-	
-	public ContentItem(Container container, Service service) {
-		
-		this.service = service;
-		this.content = container;
-		this.id = container.getId();
-		this.isContainer = true;
-		this.Subtitle ="Folder";
-		this.DefaultResource = R.drawable.ic_folder;
-		
-	}
-	
-	public ContentItem(Item item, Service service) {
-		
-		this.service = service;
-		this.content = item;
-		this.ClassName = content.getClass().getName();
-		this.id = item.getId();
-		this.isContainer = false;
-		populateMoreInfoFromItem();
-	}
-	
-	public Container getContainer() {
-		if(isContainer)
-			return (Container) content;
-		else {
-			return null;
-		}
-	}
-	
-	public Item getItem() {
-		if(isContainer)
-			return null;
-		else
-			return (Item)content;
-	}
-	
-	public  List<Res> getRes() {
-	    return content.getResources();
-    }
-    
-	public Service getService() {
-		return service;
-	}
-	
-	public String getAlbumArtworkUri()
-	  {
-	    try
-	    {
-	      URI localURI = (URI)this.content.getFirstPropertyValue(DIDLObject.Property.UPNP.ALBUM_ART_URI.class);
-	      if (localURI == null){
-	        //this._log.info("No artwork found for music track: " + this.Title);
-	        return null;
-	      }
-	      String str2;
-	      if (localURI.isAbsolute())
-	        str2 = localURI.toString();
-	      else
-	        str2 = normalizeUri(localURI);
-	      return str2;
-	    }
-	    catch (Exception localException)
-	    {
-	        return null;
-	    }
-	  }
-	
-	public String getIconArtworkUri(){
-      try
-      {
-        URI localURI = (URI)this.content.getFirstPropertyValue(DIDLObject.Property.UPNP.ICON.class);
-        if (localURI == null){
-          //this._log.info("No artwork found for music track: " + this.Title);
-          return null;
-        }
-        String str2;
-        if (localURI.isAbsolute())
-          str2 = localURI.toString();
-        else
-          str2 = normalizeUri(localURI);
-        return str2;
-      }
-      catch (Exception localException)
-      {
-          return null;
-      }
-    }
-	
-	private String normalizeUri(URI paramURI)
-	  {
-	    if (device == null)
-	    {
-	     // this._log.error("No active device...");
-	      return null;
-	    }
-	    //this._log.info("Uri value to normalize : " + paramURI.toString());
-	    if ((device instanceof RemoteDevice))
-	      return ((RemoteDevice)device).normalizeURI(paramURI).toString();
-	    return paramURI.toString();
-	  }
+    private String resourceUri;
+    private String mimeType;
+    private String subtitle = "";
+    private MusicTrack musicItem;
+    private String duration = "";
 
-	public Boolean isContainer() {
-		return isContainer;
-	}
-	
+    public ContentItem(Container container, Service service) {
+        this.service = service;
+        this.device = service.getDevice();
+        this.content = container;
+        this.id = container.getId();
+        this.isContainer = true;
+        this.subtitle = "Folder";
+        this.defaultResource = R.drawable.ic_folder;
+    }
+
+    public ContentItem(Item item, Service service) {
+        this.service = service;
+        this.content = item;
+        this.className = content.getClass().getName();
+        this.id = item.getId();
+        this.isContainer = false;
+        populateMoreInfoFromItem();
+    }
+
+    public Container getContainer() {
+        if (isContainer)
+            return (Container) content;
+        else {
+            return null;
+        }
+    }
+
+    public Item getItem() {
+        if (isContainer)
+            return null;
+        else
+            return (Item) content;
+    }
+
+    public List<Res> getRes() {
+        return content.getResources();
+    }
+
+    public Service getService() {
+        return service;
+    }
+
+    public String getAlbumArtworkUri() {
+        try {
+            URI localURI = this.content.getFirstPropertyValue(DIDLObject.Property.UPNP.ALBUM_ART_URI.class);
+            if (localURI == null) {
+                return null;
+            }
+            String str2;
+            if (localURI.isAbsolute())
+                str2 = localURI.toString();
+            else
+                str2 = normalizeUri(localURI);
+            return str2;
+        } catch (Exception localException) {
+            return null;
+        }
+    }
+
+    public String getIconArtworkUri() {
+        try {
+            URI localURI = this.content.getFirstPropertyValue(DIDLObject.Property.UPNP.ICON.class);
+            if (localURI == null) {
+                return null;
+            }
+            String str2;
+            if (localURI.isAbsolute())
+                str2 = localURI.toString();
+            else
+                str2 = normalizeUri(localURI);
+            return str2;
+        } catch (Exception localException) {
+            return null;
+        }
+    }
+
+    private String normalizeUri(URI paramURI) {
+        if (device == null) {
+            return null;
+        }
+        //this._log.info("Uri value to normalize : " + paramURI.toString());
+        if ((device instanceof RemoteDevice))
+            return ((RemoteDevice) device).normalizeURI(paramURI).toString();
+        return paramURI.toString();
+    }
+
+    public Boolean isContainer() {
+        return isContainer;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -160,153 +144,140 @@ public class ContentItem {
     public int hashCode() {
         return content.hashCode();
     }
-    
+
     @Override
     public String toString() {
-    	return content.getTitle();
+        return content.getTitle();
     }
-    
+
     public String getMimeType() {
-        return MimeType;
+        return mimeType;
     }
 
-    public void setMimeType(String mimeType) {
-        MimeType = mimeType;
+    public int getDefaultResource() {
+        return defaultResource;
     }
 
-    private void populateMoreInfoFromItem(){
+    private void populateMoreInfoFromItem() {
         Res firstResource = content.getFirstResource();
-        this.ResourceUri = firstResource.getValue();
-        this.MimeType = firstResource.getProtocolInfo().getContentFormatMimeType().toString();
-        this.Subtitle = this.MimeType;
+        this.resourceUri = firstResource.getValue();
+        this.mimeType = firstResource.getProtocolInfo().getContentFormatMimeType().toString();
+        this.subtitle = this.mimeType;
         setDuration(firstResource);
-        if (isMusicItem())
-        {
-          this.ArtworkUri = getAlbumArtworkUri();
-          this.MusicItem = new MusicTrack((Item)this.content); 
-          this.Subtitle = this.MusicItem.getFirstArtist().getName();
-          this.DefaultResource = R.drawable.nocover_audio;
-          this.type ="audio";
-          return;
+        if (getMusicItem()) {
+            this.musicItem = new MusicTrack((Item) this.content);
+            this.subtitle = this.musicItem.getFirstArtist().getName();
+            this.defaultResource = R.drawable.nocover_audio;
+            this.type = "audio";
+            return;
         }
-        
-        if (isAudioItemOrDerivative()){
-          this.DefaultResource = R.drawable.nocover_audio; 
-          this.type ="audio";
-          return;
+
+        if (isAudioItemOrDerivative()) {
+            this.defaultResource = R.drawable.nocover_audio;
+            this.type = "audio";
+            return;
         }
-        if (isImageItemOrDerivative()){
-          this.DefaultResource = R.drawable.ic_image_item;
-          this.type ="image";
-          return;
+        if (isImageItemOrDerivative()) {
+            this.defaultResource = R.drawable.ic_image_item;
+            this.type = "image";
+            return;
         }
-        if (isVideoItemOrDerivative()){
-          this.DefaultResource = R.drawable.nocover_audio;
-          this.type ="video";
-          return;
+        if (isVideoItemOrDerivative()) {
+            this.defaultResource = R.drawable.nocover_audio;
+            this.type = "video";
+            return;
         }
     }
-    
+
     private void setDuration(Res firstResource) {
-        if (isImageItemOrDerivative()){
-          return;
-        } 
-        String[]  time = firstResource.getDuration().split(".000");
-        this.Duration = time[0];
-            
+        if (isImageItemOrDerivative()) {
+            return;
+        }
+        String[] time = firstResource.getDuration().split(".000");
+        this.duration = time[0];
+
     }
 
     public String getType() {
         return type;
     }
 
-    public void setType(String type) {
-        this.type = type;
+    private boolean getMusicItem() {
+        String str = MusicTrack.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
 
-    private boolean isMusicItem()
-    {
-      String str = MusicTrack.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
-    } 
-    
-    
     public String getResourceUri() {
-        return ResourceUri;
+        return resourceUri;
     }
 
-    public boolean isAudioItemOrDerivative()
-    {
-      return (isAudioItem()) || (isAudioBookItem()) || (isAudioBroadcastItem()) || (isMusicItem());
+    public boolean isAudioItemOrDerivative() {
+        return (isAudioItem()) || (isAudioBookItem()) || (isAudioBroadcastItem()) || (getMusicItem());
     }
-    private boolean isAudioItem()
-    {
-      String str = AudioItem.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isAudioItem() {
+        String str = AudioItem.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    private boolean isAudioBookItem()
-    {
-      String str = AudioBook.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isAudioBookItem() {
+        String str = AudioBook.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    private boolean isAudioBroadcastItem()
-    {
-      String str = AudioBroadcast.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isAudioBroadcastItem() {
+        String str = AudioBroadcast.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    private boolean isPhotoItem()
-    {
-      String str = Photo.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isPhotoItem() {
+        String str = Photo.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    public boolean isImageItemOrDerivative()
-    {
-      return (isImageItem()) || (isPhotoItem());
+
+    public boolean isImageItemOrDerivative() {
+        return (isImageItem()) || (isPhotoItem());
     }
-    private boolean isImageItem()
-    {
-      String str = ImageItem.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isImageItem() {
+        String str = ImageItem.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    public boolean isVideoItemOrDerivative()
-    {
-      return (isVideoItem()) || (isVideoBroadcastItem()) || (isMusicVideoClipItem()) || (isMovieItem());
+
+    public boolean isVideoItemOrDerivative() {
+        return (isVideoItem()) || (isVideoBroadcastItem()) || (isMusicVideoClipItem()) || (isMovieItem());
     }
-    private boolean isVideoItem()
-    {
-      String str = VideoItem.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isVideoItem() {
+        String str = VideoItem.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    private boolean isVideoBroadcastItem()
-    {
-      String str = VideoBroadcast.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isVideoBroadcastItem() {
+        String str = VideoBroadcast.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    private boolean isMusicVideoClipItem()
-    {
-      String str = MusicVideoClip.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isMusicVideoClipItem() {
+        String str = MusicVideoClip.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
-    private boolean isMovieItem()
-    {
-      String str = Movie.class.getName();
-      return (str != null) && (str.equalsIgnoreCase(this.ClassName));
+
+    private boolean isMovieItem() {
+        String str = Movie.class.getName();
+        return (str != null) && (str.equalsIgnoreCase(this.className));
     }
 
     public String getSubtitle() {
-        return Subtitle;
+        return subtitle;
     }
 
     public void setSubtitle(String subtitle) {
-        Subtitle = subtitle;
+        this.subtitle = subtitle;
     }
 
     public String getDuration() {
-        return Duration;
-    }
-
-    public void setDuration(String duration) {
-        Duration = duration;
+        return duration;
     }
 
 }

@@ -54,6 +54,7 @@
             android:key="about"
             android:title="@string/about_label" />
         <Preference
+            android:key="version"
             android:enabled="false"
             android:selectable="true"
             android:summary="@string/pref_value_version"

@@ -52,7 +52,7 @@ public final class ItemListAdapter extends ArrayAdapter<Item> {
 
         View v = getWorkingView(paramView);
 
-        final Item localItem = (Item) getItem(paramInt);
+        final Item localItem = getItem(paramInt);
 
         TextView deviceName = (TextView) v.findViewById(R.id.d_r_name);
         ImageView img = (ImageView) v.findViewById(R.id.d_r_image);

@@ -19,8 +19,8 @@ import com.appdevper.mediaplayer.mediaserver.MediaServer;
 import com.appdevper.mediaplayer.util.Utils;
 
 import org.fourthline.cling.UpnpService;
+import org.fourthline.cling.android.AndroidUpnpService;
 import org.fourthline.cling.android.AndroidUpnpServiceImpl;
-import org.fourthline.cling.model.ModelUtil;
 import org.fourthline.cling.support.model.DIDLObject;
 import org.fourthline.cling.support.model.DIDLObject.Property;
 import org.fourthline.cling.support.model.PersonWithRole;
@@ -39,53 +39,64 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Enumeration;
 
-public class ServerUpnpService extends AndroidUpnpServiceImpl {
+public class ServerUpnpService {
     private static final String TAG = ServerUpnpService.class.getSimpleName();
     private static MediaServer mediaServer;
     static public final String ACTION_STARTED = "APPSERVER_STARTED";
     static public final String ACTION_STOPPED = "APPSERVER_STOPPED";
     static public final String ACTION_FAILEDTOSTART = "APPSERVER_FAILEDTOSTART";
-    static public final String ACTION_START_SERVER = "ACTION_START_APPSERVER";
-    static public final String ACTION_STOP_SERVER = "ACTION_STOP_APPSERVER";
+    //static public final String ACTION_START_SERVER = "ACTION_START_APPSERVER";
+    //static public final String ACTION_STOP_SERVER = "ACTION_STOP_APPSERVER";
 
-    private static boolean b = false;
+    private boolean b = false;
+    private AndroidUpnpService upnpService;
+    private Context context;
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
+    private static ServerUpnpService instance;
 
+    public static ServerUpnpService getInstance() {
+        if (instance == null) {
+            instance = new ServerUpnpService(AppMediaPlayer.getUpnpService(), AppMediaPlayer.getAppContext());
+        }
+        return instance;
+    }
+
+    public ServerUpnpService(AndroidUpnpService upnpService, Context context) {
+        this.upnpService = upnpService;
+        this.context = context;
+    }
+
+    public void startServer() {
         try {
-            mediaServer = new MediaServer(getLocalInetAddress(), this, ServerSettings.getDeviceName());
+            mediaServer = new MediaServer(getLocalInetAddress(), context, ServerSettings.getDeviceName());
             initMedia();
             prepareMediaServer();
         } catch (Exception e) {
             e.printStackTrace();
             if (mediaServer != null)
                 mediaServer.stop();
-            // sendBroadcast(new Intent(MediaUpnpService.ACTION_STOPPED));
             mediaServer = null;
         }
 
         if (mediaServer != null) {
             try {
                 upnpService.getRegistry().addDevice(mediaServer.getDevice());
-                sendBroadcast(new Intent(ServerUpnpService.ACTION_STARTED));
+                context.sendBroadcast(new Intent(ServerUpnpService.ACTION_STARTED));
                 b = true;
             } catch (Exception ex) {
                 ex.printStackTrace();
                 b = false;
                 mediaServer.stop();
-                sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
+                context.sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
             }
         } else {
             b = false;
-            // mediaServer.stop();
-            sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
+            context.sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
         }
 
-        return START_STICKY;
     }
 
-    public static boolean isRunning() {
+    public boolean isRunning() {
         return b;
     }
 
@@ -96,7 +107,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
         }
         // TODO: next if block could probably be removed
         if (isConnectedUsingWifi() == true) {
-            Context context = AppController.getAppContext();
+            Context context = AppMediaPlayer.getAppContext();
             WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             int ipAddress = wm.getConnectionInfo().getIpAddress();
             if (ipAddress == 0)
@@ -122,36 +133,19 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
         return null;
     }
 
-    @Override
-    public void onDestroy() {
+    public void stopServer() {
         b = false;
-        if (mediaServer != null)
+        if (mediaServer != null) {
+            upnpService.getRegistry().removeDevice(mediaServer.getDevice());
             mediaServer.stop();
-        sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
-        new Thread(new Runnable() {
+        }
 
-            @Override
-            public void run() {
-                new Shutdown().execute(upnpService);
-
-            }
-        }).run();
-    }
-
-    @Override
-    public void onTaskRemoved(Intent rootIntent) {
-        super.onTaskRemoved(rootIntent);
-        Log.d(TAG, "user has removed my activity, we got killed! restarting...");
-        Intent restartService = new Intent(getApplicationContext(), this.getClass());
-        restartService.setPackage(getPackageName());
-        PendingIntent restartServicePI = PendingIntent.getService(getApplicationContext(), 1, restartService, PendingIntent.FLAG_ONE_SHOT);
-        AlarmManager alarmService = (AlarmManager) getApplicationContext().getSystemService(Context.ALARM_SERVICE);
-        alarmService.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + 2000, restartServicePI);
+        context.sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
     }
 
     public static boolean isConnectedToLocalNetwork() {
         boolean connected;
-        Context context = AppController.getAppContext();
+        Context context = AppMediaPlayer.getAppContext();
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo ni = cm.getActiveNetworkInfo();
         connected = ni != null && ni.isConnected() == true && (ni.getType() & (ConnectivityManager.TYPE_WIFI | ConnectivityManager.TYPE_ETHERNET)) != 0;
@@ -169,7 +163,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
     }
 
     public static boolean isConnectedUsingWifi() {
-        Context context = AppController.getAppContext();
+        Context context = AppMediaPlayer.getAppContext();
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo ni = cm.getActiveNetworkInfo();
         return ni != null && ni.isConnected() == true && ni.getType() == ConnectivityManager.TYPE_WIFI;
@@ -285,7 +279,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
         ArrayList<VideoItem> arItem = new ArrayList<VideoItem>();
         String[] videoColumns = {MediaStore.Video.Media._ID, MediaStore.Video.Media.TITLE, MediaStore.Video.Media.DATA, MediaStore.Video.Media.ARTIST, MediaStore.Video.Media.MIME_TYPE,
                 MediaStore.Video.Media.SIZE, MediaStore.Video.Media.DURATION, MediaStore.Video.Media.RESOLUTION};
-        Cursor cursor = getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, videoColumns, null, null, null);
+        Cursor cursor = context.getContentResolver().query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, videoColumns, null, null, null);
         if (cursor.moveToFirst()) {
             do {
                 String id = ContentTree.VIDEO_PREFIX + cursor.getInt(cursor.getColumnIndex(MediaStore.Video.Media._ID));
@@ -316,7 +310,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
         ArrayList<MusicTrack> arItem = new ArrayList<MusicTrack>();
         String[] audioColumns = {MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.MIME_TYPE,
                 MediaStore.Audio.Media.SIZE, MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.ALBUM};
-        Cursor cursor = getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audioColumns, MediaStore.Audio.Media.DATA + " like ? ", new String[]{"%mp3"}, null);
+        Cursor cursor = context.getContentResolver().query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, audioColumns, MediaStore.Audio.Media.DATA + " like ? ", new String[]{"%mp3"}, null);
         if (cursor.moveToFirst()) {
             do {
                 String id = ContentTree.AUDIO_PREFIX + cursor.getInt(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
@@ -347,7 +341,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
     private ArrayList<ImageItem> initImage() {
         ArrayList<ImageItem> arItem = new ArrayList<ImageItem>();
         String[] imageColumns = {MediaStore.Images.Media._ID, MediaStore.Images.Media.TITLE, MediaStore.Images.Media.DATA, MediaStore.Images.Media.MIME_TYPE, MediaStore.Images.Media.SIZE};
-        Cursor cursor = getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imageColumns, null, null, null);
+        Cursor cursor = context.getContentResolver().query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imageColumns, null, null, null);
         if (cursor.moveToFirst()) {
             do {
                 String _id = "" + cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Media._ID));

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="com.appdevper.mediaplayer">
-
-    <uses-sdk android:minSdkVersion="14"/>
+<manifest
+    package="com.appdevper.mediaplayer"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
@@ -10,17 +10,19 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.WRITE_INTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <application
-        android:name=".app.AppController"
+        android:name=".app.AppMediaPlayer"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppBaseTheme">
         <activity
             android:name=".activity.MainActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:label="@string/app_name">
+            android:configChanges="keyboardHidden"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
 
@@ -29,42 +31,51 @@
         </activity>
         <activity
             android:name=".activity.ContentActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:label="Media Server">
+            android:configChanges="keyboardHidden"
+            android:label="Media Server"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
         </activity>
         <activity
             android:name=".activity.ImageActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:configChanges="keyboardHidden"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
             android:theme="@android:style/Theme.NoTitleBar">
         </activity>
         <activity
-            android:name=".activity.MusicPlayerActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:label="Player">
-        </activity>
-        <activity
-            android:name=".activity.MusicRemoteActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:label="Controller">
-        </activity>
-        <activity
             android:name=".activity.RenderListActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:label="Media Renderer">
+            android:configChanges="keyboardHidden"
+            android:label="Media Renderer"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
         </activity>
         <activity
-            android:name=".activity.PlayListActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize"
-            android:label="PlayList">
+            android:name=".activity.PlayListsActivity"
+            android:configChanges="keyboardHidden"
+            android:label="Playlist"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
         </activity>
         <activity
             android:name=".activity.SettingPreferenceActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize">
-
+            android:configChanges="keyboardHidden"
+            android:label="Settings"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
         </activity>
         <activity
             android:name=".activity.SelectMediaActivity"
-            android:configChanges="orientation|keyboardHidden|screenSize">
+            android:configChanges="keyboardHidden"
+            android:label="SelectMedia"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
+        </activity>
+        <activity
+            android:name=".activity.FullScreenPlayerActivity"
+            android:configChanges="keyboardHidden"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait">
         </activity>
 
         <receiver
@@ -75,17 +86,16 @@
                 <action android:name="APPSERVER_STOPPED"/>
             </intent-filter>
         </receiver>
-        <receiver
-            android:name=".app.RequestStartStopReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="ACTION_START_APPSERVER"/>
-                <action android:name="ACTION_STOP_APPSERVER"/>
-            </intent-filter>
-        </receiver>
 
         <service android:name=".app.FindUpnpService"/>
-        <service android:name=".app.ServerUpnpService"/>
+        <service
+            android:name=".app.MusicService"
+            android:exported="true"
+            tools:ignore="ExportedService">
+        </service>
+
+        <service
+            android:name="com.google.android.libraries.cast.companionlibrary.cast.reconnection.ReconnectionService"/>
 
         <activity
             android:name="com.google.android.gms.ads.AdActivity"
