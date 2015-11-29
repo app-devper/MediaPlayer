@@ -19,8 +19,11 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
+        }
+        debug {
+            minifyEnabled true
         }
     }
     repositories {
@@ -43,5 +46,5 @@ dependencies {
     compile files('libs/seamless-http-1.0.jar')
     compile files('libs/seamless-util-1.0.jar')
     compile files('libs/seamless-xml-1.0.jar')
-    compile (name:'CastCompanionLibrary-debug', ext:'aar')
+    compile(name: 'CastCompanionLibrary-debug', ext: 'aar')
 }
