@@ -1,3 +1,4 @@
+
 ### Android template
 # Built application files
 *.apk
@@ -10,6 +11,9 @@
 *.class
 
 # Generated files
+/.idea
+/app/app.iml
+/MediaPlayer.iml
 app/build/
 
 # Gradle files
