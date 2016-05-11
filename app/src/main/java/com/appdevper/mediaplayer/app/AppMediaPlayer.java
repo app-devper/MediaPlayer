@@ -31,12 +31,10 @@ import android.widget.Toast;
 
 import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.activity.MainActivity;
+import com.appdevper.mediaplayer.loader.ImageLoader;
 import com.appdevper.mediaplayer.util.ContentItem;
+import com.google.android.libraries.cast.companionlibrary.cast.CastConfiguration;
 import com.google.android.libraries.cast.companionlibrary.cast.VideoCastManager;
-import com.google.android.libraries.cast.companionlibrary.cast.player.VideoCastControllerActivity;
-
-import static com.google.android.libraries.cast.companionlibrary.cast.BaseCastManager.FEATURE_DEBUGGING;
-import static com.google.android.libraries.cast.companionlibrary.cast.BaseCastManager.FEATURE_WIFI_RECONNECT;
 
 public class AppMediaPlayer extends Application {
 
@@ -52,14 +50,21 @@ public class AppMediaPlayer extends Application {
     public static Service<?, ?> rService;
     private static Boolean rPlaying = false;
     public final static UnsignedIntegerFourBytes instanceid = new UnsignedIntegerFourBytes(0);
+    private static ImageLoader imageLoader;
 
     @Override
     public void onCreate() {
         super.onCreate();
         sContext = getApplicationContext();
         String applicationId = getResources().getString(R.string.cast_application_id);
-        VideoCastManager castManager = VideoCastManager.initialize(getApplicationContext(), applicationId, MainActivity.class, null);
-        castManager.enableFeatures(FEATURE_WIFI_RECONNECT | FEATURE_DEBUGGING);
+        VideoCastManager.initialize(
+                getApplicationContext(),
+                new CastConfiguration.Builder(applicationId)
+                        .enableWifiReconnection()
+                        .enableAutoReconnect()
+                        .enableDebug()
+                        .setTargetActivity(MainActivity.class)
+                        .build());
         startService(new Intent(getApplicationContext(), MusicService.class));
     }
 
@@ -74,8 +79,15 @@ public class AppMediaPlayer extends Application {
         return upnpService;
     }
 
+    public static ImageLoader getImageLoader() {
+        if (imageLoader == null) {
+            imageLoader = new ImageLoader(sContext);
+        }
+        return imageLoader;
+    }
+
     public static void setUpnpService(AndroidUpnpService upnp) {
-       upnpService = upnp;
+        upnpService = upnp;
     }
 
     public static Boolean isPlaying() {

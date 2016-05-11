@@ -15,7 +15,7 @@
  */
 package com.appdevper.mediaplayer.app;
 
-import static android.media.session.MediaSession.QueueItem;
+import static android.support.v4.media.session.MediaSessionCompat.QueueItem;
 
 /**
  * Interface representing either Local or Remote Playback. The {@link MusicService} works
@@ -99,6 +99,8 @@ public interface Playback {
      * @return the current media Id being processed in any state or null.
      */
     String getCurrentMediaId();
+
+    void updateLastKnownStreamPosition();
 
     interface Callback {
         /**

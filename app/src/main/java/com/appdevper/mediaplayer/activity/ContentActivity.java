@@ -15,6 +15,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.annotation.NonNull;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -29,10 +32,8 @@ import com.appdevper.mediaplayer.adater.ContentItemAdapter;
 import com.appdevper.mediaplayer.app.AppMediaPlayer;
 import com.appdevper.mediaplayer.app.ShareData;
 import com.appdevper.mediaplayer.model.MusicProvider;
-import com.appdevper.mediaplayer.ui.BaseActivity;
 import com.appdevper.mediaplayer.util.ContentActionCallback;
 import com.appdevper.mediaplayer.util.ContentItem;
-import com.google.android.gms.ads.AdRequest;
 
 import org.fourthline.cling.android.AndroidUpnpService;
 import org.fourthline.cling.model.meta.Device;
@@ -45,17 +46,16 @@ import java.util.Stack;
 
 public class ContentActivity extends BaseActivity {
 
+    //private GridView contentListView;
     private ListView contentListView;
     private ContentItemAdapter contentAdapter;
     private AndroidUpnpService upnpService;
-    private boolean aSelect = false;
     private final static String TAG = ContentActivity.class.getSimpleName();
     private Device<?, ?, ?> cDevice;
     private Service<?, ?> cServices;
     private String type;
     private ContentItem mainContent;
     private Stack<ContentItem> stackContent;
-    private AdRequest adRequest;
 
 
     @Override
@@ -65,16 +65,34 @@ public class ContentActivity extends BaseActivity {
 
         initializeToolbar();
 
-        contentListView = (ListView) findViewById(R.id.contentList);
-
         contentAdapter = new ContentItemAdapter(this);
+
+        contentListView = (ListView) findViewById(R.id.contentList);
         contentListView.setAdapter(contentAdapter);
-        contentListView.setOnItemClickListener(contentItemClickListener);
-        contentListView.setOnItemLongClickListener(itemLongClink);
+        contentListView.setOnItemClickListener(new OnItemClickListener() {
+
+            @Override
+            public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
+                sMedia(position);
+            }
+        });
+
+        contentListView.setOnItemLongClickListener(new OnItemLongClickListener() {
+
+            @Override
+            public boolean onItemLongClick(AdapterView<?> parent, View v, int position, long id) {
+                ContentItem content = contentAdapter.getItem(position);
+                if (!content.isContainer()) {
+                    showDialog(content);
+                }
+                return true;
+            }
+        });
+
 
         upnpService = AppMediaPlayer.getUpnpService();
         cDevice = ShareData.getDevice();
-
+        setTitle(getIntent().getStringExtra("name"));
         stackContent = new Stack<>();
 
         try {
@@ -87,15 +105,11 @@ public class ContentActivity extends BaseActivity {
 
         AppMediaPlayer.setService();
 
-        adRequest = new AdRequest.Builder().addTestDevice("FC30F813719E71A110A143F708B6C212").addTestDevice(AdRequest.DEVICE_ID_EMULATOR).build();
-
-        //adView.loadAd(adRequest);
-
     }
 
-    private final MediaController.Callback mMediaControllerCallback = new MediaController.Callback() {
+    private final MediaControllerCompat.Callback mMediaControllerCallback = new MediaControllerCompat.Callback() {
         @Override
-        public void onMetadataChanged(MediaMetadata metadata) {
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
             super.onMetadataChanged(metadata);
             if (metadata == null) {
                 return;
@@ -105,7 +119,7 @@ public class ContentActivity extends BaseActivity {
         }
 
         @Override
-        public void onPlaybackStateChanged(@NonNull PlaybackState state) {
+        public void onPlaybackStateChanged(@NonNull PlaybackStateCompat state) {
             super.onPlaybackStateChanged(state);
             Log.d(TAG, "Received state change: " + state);
 
@@ -129,7 +143,6 @@ public class ContentActivity extends BaseActivity {
         if (!stackContent.isEmpty()) {
             mainContent = stackContent.pop();
             upnpService.getControlPoint().execute(new ContentActionCallback(this, mainContent.getService(), mainContent.getContainer(), contentAdapter));
-            aSelect = false;
             return true;
         } else {
             setResult(200);
@@ -146,36 +159,14 @@ public class ContentActivity extends BaseActivity {
         return rootContainer;
     }
 
-    private OnItemClickListener contentItemClickListener = new OnItemClickListener() {
-
-        @Override
-        public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
-            sMedia(position);
-
-        }
-    };
-
-    private OnItemLongClickListener itemLongClink = new OnItemLongClickListener() {
-
-        @Override
-        public boolean onItemLongClick(AdapterView<?> parent, View v, int position, long id) {
-            ContentItem content = contentAdapter.getItem(position);
-            if (!content.isContainer()) {
-                showDialog(content);
-            }
-            return true;
-        }
-    };
-
     private void sMedia(int position) {
         ContentItem content = contentAdapter.getItem(position);
         type = content.getType();
-        Log.d("___CLINK____", content.isContainer().toString());
+        Log.d(TAG, content.isContainer().toString());
         if (content.isContainer()) {
             stackContent.push(mainContent);
             mainContent = content;
             upnpService.getControlPoint().execute(new ContentActionCallback(ContentActivity.this, content.getService(), content.getContainer(), contentAdapter));
-            aSelect = false;
         } else {
             try {
                 if (ShareData.getrDevice().getIslocal()) {
@@ -216,7 +207,8 @@ public class ContentActivity extends BaseActivity {
     }
 
     public void onMediaItemSelected(String mediaId) {
-        getMediaController().getTransportControls().playFromMediaId(mediaId, null);
+        Log.i(TAG, "onMediaItemSelected: " + mediaId);
+        getSupportMediaController().getTransportControls().playFromMediaId(mediaId, null);
     }
 
     private void showDialog(final ContentItem content) {
@@ -282,8 +274,8 @@ public class ContentActivity extends BaseActivity {
 
     @Override
     protected void onMediaControllerConnected() {
-        if (getMediaController() != null) {
-            getMediaController().registerCallback(mMediaControllerCallback);
+        if (getSupportMediaController() != null) {
+            getSupportMediaController().registerCallback(mMediaControllerCallback);
         }
     }
 }

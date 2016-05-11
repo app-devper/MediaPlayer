@@ -20,21 +20,24 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.media.MediaDescription;
 import android.media.MediaMetadata;
-import android.media.MediaMetadataRetriever;
-import android.media.browse.MediaBrowser;
 import android.media.session.MediaController;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.RemoteException;
 import android.os.SystemClock;
 import android.support.annotation.NonNull;
-import android.util.Log;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.media.MediaDescriptionCompat;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.view.Menu;
 import android.view.View;
 import android.widget.ImageView;
@@ -44,13 +47,10 @@ import android.widget.TextView;
 
 import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.app.MusicService;
-import com.appdevper.mediaplayer.model.MusicProvider;
-import com.appdevper.mediaplayer.ui.*;
 import com.appdevper.mediaplayer.util.AlbumArtCache;
 import com.appdevper.mediaplayer.util.LogHelper;
 import com.google.android.libraries.cast.companionlibrary.utils.Utils;
 
-import java.util.HashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -92,17 +92,17 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
     private final ScheduledExecutorService mExecutorService = Executors.newSingleThreadScheduledExecutor();
 
     private ScheduledFuture<?> mScheduleFuture;
-    private PlaybackState mLastPlaybackState;
+    private PlaybackStateCompat mLastPlaybackState;
 
-    private final MediaController.Callback mCallback = new MediaController.Callback() {
+    private final MediaControllerCompat.Callback mCallback = new MediaControllerCompat.Callback() {
         @Override
-        public void onPlaybackStateChanged(@NonNull PlaybackState state) {
+        public void onPlaybackStateChanged(@NonNull PlaybackStateCompat state) {
             LogHelper.d(TAG, "onPlaybackstate changed", state);
             updatePlaybackState(state);
         }
 
         @Override
-        public void onMetadataChanged(MediaMetadata metadata) {
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
             if (metadata != null) {
                 updateMediaDescription(metadata.getDescription());
                 updateDuration(metadata);
@@ -121,7 +121,11 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
             MusicService.LocalBinder binder = (MusicService.LocalBinder) service;
             mService = binder.getService();
             mBound = true;
-            connectToSession(mService.getSessionToken());
+            try {
+                connectToSession(mService.getSessionToken());
+            } catch (RemoteException e) {
+                LogHelper.e(TAG, e, "could not connect media controller");
+            }
         }
 
         @Override
@@ -142,8 +146,8 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         }
 
         mBackgroundImage = (ImageView) findViewById(R.id.background_image);
-        mPauseDrawable = getDrawable(R.drawable.uamp_ic_pause_white_48dp);
-        mPlayDrawable = getDrawable(R.drawable.uamp_ic_play_arrow_white_48dp);
+        mPauseDrawable = ContextCompat.getDrawable(this, R.drawable.uamp_ic_pause_white_48dp);
+        mPlayDrawable = ContextCompat.getDrawable(this, R.drawable.uamp_ic_play_arrow_white_48dp);
         mPlayPause = (ImageView) findViewById(R.id.play_pause);
         mSkipNext = (ImageView) findViewById(R.id.next);
         mSkipPrev = (ImageView) findViewById(R.id.prev);
@@ -159,7 +163,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         mSkipNext.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                MediaController.TransportControls controls = getMediaController().getTransportControls();
+                MediaControllerCompat.TransportControls controls = getSupportMediaController().getTransportControls();
                 controls.skipToNext();
             }
         });
@@ -167,7 +171,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         mSkipPrev.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                MediaController.TransportControls controls = getMediaController().getTransportControls();
+                MediaControllerCompat.TransportControls controls = getSupportMediaController().getTransportControls();
                 controls.skipToPrevious();
             }
         });
@@ -175,9 +179,9 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         mPlayPause.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                PlaybackState state = getMediaController().getPlaybackState();
+                PlaybackStateCompat state = getSupportMediaController().getPlaybackState();
                 if (state != null) {
-                    MediaController.TransportControls controls = getMediaController().getTransportControls();
+                    MediaControllerCompat.TransportControls controls = getSupportMediaController().getTransportControls();
                     switch (state.getState()) {
                         case PlaybackState.STATE_PLAYING: // fall through
                         case PlaybackState.STATE_BUFFERING:
@@ -209,7 +213,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                getMediaController().getTransportControls().seekTo(seekBar.getProgress());
+                getSupportMediaController().getTransportControls().seekTo(seekBar.getProgress());
                 scheduleSeekbarUpdate();
             }
         });
@@ -228,17 +232,17 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         return true;
     }
 
-    private void connectToSession(MediaSession.Token token) {
-        MediaController mediaController = new MediaController(FullScreenPlayerActivity.this, token);
+    private void connectToSession(MediaSessionCompat.Token token) throws RemoteException {
+        MediaControllerCompat mediaController = new MediaControllerCompat(FullScreenPlayerActivity.this, token);
         if (mediaController.getMetadata() == null) {
             finish();
             return;
         }
-        setMediaController(mediaController);
+        setSupportMediaController(mediaController);
         mediaController.registerCallback(mCallback);
-        PlaybackState state = mediaController.getPlaybackState();
+        PlaybackStateCompat state = mediaController.getPlaybackState();
         updatePlaybackState(state);
-        MediaMetadata metadata = mediaController.getMetadata();
+        MediaMetadataCompat metadata = mediaController.getMetadata();
         if (metadata != null) {
             updateMediaDescription(metadata.getDescription());
             updateDuration(metadata);
@@ -251,7 +255,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
 
     private void updateFromParams(Intent intent) {
         if (intent != null) {
-            MediaDescription description = intent.getParcelableExtra(MainActivity.EXTRA_CURRENT_MEDIA_DESCRIPTION);
+            MediaDescriptionCompat description = intent.getParcelableExtra(MainActivity.EXTRA_CURRENT_MEDIA_DESCRIPTION);
             if (description != null) {
                 updateMediaDescription(description);
             }
@@ -291,8 +295,8 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
             unbindService(mConnection);
             mBound = false;
         }
-        if (getMediaController() != null) {
-            getMediaController().unregisterCallback(mCallback);
+        if (getSupportMediaController() != null) {
+            getSupportMediaController().unregisterCallback(mCallback);
         }
     }
 
@@ -303,7 +307,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         mExecutorService.shutdown();
     }
 
-    private void fetchImageAsync(@NonNull final MediaDescription description) {
+    private void fetchImageAsync(@NonNull final MediaDescriptionCompat description) {
         if (description.getIconUri() == null) {
             com.appdevper.mediaplayer.util.Utils.downloadBitmap(getResources(), description.getMediaId(), mBackgroundImage);
             return;
@@ -336,7 +340,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         }
     }
 
-    private void updateMediaDescription(MediaDescription description) {
+    private void updateMediaDescription(MediaDescriptionCompat description) {
         if (description == null) {
             return;
         }
@@ -346,7 +350,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         fetchImageAsync(description);
     }
 
-    private void updateDuration(MediaMetadata metadata) {
+    private void updateDuration(MediaMetadataCompat metadata) {
         if (metadata == null) {
             return;
         }
@@ -356,13 +360,13 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         mEnd.setText(Utils.formatMillis(duration));
     }
 
-    private void updatePlaybackState(PlaybackState state) {
+    private void updatePlaybackState(PlaybackStateCompat state) {
         if (state == null) {
             return;
         }
         mLastPlaybackState = state;
-        if (getMediaController() != null && getMediaController().getExtras() != null) {
-            String castName = getMediaController().getExtras().getString(MusicService.EXTRA_CONNECTED_CAST);
+        if (getSupportMediaController() != null && getSupportMediaController().getExtras() != null) {
+            String castName = getSupportMediaController().getExtras().getString(MusicService.EXTRA_CONNECTED_CAST);
             String line3Text = castName == null ? "" : getResources().getString(R.string.casting_to_device, castName);
             mLine3.setText(line3Text);
         }

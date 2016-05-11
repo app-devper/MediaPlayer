@@ -33,7 +33,6 @@ public class ImageActivity extends FragmentActivity {
 		listPath = new ArrayList<>();
 
 		for (int i = 0; i < sList.size(); i++) {
-
 			listPath.add(sList.get(i).getResourceUri());
 		}
 
@@ -42,7 +41,7 @@ public class ImageActivity extends FragmentActivity {
 
 	private void initPager() {
 
-		mPagerAdapter = new ImagePagerAdapter(getSupportFragmentManager(), ImageActivity.this, listPath);
+		mPagerAdapter = new ImagePagerAdapter(getSupportFragmentManager(), this, listPath);
 		imageSliderPager.setAdapter(mPagerAdapter);
 		imageSliderPager.setCurrentItem(select);
 	}

@@ -1,7 +1,5 @@
 package com.appdevper.mediaplayer.app;
 
-import android.app.AlarmManager;
-import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
@@ -9,7 +7,6 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
-import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
 
@@ -39,34 +36,27 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Enumeration;
 
-public class ServerUpnpService {
+public class ServerUpnpService extends AndroidUpnpServiceImpl {
     private static final String TAG = ServerUpnpService.class.getSimpleName();
     private static MediaServer mediaServer;
     static public final String ACTION_STARTED = "APPSERVER_STARTED";
     static public final String ACTION_STOPPED = "APPSERVER_STOPPED";
     static public final String ACTION_FAILEDTOSTART = "APPSERVER_FAILEDTOSTART";
-    //static public final String ACTION_START_SERVER = "ACTION_START_APPSERVER";
-    //static public final String ACTION_STOP_SERVER = "ACTION_STOP_APPSERVER";
+    static public final String ACTION_START_SERVER = "ACTION_START_APPSERVER";
+    static public final String ACTION_STOP_SERVER = "ACTION_STOP_APPSERVER";
 
-    private boolean b = false;
-    private AndroidUpnpService upnpService;
+    static private boolean b = false;
     private Context context;
 
-    private static ServerUpnpService instance;
 
-    public static ServerUpnpService getInstance() {
-        if (instance == null) {
-            instance = new ServerUpnpService(AppMediaPlayer.getUpnpService(), AppMediaPlayer.getAppContext());
-        }
-        return instance;
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        context = getApplicationContext();
+        startServer();
+        return START_NOT_STICKY;
     }
 
-    public ServerUpnpService(AndroidUpnpService upnpService, Context context) {
-        this.upnpService = upnpService;
-        this.context = context;
-    }
-
-    public void startServer() {
+    private void startServer() {
         try {
             mediaServer = new MediaServer(getLocalInetAddress(), context, ServerSettings.getDeviceName());
             initMedia();
@@ -96,11 +86,17 @@ public class ServerUpnpService {
 
     }
 
-    public boolean isRunning() {
+    @Override
+    public void onDestroy() {
+        stopServer();
+        new Shutdown().execute(upnpService);
+    }
+
+    public static boolean isRunning() {
         return b;
     }
 
-    public static InetAddress getLocalInetAddress() {
+    private static InetAddress getLocalInetAddress() {
         if (isConnectedToLocalNetwork() == false) {
             Log.e(TAG, "getLocalInetAddress called and no connection");
             return null;
@@ -133,17 +129,17 @@ public class ServerUpnpService {
         return null;
     }
 
-    public void stopServer() {
+    private void stopServer() {
         b = false;
         if (mediaServer != null) {
             upnpService.getRegistry().removeDevice(mediaServer.getDevice());
             mediaServer.stop();
         }
-
         context.sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
+
     }
 
-    public static boolean isConnectedToLocalNetwork() {
+    private static boolean isConnectedToLocalNetwork() {
         boolean connected;
         Context context = AppMediaPlayer.getAppContext();
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -162,7 +158,7 @@ public class ServerUpnpService {
         return connected;
     }
 
-    public static boolean isConnectedUsingWifi() {
+    private static boolean isConnectedUsingWifi() {
         Context context = AppMediaPlayer.getAppContext();
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo ni = cm.getActiveNetworkInfo();

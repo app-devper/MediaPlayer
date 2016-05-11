@@ -16,14 +16,8 @@ import android.provider.MediaStore;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
-import android.support.v4.app.FragmentTransaction;
 import android.support.v4.view.ViewPager;
-import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBar;
-import android.support.v7.app.ActionBar.Tab;
-import android.support.v7.app.ActionBar.TabListener;
-import android.support.v7.app.ActionBarActivity;
-import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -31,7 +25,6 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.ListView;
 import android.widget.Toast;
 
 import com.appdevper.mediaplayer.R;
@@ -41,16 +34,9 @@ import com.appdevper.mediaplayer.fragment.AudioFragment;
 import com.appdevper.mediaplayer.fragment.ImageFragment;
 import com.appdevper.mediaplayer.fragment.VideoFragment;
 import com.appdevper.mediaplayer.mediaserver.ContentTree;
-import com.appdevper.mediaplayer.ui.BaseActivity;
 import com.appdevper.mediaplayer.ui.PlaybackControlsFragment;
-import com.appdevper.mediaplayer.util.LogHelper;
-import com.appdevper.mediaplayer.util.ResourceHelper;
-import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
-import com.google.android.gms.ads.InterstitialAd;
 
 public class SelectMediaActivity extends AppCompatActivity {
-
 
     private final static String TAG = SelectMediaActivity.class.getSimpleName();
     private int page = 0;
@@ -64,7 +50,7 @@ public class SelectMediaActivity extends AppCompatActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_select);
 
         initializeToolbar();
 
@@ -78,6 +64,7 @@ public class SelectMediaActivity extends AppCompatActivity {
         }
 
         hidePlaybackControls();
+
         initMedia();
     }
 
@@ -87,7 +74,7 @@ public class SelectMediaActivity extends AppCompatActivity {
             throw new IllegalStateException("Layout is required to include a Toolbar with id " + "'toolbar'");
         }
 
-        mToolbar.setNavigationIcon(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
+        //mToolbar.setNavigationIcon(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
         setSupportActionBar(mToolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);

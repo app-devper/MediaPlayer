@@ -1,9 +1,9 @@
 package com.appdevper.mediaplayer.activity;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
 import org.fourthline.cling.android.AndroidUpnpService;
+import org.fourthline.cling.android.AndroidUpnpServiceImpl;
 import org.fourthline.cling.model.meta.LocalDevice;
 import org.fourthline.cling.model.meta.RemoteDevice;
 import org.fourthline.cling.registry.DefaultRegistryListener;
@@ -15,38 +15,24 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.support.v4.app.Fragment;
-import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentPagerAdapter;
-import android.support.v4.app.FragmentTransaction;
-import android.support.v4.view.ViewPager;
-import android.support.v7.app.ActionBar;
-import android.support.v7.app.ActionBar.Tab;
-import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ListView;
 import android.widget.Toast;
 
 import com.appdevper.mediaplayer.R;
+import com.appdevper.mediaplayer.adater.DeviceListAdapter;
 import com.appdevper.mediaplayer.app.AppConfiguration;
 import com.appdevper.mediaplayer.app.AppMediaPlayer;
-import com.appdevper.mediaplayer.app.FindUpnpService;
 import com.appdevper.mediaplayer.app.MusicService;
 import com.appdevper.mediaplayer.app.ServerSettings;
 import com.appdevper.mediaplayer.app.ServerUpnpService;
 import com.appdevper.mediaplayer.app.ShareData;
-import com.appdevper.mediaplayer.fragment.RenderFragment;
-import com.appdevper.mediaplayer.fragment.ServerFragment;
-import com.appdevper.mediaplayer.ui.ActionBarCastActivity;
-import com.appdevper.mediaplayer.ui.BaseActivity;
 import com.appdevper.mediaplayer.util.DeviceItem;
-import com.appdevper.mediaplayer.util.LogHelper;
 import com.appdevper.mediaplayer.util.Utils;
 import com.google.android.gms.ads.AdListener;
 import com.google.android.gms.ads.AdRequest;
-import com.google.android.gms.ads.AdView;
 import com.google.android.gms.ads.InterstitialAd;
 
 public class MainActivity extends BaseActivity {
@@ -54,43 +40,60 @@ public class MainActivity extends BaseActivity {
     private DeviceListRegistryListener deviceListRegistryListener;
     private final static String LOGTAG = MainActivity.class.getSimpleName();
 
-    private MusicService mService;
 
     private ServiceConnection serviceConnection = new ServiceConnection() {
 
         public void onServiceConnected(ComponentName className, IBinder service) {
-            MusicService.LocalBinder binder = (MusicService.LocalBinder) service;
-            mService = binder.getService();
-            mService.setUpnpCallBack(upnpCallBack);
-            Log.v(LOGTAG, "Connected to Music Service");
-            if (AppMediaPlayer.getUpnpService() != null) {
+            AppMediaPlayer.setUpnpService((AndroidUpnpService) service);
+            Log.d(LOGTAG, "AndroidUpnpService Connect");
+            if (upnpCallBack != null) {
                 upnpCallBack.onConnect();
+            }
+
+            if (ServerSettings.autoRun() && !ServerUpnpService.isRunning()) {
+                sendBroadcast(new Intent(ServerUpnpService.ACTION_START_SERVER));
             }
         }
 
         public void onServiceDisconnected(ComponentName className) {
+            //AppMediaPlayer.setUpnpService(null);
+            Log.d(LOGTAG, "AndroidUpnpService DisConnect");
+            if (upnpCallBack != null) {
+                upnpCallBack.onDisConnect();
+            }
 
         }
     };
 
     private AdRequest adRequest;
-    private SectionsPagerAdapter mSectionsPagerAdapter;
-    private ViewPager mViewPager;
+
     private InterstitialAd interstitialAd;
+    public static final String EXTRA_START_SETTING = "com.appdevper.mediaplayer.EXTRA_START_SETTING";
     public static final String EXTRA_START_FULLSCREEN = "com.appdevper.mediaplayer.EXTRA_START_FULLSCREEN";
     public static final String EXTRA_CURRENT_MEDIA_DESCRIPTION = "com.appdevper.mediaplayer.CURRENT_MEDIA_DESCRIPTION";
+    private DeviceListAdapter deviceList;
+    private ListView listServer;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initializeToolbar();
-        //AdView adView = (AdView) findViewById(R.id.adView);
+        deviceList = new DeviceListAdapter(this);
 
-        mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager());
+        listServer = (ListView) findViewById(R.id.listServer);
+        listServer.setAdapter(deviceList);
+        listServer.setOnItemClickListener(new AdapterView.OnItemClickListener() {
 
-        mViewPager = (ViewPager) findViewById(R.id.pager);
-        mViewPager.setAdapter(mSectionsPagerAdapter);
+            @Override
+            public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
+                ShareData.setDevice(deviceList.getItem(position).getDevice());
+                Intent intent = new Intent();
+                intent.setClass(MainActivity.this, ContentActivity.class);
+                intent.putExtra("name", deviceList.getItem(position).toString());
+                startActivityForResult(intent, 200);
+            }
+        });
 
         ShareData.setRenList(new ArrayList<DeviceItem>());
 
@@ -117,7 +120,7 @@ public class MainActivity extends BaseActivity {
 
         //interstitialAd.loadAd(adRequest);
 
-        bindService(new Intent(this, MusicService.class), serviceConnection, Context.BIND_AUTO_CREATE);
+        bindService(new Intent(this, AndroidUpnpServiceImpl.class), serviceConnection, Context.BIND_AUTO_CREATE);
 
         if (savedInstanceState == null) {
             startFullScreenActivityIfNeeded(getIntent());
@@ -130,12 +133,14 @@ public class MainActivity extends BaseActivity {
         if (AppMediaPlayer.getUpnpService() != null) {
             AppMediaPlayer.getUpnpService().getRegistry().removeListener(deviceListRegistryListener);
         }
+
         try {
             unbindService(serviceConnection);
+            Log.v(LOGTAG, "unbindService(serviceConnection)");
         } catch (Exception ex) {
             Log.v(LOGTAG, "Can't unbindService(serviceConnection)");
         }
-        Log.v(LOGTAG, "unbindService(serviceConnection)");
+
     }
 
     @Override
@@ -148,6 +153,11 @@ public class MainActivity extends BaseActivity {
             Intent fullScreenIntent = new Intent(this, FullScreenPlayerActivity.class);
             fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             fullScreenIntent.putExtra(EXTRA_CURRENT_MEDIA_DESCRIPTION, intent.getParcelableExtra(EXTRA_CURRENT_MEDIA_DESCRIPTION));
+            startActivity(fullScreenIntent);
+        }
+        if (intent != null && intent.getBooleanExtra(EXTRA_START_SETTING, false)) {
+            Intent fullScreenIntent = new Intent(this, SettingPreferenceActivity.class);
+            fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             startActivity(fullScreenIntent);
         }
     }
@@ -204,19 +214,7 @@ public class MainActivity extends BaseActivity {
         public void deviceAdded(final DeviceItem di) {
             runOnUiThread(new Runnable() {
                 public void run() {
-                    int position = -1;
-                    try {
-                        position = ServerFragment.getInstance().getAdapter().getPosition(di);
-                    } catch (Exception e) {
-
-                    }
-
-                    if (position >= 0) {
-                        ServerFragment.getInstance().getAdapter().remove(di);
-                        ServerFragment.getInstance().getAdapter().insert(di, position);
-                    } else {
-                        ServerFragment.getInstance().getAdapter().add(di);
-                    }
+                    deviceList.add(di);
                 }
             });
         }
@@ -224,20 +222,7 @@ public class MainActivity extends BaseActivity {
         public void deviceRenAdded(final DeviceItem di) {
             runOnUiThread(new Runnable() {
                 public void run() {
-                    int position = -1;
-                    try {
-                        position = RenderFragment.getInstance().getAdapter().getPosition(di);
-                    } catch (Exception e) {
-
-                    }
-                    if (position >= 0) {
-                        RenderFragment.getInstance().getAdapter().remove(di);
-                        RenderFragment.getInstance().getAdapter().insert(di, position);
-                    } else {
-                        RenderFragment.getInstance().getAdapter().add(di);
-                        ShareData.getRenList().add(di);
-                    }
-
+                    ShareData.getRenList().add(di);
                 }
             });
         }
@@ -245,52 +230,10 @@ public class MainActivity extends BaseActivity {
         public void deviceRemoved(final DeviceItem di) {
             runOnUiThread(new Runnable() {
                 public void run() {
-                    ServerFragment.getInstance().getAdapter().remove(di);
-                    RenderFragment.getInstance().getAdapter().remove(di);
                     ShareData.getRenList().remove(di);
+                    deviceList.remove(di);
                 }
             });
-        }
-    }
-
-    public class SectionsPagerAdapter extends FragmentPagerAdapter {
-
-        public SectionsPagerAdapter(FragmentManager fm) {
-            super(fm);
-        }
-
-        @Override
-        public Fragment getItem(int position) {
-            Fragment fragment = null;
-            switch (position) {
-                case 0:
-                    fragment = ServerFragment.newInstance("HOME");
-                    break;
-                case 1:
-                    fragment = RenderFragment.newInstance("HOME");
-                    break;
-
-            }
-
-            return fragment;
-        }
-
-        @Override
-        public int getCount() {
-            return 2;
-        }
-
-        @Override
-        public CharSequence getPageTitle(int position) {
-            Locale l = Locale.getDefault();
-            switch (position) {
-                case 0:
-                    return "server".toUpperCase(l);
-                case 1:
-                    return "renderer".toUpperCase(l);
-
-            }
-            return null;
         }
     }
 
@@ -299,12 +242,6 @@ public class MainActivity extends BaseActivity {
         public void onConnect() {
             Log.i(LOGTAG, "onConnect");
             DeviceItem di = new DeviceItem(null, true);
-            try {
-                RenderFragment.getInstance().getAdapter().add(di);
-            } catch (Exception e) {
-                // TODO: handle exception
-            }
-
             ShareData.getRenList().add(di);
             ShareData.setrDevice(di);
             AppMediaPlayer.getUpnpService().getRegistry().addListener(deviceListRegistryListener);

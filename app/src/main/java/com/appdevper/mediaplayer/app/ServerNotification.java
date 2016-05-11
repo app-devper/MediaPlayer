@@ -1,6 +1,7 @@
 package com.appdevper.mediaplayer.app;
 
 import com.appdevper.mediaplayer.R;
+import com.appdevper.mediaplayer.activity.MainActivity;
 import com.appdevper.mediaplayer.activity.SettingPreferenceActivity;
 
 import android.annotation.SuppressLint;
@@ -27,6 +28,10 @@ public class ServerNotification extends BroadcastReceiver {
             setupNotification(context);
         } else if (intent.getAction().equals(ServerUpnpService.ACTION_STOPPED)) {
             clearNotification(context);
+        } else if (intent.getAction().equals(ServerUpnpService.ACTION_START_SERVER)) {
+            context.startService(new Intent(context, ServerUpnpService.class));
+        } else if (intent.getAction().equals(ServerUpnpService.ACTION_STOP_SERVER)) {
+            context.stopService(new Intent(context, ServerUpnpService.class));
         }
     }
 
@@ -46,14 +51,11 @@ public class ServerNotification extends BroadcastReceiver {
         CharSequence contentTitle = context.getString(R.string.notif_title);
         CharSequence contentText = String.format(context.getString(R.string.notif_text), ServerSettings.getDeviceName());
 
-        Intent notificationIntent = new Intent(context, SettingPreferenceActivity.class);
-        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        PendingIntent contentIntent = PendingIntent.getActivity(context, 0, notificationIntent, 0);
+        Intent openUI = new Intent(context, MainActivity.class);
+        openUI.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        openUI.putExtra(MainActivity.EXTRA_START_SETTING, true);
+        PendingIntent contentIntent = PendingIntent.getActivity(context, 0, openUI, 0);
 
-        //int stopIcon = android.R.drawable.ic_menu_close_clear_cancel;
-        //CharSequence stopText = context.getString(R.string.notif_stop_text);
-        //Intent stopIntent = new Intent(ServerUpnpService.ACTION_STOP_SERVER);
-        //PendingIntent stopPendingIntent = PendingIntent.getBroadcast(context, 0, stopIntent, PendingIntent.FLAG_ONE_SHOT);
 
         NotificationCompat.Builder nb = new NotificationCompat.Builder(context) //
                 .setContentTitle(contentTitle) //

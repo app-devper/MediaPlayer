@@ -50,7 +50,7 @@ public class SettingPreferenceActivity extends AppCompatActivity {
             throw new IllegalStateException("Layout is required to include a Toolbar with id " + "'toolbar'");
         }
 
-        mToolbar.setNavigationIcon(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
+        //mToolbar.setNavigationIcon(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
         setSupportActionBar(mToolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
@@ -90,7 +90,7 @@ public class SettingPreferenceActivity extends AppCompatActivity {
             selectPref.setOnPreferenceClickListener(new OnPreferenceClickListener() {
                 @Override
                 public boolean onPreferenceClick(Preference preference) {
-                    if (!ServerUpnpService.getInstance().isRunning()) {
+                    if (!ServerUpnpService.isRunning()) {
                         startActivity(new Intent(SettingPreferenceActivity.this, SelectMediaActivity.class));
                     }
                     return false;
@@ -231,7 +231,7 @@ public class SettingPreferenceActivity extends AppCompatActivity {
             CheckBoxPreference videoPref = findPref("allow_video");
             CheckBoxPreference audioPref = findPref("allow_audio");
             CheckBoxPreference imagePref = findPref("allow_image");
-            if (ServerUpnpService.getInstance().isRunning() == true) {
+            if (ServerUpnpService.isRunning() == true) {
                 videoPref.setEnabled(false);
                 audioPref.setEnabled(false);
                 imagePref.setEnabled(false);
@@ -251,11 +251,11 @@ public class SettingPreferenceActivity extends AppCompatActivity {
         }
 
         private void startServer() {
-            ServerUpnpService.getInstance().startServer();
+            sendBroadcast(new Intent(ServerUpnpService.ACTION_START_SERVER));
         }
 
         private void stopServer() {
-            ServerUpnpService.getInstance().stopServer();
+            sendBroadcast(new Intent(ServerUpnpService.ACTION_STOP_SERVER));
         }
     }
 

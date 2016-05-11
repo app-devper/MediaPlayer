@@ -45,23 +45,4 @@
 
     </RelativeLayout>
 
-    <RelativeLayout
-        android:layout_width="wrap_content"
-        android:layout_height="2dip"
-        android:layout_alignParentLeft="true"
-        android:layout_alignParentRight="true"
-        android:layout_below="@+id/relativeLayout1"
-        android:background="#161616" >
-    </RelativeLayout>
-
-    <RelativeLayout
-        android:id="@+id/r_select"
-        android:layout_width="10dip"
-        android:layout_height="match_parent"
-        android:layout_alignBottom="@+id/relativeLayout1"
-        android:layout_alignParentRight="true"
-        android:background="#BFD22B" >
-
-    </RelativeLayout>
-
 </RelativeLayout>

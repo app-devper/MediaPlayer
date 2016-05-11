@@ -17,7 +17,10 @@ import android.util.Log;
 import android.widget.ImageView;
 
 import com.appdevper.mediaplayer.R;
+import com.appdevper.mediaplayer.app.AppMediaPlayer;
+import com.appdevper.mediaplayer.app.ShareData;
 import com.appdevper.mediaplayer.model.MusicProvider;
+import com.appdevper.mediaplayer.model.MusicProviderSource;
 import com.google.android.gms.ads.AdRequest;
 
 public class Utils {
@@ -213,7 +216,7 @@ public class Utils {
             m = Integer.parseInt(ss[1]);
             s = Integer.parseInt(ss[2]);
             ms = Integer.parseInt(ss[3]);
-        } else if(ss.length == 3) {
+        } else if (ss.length == 3) {
             h = Integer.parseInt(ss[0]);
             m = Integer.parseInt(ss[1]);
             s = Integer.parseInt(ss[2]);
@@ -246,8 +249,11 @@ public class Utils {
         return errorReason;
     }
 
-    public static void downloadBitmap(final Resources resource,String mediaId, final ImageView imageView) {
-        final String url = MusicProvider.getInstance().getMusic(mediaId).getString(MusicProvider.CUSTOM_METADATA_TRACK_SOURCE);
+    public static void downloadBitmap(final Resources resource, String mediaId, final ImageView imageView) {
+        if (mediaId == null) {
+            return;
+        }
+        final String url = MusicProvider.getInstance().getMusic(mediaId).getString(MusicProviderSource.CUSTOM_METADATA_TRACK_SOURCE);
         final MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
 
         new AsyncTask<Void, Void, Bitmap>() {
@@ -257,7 +263,7 @@ public class Utils {
                 metaRetriever.setDataSource(url, new HashMap<String, String>());
                 try {
                     final byte[] art = metaRetriever.getEmbeddedPicture();
-                    bitmap =  BitmapFactory.decodeByteArray(art, 0, art.length);
+                    bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
                 } catch (Exception e) {
                     Log.d(TAG, "Couldn't create album art: " + e.getMessage());
                     bitmap = BitmapFactory.decodeResource(resource, R.drawable.ic_default_art);
@@ -270,5 +276,55 @@ public class Utils {
                 imageView.setImageBitmap(bitmap);
             }
         }.execute();
+    }
+
+    public static void downloadBitmap(final Resources resource, final ContentItem item, final ImageView imageView) {
+        if (item.getType().equals("image")) {
+            final MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
+            new AsyncTask<Void, Void, Bitmap>() {
+                @Override
+                protected Bitmap doInBackground(Void[] objects) {
+                    Bitmap bitmap;
+                    metaRetriever.setDataSource(item.getResourceUri(), new HashMap<String, String>());
+                    try {
+                        final byte[] art = metaRetriever.getEmbeddedPicture();
+                        bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
+                    } catch (Exception e) {
+                        Log.d(TAG, "Couldn't create album art: " + e.getMessage());
+                        bitmap = BitmapFactory.decodeResource(resource, R.drawable.ic_default_art);
+                    }
+                    return bitmap;
+                }
+
+                @Override
+                protected void onPostExecute(Bitmap bitmap) {
+                    imageView.setImageBitmap(bitmap);
+                }
+            }.execute();
+        } else {
+            final MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
+            new AsyncTask<Void, Void, Bitmap>() {
+                @Override
+                protected Bitmap doInBackground(Void[] objects) {
+                    Bitmap bitmap;
+                    metaRetriever.setDataSource(item.getResourceUri(), new HashMap<String, String>());
+                    try {
+                        final byte[] art = metaRetriever.getEmbeddedPicture();
+                        bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
+                    } catch (Exception e) {
+                        Log.d(TAG, "Couldn't create album art: " + e.getMessage());
+
+                        bitmap = BitmapFactory.decodeResource(resource, R.drawable.ic_default_art);
+                    }
+                    return bitmap;
+                }
+
+                @Override
+                protected void onPostExecute(Bitmap bitmap) {
+                    imageView.setImageBitmap(bitmap);
+                }
+            }.execute();
+        }
+
     }
 }

@@ -17,10 +17,12 @@ package com.appdevper.mediaplayer.app;
 
 import android.media.session.PlaybackState;
 import android.net.Uri;
+import android.support.v4.media.MediaMetadataCompat;
 import android.text.TextUtils;
 import android.util.Log;
 
 import com.appdevper.mediaplayer.model.MusicProvider;
+import com.appdevper.mediaplayer.model.MusicProviderSource;
 import com.appdevper.mediaplayer.util.LogHelper;
 import com.google.android.gms.cast.MediaInfo;
 import com.google.android.gms.cast.MediaMetadata;
@@ -36,7 +38,7 @@ import org.fourthline.cling.model.ModelUtil;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import static android.media.session.MediaSession.QueueItem;
+import static android.support.v4.media.session.MediaSessionCompat.QueueItem;
 
 public class UpnpPlayback implements Playback {
 
@@ -176,6 +178,11 @@ public class UpnpPlayback implements Playback {
     }
 
     @Override
+    public void updateLastKnownStreamPosition() {
+        mCurrentPosition = getCurrentStreamPosition();
+    }
+
+    @Override
     public void setCallback(Callback callback) {
         this.mCallback = callback;
     }
@@ -197,20 +204,20 @@ public class UpnpPlayback implements Playback {
     }
 
     private void loadMedia(String mediaId, boolean autoPlay) throws Exception {
-        android.media.MediaMetadata track = mMusicProvider.getMusic(mediaId);
+       MediaMetadataCompat track = mMusicProvider.getMusic(mediaId);
         if (track == null) {
             throw new IllegalArgumentException("Invalid mediaId " + mediaId);
         }
         if (!TextUtils.equals(mediaId, mCurrentMediaId)) {
             mCurrentMediaId = mediaId;
             mCurrentPosition = 0;
-            upnpPlayer.setURI(track.getString(MusicProvider.CUSTOM_METADATA_TRACK_SOURCE), autoPlay);
+            upnpPlayer.setURI(track.getString(MusicProviderSource.CUSTOM_METADATA_TRACK_SOURCE), autoPlay);
         }
         else {
             upnpPlayer.toPlay();
         }
 
-        Log.i(TAG, track.getString(MusicProvider.CUSTOM_METADATA_TRACK_SOURCE));
+        Log.i(TAG, track.getString(MusicProviderSource.CUSTOM_METADATA_TRACK_SOURCE));
     }
 
     UpnpPlayer.Playback playback = new UpnpPlayer.Playback() {

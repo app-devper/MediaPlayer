@@ -5,6 +5,9 @@ import android.media.session.MediaController;
 import android.media.session.PlaybackState;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.v4.media.MediaMetadataCompat;
+import android.support.v4.media.session.MediaControllerCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
@@ -14,7 +17,6 @@ import android.widget.ListView;
 import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.adater.PlayListAdapter;
 import com.appdevper.mediaplayer.model.MusicProvider;
-import com.appdevper.mediaplayer.ui.BaseActivity;
 
 public class PlayListsActivity extends BaseActivity {
     private final static String TAG = PlayListsActivity.class.getSimpleName();
@@ -47,7 +49,7 @@ public class PlayListsActivity extends BaseActivity {
             throw new IllegalStateException("Layout is required to include a Toolbar with id " + "'toolbar'");
         }
 
-        mToolbar.setNavigationIcon(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
+        //mToolbar.setNavigationIcon(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
         setSupportActionBar(mToolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
@@ -60,12 +62,12 @@ public class PlayListsActivity extends BaseActivity {
     }
 
     public void onMediaItemSelected(String mediaId) {
-        getMediaController().getTransportControls().playFromMediaId(mediaId, null);
+        getSupportMediaController().getTransportControls().playFromMediaId(mediaId, null);
     }
 
-    private final MediaController.Callback mMediaControllerCallback = new MediaController.Callback() {
+    private final MediaControllerCompat.Callback mMediaControllerCallback = new MediaControllerCompat.Callback() {
         @Override
-        public void onMetadataChanged(MediaMetadata metadata) {
+        public void onMetadataChanged(MediaMetadataCompat metadata) {
             super.onMetadataChanged(metadata);
             if (metadata == null) {
                 return;
@@ -75,7 +77,7 @@ public class PlayListsActivity extends BaseActivity {
         }
 
         @Override
-        public void onPlaybackStateChanged(@NonNull PlaybackState state) {
+        public void onPlaybackStateChanged(@NonNull PlaybackStateCompat state) {
             super.onPlaybackStateChanged(state);
             Log.d(TAG, "Received state change: " + state);
 
@@ -85,8 +87,8 @@ public class PlayListsActivity extends BaseActivity {
 
     @Override
     protected void onMediaControllerConnected() {
-        if (getMediaController() != null) {
-            getMediaController().registerCallback(mMediaControllerCallback);
+        if (getSupportMediaController() != null) {
+            getSupportMediaController().registerCallback(mMediaControllerCallback);
         }
     }
 }

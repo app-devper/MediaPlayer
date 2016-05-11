@@ -25,9 +25,11 @@ import android.media.MediaPlayer;
 import android.media.session.PlaybackState;
 import android.net.wifi.WifiManager;
 import android.os.PowerManager;
+import android.support.v4.media.MediaMetadataCompat;
 import android.text.TextUtils;
 
 import com.appdevper.mediaplayer.model.MusicProvider;
+import com.appdevper.mediaplayer.model.MusicProviderSource;
 import com.appdevper.mediaplayer.util.LogHelper;
 import com.appdevper.mediaplayer.util.MediaIDHelper;
 
@@ -37,7 +39,7 @@ import static android.media.MediaPlayer.OnCompletionListener;
 import static android.media.MediaPlayer.OnErrorListener;
 import static android.media.MediaPlayer.OnPreparedListener;
 import static android.media.MediaPlayer.OnSeekCompleteListener;
-import static android.media.session.MediaSession.QueueItem;
+import static android.support.v4.media.session.MediaSessionCompat.QueueItem;
 
 /**
  * A class that implements local media playback using {@link MediaPlayer}
@@ -163,9 +165,9 @@ public class LocalPlayback implements Playback, AudioManager.OnAudioFocusChangeL
         } else {
             mState = PlaybackState.STATE_STOPPED;
             relaxResources(false); // release everything except MediaPlayer
-            MediaMetadata track = mMusicProvider.getMusic(item.getDescription().getMediaId());
+            MediaMetadataCompat track = mMusicProvider.getMusic(item.getDescription().getMediaId());
 
-            String source = track.getString(MusicProvider.CUSTOM_METADATA_TRACK_SOURCE);
+            String source = track.getString(MusicProviderSource.CUSTOM_METADATA_TRACK_SOURCE);
 
             try {
                 createMediaPlayerIfNeeded();
@@ -246,6 +248,13 @@ public class LocalPlayback implements Playback, AudioManager.OnAudioFocusChangeL
     @Override
     public String getCurrentMediaId() {
         return mCurrentMediaId;
+    }
+
+    @Override
+    public void updateLastKnownStreamPosition() {
+        if (mMediaPlayer != null) {
+            mCurrentPosition = mMediaPlayer.getCurrentPosition();
+        }
     }
 
     /**

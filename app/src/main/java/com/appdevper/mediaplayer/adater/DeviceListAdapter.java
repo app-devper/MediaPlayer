@@ -1,9 +1,12 @@
 package com.appdevper.mediaplayer.adater;
 
 import com.appdevper.mediaplayer.R;
+import com.appdevper.mediaplayer.activity.RenderListActivity;
+import com.appdevper.mediaplayer.app.AppMediaPlayer;
 import com.appdevper.mediaplayer.loader.ImageLoader;
 import com.appdevper.mediaplayer.util.DeviceItem;
 
+import android.app.Activity;
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -16,53 +19,31 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class DeviceListAdapter extends ArrayAdapter<DeviceItem> {
-	private final ImageLoader imgDownloader;
-	private final int deviceItemLayoutResource;
 
-	public DeviceListAdapter(Context paramContext, int paramInt) {
-		super(paramContext, 0);
-		this.deviceItemLayoutResource = paramInt;
-		this.imgDownloader = new ImageLoader(paramContext);
-	}
+    public DeviceListAdapter(Activity act) {
+        super(act, 0);
+    }
 
-	private View getWorkingView(View paramView) {
-		if (paramView == null)
-			return ((LayoutInflater) getContext().getSystemService("layout_inflater")).inflate(this.deviceItemLayoutResource, null);
-		return paramView;
-	}
+    public DeviceListAdapter(Activity act, ArrayList<DeviceItem> deviceItem) {
+        super(act, 0, deviceItem);
+    }
 
-	public void ClearAdapter() {
-		if ((this.imgDownloader == null) || (getCount() < 1))
-			return;
-		this.imgDownloader.clearCache();
-		clear();
-	}
+    public View getView(int paramInt, View paramView, ViewGroup parent) {
 
-	public List<DeviceItem> getAll() {
-		ArrayList<DeviceItem> localArrayList = new ArrayList<DeviceItem>();
-		int i = getCount();
-		for (int j = 0;; j++) {
-			if (j >= i)
-				return localArrayList;
-			localArrayList.add((DeviceItem) getItem(j));
-		}
-	}
+        if (paramView == null) {
+            paramView = LayoutInflater.from(getContext()).inflate(R.layout.device_row, parent, false);
+        }
 
-	public View getView(int paramInt, View paramView, ViewGroup paramViewGroup) {
+        DeviceItem localDevice = getItem(paramInt);
+        TextView deviceName = (TextView) paramView.findViewById(R.id.m_name);
+        ImageView img = (ImageView) paramView.findViewById(R.id.m_image);
+        deviceName.setText(localDevice.toString());
+        if (!localDevice.getIslocal()) {
+            AppMediaPlayer.getImageLoader().displayImage(localDevice.getIconUri(), img);
+        } else {
+            img.setImageResource(R.drawable.ic_launcher);
+        }
 
-		View v = getWorkingView(paramView);
-		DeviceItem localDevice = (DeviceItem) getItem(paramInt);
-
-		TextView deviceName = (TextView) v.findViewById(R.id.m_name);
-		ImageView img = (ImageView) v.findViewById(R.id.m_image);
-		deviceName.setText(localDevice.toString());
-		if (!localDevice.getIslocal()) {
-			// Log.i("DeviceList", "URL=" + localDevice.getIconUri());
-			imgDownloader.DisplayImage(localDevice.getIconUri(), img);
-		} else {
-			img.setImageResource(R.drawable.ic_launcher);
-		}
-
-		return v;
-	}
+        return paramView;
+    }
 }

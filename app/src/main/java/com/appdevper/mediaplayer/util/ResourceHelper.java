@@ -39,7 +39,7 @@ public class ResourceHelper {
         try {
             Context packageContext = context.createPackageContext(packageName, 0);
             ApplicationInfo applicationInfo =
-                context.getPackageManager().getApplicationInfo(packageName, 0);
+                    context.getPackageManager().getApplicationInfo(packageName, 0);
             packageContext.setTheme(applicationInfo.theme);
             Resources.Theme theme = packageContext.getTheme();
             TypedArray ta = theme.obtainStyledAttributes(new int[] {attribute});
@@ -50,4 +50,5 @@ public class ResourceHelper {
         }
         return themeColor;
     }
+
 }

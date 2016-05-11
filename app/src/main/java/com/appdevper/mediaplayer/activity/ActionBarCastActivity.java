@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.appdevper.mediaplayer.ui;
+package com.appdevper.mediaplayer.activity;
 
 import android.app.ActivityOptions;
 import android.app.FragmentManager;
@@ -39,14 +39,12 @@ import android.widget.SimpleAdapter;
 
 
 import com.appdevper.mediaplayer.R;
-import com.appdevper.mediaplayer.activity.PlayListsActivity;
+import com.appdevper.mediaplayer.ui.DrawerMenuContents;
 import com.appdevper.mediaplayer.util.LogHelper;
 import com.appdevper.mediaplayer.util.PrefUtils;
-import com.appdevper.mediaplayer.util.ResourceHelper;
-import com.github.amlcurran.showcaseview.ShowcaseView;
-import com.github.amlcurran.showcaseview.targets.ViewTarget;
 import com.google.android.libraries.cast.companionlibrary.cast.VideoCastManager;
 import com.google.android.libraries.cast.companionlibrary.cast.callbacks.VideoCastConsumerImpl;
+import com.google.android.libraries.cast.companionlibrary.widgets.IntroductoryOverlay;
 
 public abstract class ActionBarCastActivity extends AppCompatActivity {
 
@@ -264,13 +262,12 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
         if (mDrawerLayout != null) {
             mDrawerList = (ListView) findViewById(R.id.drawer_list);
             if (mDrawerList == null) {
-                throw new IllegalStateException("A layout with a drawerLayout is required to" +
-                        "include a ListView with id 'drawerList'");
+                throw new IllegalStateException("A layout with a drawerLayout is required to" + "include a ListView with id 'drawerList'");
             }
 
             // Create an ActionBarDrawerToggle that will handle opening/closing of the drawer:
             mDrawerToggle = new ActionBarDrawerToggle(this, mDrawerLayout, mToolbar, R.string.open_content_drawer, R.string.close_content_drawer);
-            mDrawerLayout.setDrawerListener(mDrawerListener);
+            mDrawerLayout.addDrawerListener(mDrawerListener);
             // mDrawerLayout.setStatusBarBackgroundColor(ResourceHelper.getThemeColor(this, R.attr.colorPrimary, android.R.color.black));
             populateDrawerItems();
             setSupportActionBar(mToolbar);
@@ -278,7 +275,6 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
         } else {
             setSupportActionBar(mToolbar);
         }
-
         mToolbarInitialized = true;
     }
 
@@ -336,15 +332,17 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
      * Shows the Cast First Time User experience to the user (an overlay that explains what is
      * the Cast icon)
      */
+
     private void showFtu() {
         Menu menu = mToolbar.getMenu();
         View view = menu.findItem(R.id.media_route_menu_item).getActionView();
         if (view != null && view instanceof MediaRouteButton) {
-            new ShowcaseView.Builder(this)
-                    .setTarget(new ViewTarget(view))
-                    .setContentTitle(R.string.touch_to_cast)
-                    .hideOnTouchOutside()
+            IntroductoryOverlay overlay = new IntroductoryOverlay.Builder(this)
+                    .setMenuItem(mMediaRouteMenuItem)
+                    .setTitleText(R.string.touch_to_cast)
+                    .setSingleTime()
                     .build();
+            overlay.show();
         }
     }
 }
