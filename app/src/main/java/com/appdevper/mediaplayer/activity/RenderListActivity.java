@@ -91,6 +91,11 @@ public class RenderListActivity extends BaseActivity {
     }
 
     @Override
+    protected void onMediaControllerConnected() {
+
+    }
+
+    @Override
     protected void initializeToolbar() {
         super.initializeToolbar();
         mToolbar = (Toolbar) findViewById(R.id.toolbar);

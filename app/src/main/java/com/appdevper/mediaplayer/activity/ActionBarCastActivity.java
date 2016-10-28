@@ -134,7 +134,8 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
         public void onDrawerOpened(View drawerView) {
             if (mDrawerToggle != null)
                 mDrawerToggle.onDrawerOpened(drawerView);
-            if (getSupportActionBar() != null) getSupportActionBar().setTitle(R.string.app_name);
+            if (getSupportActionBar() != null)
+                getSupportActionBar().setTitle(R.string.app_name);
         }
     };
 
@@ -259,6 +260,7 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
         mToolbar.inflateMenu(R.menu.main);
 
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawerLayout);
+
         if (mDrawerLayout != null) {
             mDrawerList = (ListView) findViewById(R.id.drawer_list);
             if (mDrawerList == null) {

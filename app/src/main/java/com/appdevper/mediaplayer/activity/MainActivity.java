@@ -79,6 +79,7 @@ public class MainActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initializeToolbar();
+        
         deviceList = new DeviceListAdapter(this);
 
         listServer = (ListView) findViewById(R.id.listServer);
@@ -140,6 +141,11 @@ public class MainActivity extends BaseActivity {
         } catch (Exception ex) {
             Log.v(LOGTAG, "Can't unbindService(serviceConnection)");
         }
+
+    }
+
+    @Override
+    protected void onMediaControllerConnected() {
 
     }
 

@@ -88,8 +88,7 @@ public class PlaybackControlsFragment extends Fragment {
     };
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View rootView = inflater.inflate(R.layout.fragment_playback_controls, container, false);
 
         mPlayPause = (ImageButton) rootView.findViewById(R.id.play_pause);
@@ -190,19 +189,6 @@ public class PlaybackControlsFragment extends Fragment {
                         }
                 );
             }
-        }
-    }
-
-    private Bitmap downloadBitmap(String mediaId) {
-        String url = MusicProvider.getInstance().getMusic(mediaId).getString(MusicProviderSource.CUSTOM_METADATA_TRACK_SOURCE);
-        final MediaMetadataRetriever metaRetriever = new MediaMetadataRetriever();
-        metaRetriever.setDataSource(url, new HashMap<String, String>());
-        try {
-            final byte[] art = metaRetriever.getEmbeddedPicture();
-            return BitmapFactory.decodeByteArray(art, 0, art.length);
-        } catch (Exception e) {
-            Log.d(TAG, "Couldn't create album art: " + e.getMessage());
-            return BitmapFactory.decodeResource(getResources(), R.drawable.ic_default_art);
         }
     }
 

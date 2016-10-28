@@ -80,7 +80,6 @@ public class PlayListsActivity extends BaseActivity {
         public void onPlaybackStateChanged(@NonNull PlaybackStateCompat state) {
             super.onPlaybackStateChanged(state);
             Log.d(TAG, "Received state change: " + state);
-
             adapter.notifyDataSetChanged();
         }
     };

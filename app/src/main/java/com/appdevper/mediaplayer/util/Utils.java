@@ -260,8 +260,8 @@ public class Utils {
             @Override
             protected Bitmap doInBackground(Void[] objects) {
                 Bitmap bitmap;
-                metaRetriever.setDataSource(url, new HashMap<String, String>());
                 try {
+                    metaRetriever.setDataSource(url, new HashMap<String, String>());
                     final byte[] art = metaRetriever.getEmbeddedPicture();
                     bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
                 } catch (Exception e) {
@@ -285,8 +285,8 @@ public class Utils {
                 @Override
                 protected Bitmap doInBackground(Void[] objects) {
                     Bitmap bitmap;
-                    metaRetriever.setDataSource(item.getResourceUri(), new HashMap<String, String>());
                     try {
+                        metaRetriever.setDataSource(item.getResourceUri(), new HashMap<String, String>());
                         final byte[] art = metaRetriever.getEmbeddedPicture();
                         bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
                     } catch (Exception e) {
@@ -307,8 +307,8 @@ public class Utils {
                 @Override
                 protected Bitmap doInBackground(Void[] objects) {
                     Bitmap bitmap;
-                    metaRetriever.setDataSource(item.getResourceUri(), new HashMap<String, String>());
                     try {
+                        metaRetriever.setDataSource(item.getResourceUri(), new HashMap<String, String>());
                         final byte[] art = metaRetriever.getEmbeddedPicture();
                         bitmap = BitmapFactory.decodeByteArray(art, 0, art.length);
                     } catch (Exception e) {

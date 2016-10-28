@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.appdevper.mediaplayer.activity;
 
 import android.app.ActivityManager;
@@ -26,7 +27,6 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.support.annotation.NonNull;
-import android.support.v4.media.MediaBrowserCompat;
 import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.MediaSessionCompat;
@@ -34,16 +34,11 @@ import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
 
 import com.appdevper.mediaplayer.R;
-import com.appdevper.mediaplayer.app.AppMediaPlayer;
 import com.appdevper.mediaplayer.app.MusicService;
-import com.appdevper.mediaplayer.app.ServerSettings;
-import com.appdevper.mediaplayer.app.ServerUpnpService;
 import com.appdevper.mediaplayer.ui.PlaybackControlsFragment;
 import com.appdevper.mediaplayer.util.LogHelper;
 import com.appdevper.mediaplayer.util.NetworkHelper;
 import com.appdevper.mediaplayer.util.ResourceHelper;
-
-import org.fourthline.cling.android.AndroidUpnpService;
 
 
 /**
@@ -78,7 +73,7 @@ public abstract class BaseActivity extends ActionBarCastActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        LogHelper.d(TAG, "Activity onCreate");
+        Log.d(TAG, "Activity onCreate");
 
         if (Build.VERSION.SDK_INT >= 21) {
             // Since our app icon has the same color as colorPrimary, our entry in the Recent Apps
@@ -91,8 +86,7 @@ public abstract class BaseActivity extends ActionBarCastActivity {
                             android.R.color.darker_gray));
             setTaskDescription(taskDesc);
         }
-//        mMediaBrowser = new MediaBrowserCompat(this,
-//                new ComponentName(this, MusicService.class), mConnectionCallback, null);
+
         Intent intent = new Intent(this, MusicService.class);
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
     }
@@ -100,7 +94,7 @@ public abstract class BaseActivity extends ActionBarCastActivity {
     @Override
     protected void onStart() {
         super.onStart();
-        LogHelper.d(TAG, "Activity onStart");
+        Log.d(TAG, "Activity onStart");
 
         mControlsFragment = (PlaybackControlsFragment) getFragmentManager().findFragmentById(R.id.fragment_playback_controls);
         if (mControlsFragment == null) {
@@ -109,17 +103,33 @@ public abstract class BaseActivity extends ActionBarCastActivity {
 
         hidePlaybackControls();
 
-        // mMediaBrowser.connect();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        Log.d(TAG, "Activity onResume");
+
+        if (getSupportMediaController() != null) {
+            getSupportMediaController().registerCallback(mMediaControllerCallback);
+
+            if (shouldShowControls()) {
+                showPlaybackControls();
+            } else {
+                hidePlaybackControls();
+            }
+        }
+
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        LogHelper.d(TAG, "Activity onStop");
+        Log.d(TAG, "Activity onStop");
         if (getSupportMediaController() != null) {
             getSupportMediaController().unregisterCallback(mMediaControllerCallback);
         }
-        //mMediaBrowser.disconnect();
+
     }
 
     @Override
@@ -128,12 +138,10 @@ public abstract class BaseActivity extends ActionBarCastActivity {
         unbindService(serviceConnection);
     }
 
-    protected void onMediaControllerConnected() {
-        // empty implementation, can be overridden by clients.
-    }
+    protected abstract void onMediaControllerConnected();
 
     protected void showPlaybackControls() {
-        LogHelper.d(TAG, "showPlaybackControls");
+        Log.d(TAG, "showPlaybackControls");
         if (NetworkHelper.isOnline(this)) {
             getFragmentManager().beginTransaction()
                     .setCustomAnimations(
@@ -145,23 +153,13 @@ public abstract class BaseActivity extends ActionBarCastActivity {
     }
 
     protected void hidePlaybackControls() {
-        LogHelper.d(TAG, "hidePlaybackControls");
-        getFragmentManager().beginTransaction()
-                .hide(mControlsFragment)
-                .commit();
+        Log.d(TAG, "hidePlaybackControls");
+        getFragmentManager().beginTransaction().hide(mControlsFragment).commit();
     }
 
-    /**
-     * Check if the MediaSession is active and in a "playback-able" state
-     * (not NONE and not STOPPED).
-     *
-     * @return true if the MediaSession's state requires playback controls to be visible.
-     */
     protected boolean shouldShowControls() {
         MediaControllerCompat mediaController = getSupportMediaController();
-        if (mediaController == null ||
-                mediaController.getMetadata() == null ||
-                mediaController.getPlaybackState() == null) {
+        if (mediaController == null || mediaController.getMetadata() == null || mediaController.getPlaybackState() == null) {
             return false;
         }
         switch (mediaController.getPlaybackState().getState()) {
@@ -182,8 +180,6 @@ public abstract class BaseActivity extends ActionBarCastActivity {
         if (shouldShowControls()) {
             showPlaybackControls();
         } else {
-            LogHelper.d(TAG, "connectionCallback.onConnected: " +
-                    "hiding controls because metadata is null");
             hidePlaybackControls();
         }
 
@@ -202,8 +198,6 @@ public abstract class BaseActivity extends ActionBarCastActivity {
                     if (shouldShowControls()) {
                         showPlaybackControls();
                     } else {
-                        LogHelper.d(TAG, "mediaControllerCallback.onPlaybackStateChanged: " +
-                                "hiding controls because state is ", state.getState());
                         hidePlaybackControls();
                     }
                 }
@@ -213,8 +207,6 @@ public abstract class BaseActivity extends ActionBarCastActivity {
                     if (shouldShowControls()) {
                         showPlaybackControls();
                     } else {
-                        LogHelper.d(TAG, "mediaControllerCallback.onMetadataChanged: " +
-                                "hiding controls because metadata is null");
                         hidePlaybackControls();
                     }
                 }
