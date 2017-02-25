@@ -79,7 +79,7 @@ public class MainActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initializeToolbar();
-        
+
         deviceList = new DeviceListAdapter(this);
 
         listServer = (ListView) findViewById(R.id.listServer);
@@ -93,6 +93,7 @@ public class MainActivity extends BaseActivity {
                 intent.setClass(MainActivity.this, ContentActivity.class);
                 intent.putExtra("name", deviceList.getItem(position).toString());
                 startActivityForResult(intent, 200);
+                overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_left);
             }
         });
 
@@ -141,7 +142,6 @@ public class MainActivity extends BaseActivity {
         } catch (Exception ex) {
             Log.v(LOGTAG, "Can't unbindService(serviceConnection)");
         }
-
     }
 
     @Override
@@ -160,11 +160,13 @@ public class MainActivity extends BaseActivity {
             fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             fullScreenIntent.putExtra(EXTRA_CURRENT_MEDIA_DESCRIPTION, intent.getParcelableExtra(EXTRA_CURRENT_MEDIA_DESCRIPTION));
             startActivity(fullScreenIntent);
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_left);
         }
         if (intent != null && intent.getBooleanExtra(EXTRA_START_SETTING, false)) {
             Intent fullScreenIntent = new Intent(this, SettingPreferenceActivity.class);
             fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             startActivity(fullScreenIntent);
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_left);
         }
     }
 

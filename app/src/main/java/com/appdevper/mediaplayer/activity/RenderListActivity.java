@@ -51,7 +51,7 @@ public class RenderListActivity extends BaseActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_placeholder);
+        setContentView(R.layout.activity_playlist);
         initializeToolbar();
 
         deviceItem = ShareData.getRenList();
@@ -110,7 +110,7 @@ public class RenderListActivity extends BaseActivity {
         mToolbar.setNavigationOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                finish();
+                onBackPressed();
             }
         });
     }

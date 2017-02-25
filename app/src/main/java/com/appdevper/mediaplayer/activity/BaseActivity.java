@@ -1,18 +1,3 @@
-/*
- * Copyright (C) 2014 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 package com.appdevper.mediaplayer.activity;
 
@@ -40,10 +25,6 @@ import com.appdevper.mediaplayer.util.LogHelper;
 import com.appdevper.mediaplayer.util.NetworkHelper;
 import com.appdevper.mediaplayer.util.ResourceHelper;
 
-
-/**
- * Base activity for activities that need to show a playback control fragment when media is playing.
- */
 public abstract class BaseActivity extends ActionBarCastActivity {
 
     private static final String TAG = LogHelper.makeLogTag(BaseActivity.class);
@@ -76,9 +57,6 @@ public abstract class BaseActivity extends ActionBarCastActivity {
         Log.d(TAG, "Activity onCreate");
 
         if (Build.VERSION.SDK_INT >= 21) {
-            // Since our app icon has the same color as colorPrimary, our entry in the Recent Apps
-            // list gets weird. We need to change either the icon or the color
-            // of the TaskDescription.
             ActivityManager.TaskDescription taskDesc = new ActivityManager.TaskDescription(
                     getTitle().toString(),
                     BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher_white),
@@ -102,7 +80,6 @@ public abstract class BaseActivity extends ActionBarCastActivity {
         }
 
         hidePlaybackControls();
-
     }
 
     @Override
@@ -119,7 +96,6 @@ public abstract class BaseActivity extends ActionBarCastActivity {
                 hidePlaybackControls();
             }
         }
-
     }
 
     @Override
@@ -129,7 +105,6 @@ public abstract class BaseActivity extends ActionBarCastActivity {
         if (getSupportMediaController() != null) {
             getSupportMediaController().unregisterCallback(mMediaControllerCallback);
         }
-
     }
 
     @Override

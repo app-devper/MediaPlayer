@@ -109,6 +109,7 @@ public class PlaybackControlsFragment extends Fragment {
                     intent.putExtra(MainActivity.EXTRA_CURRENT_MEDIA_DESCRIPTION, metadata.getDescription());
                 }
                 getActivity().startActivity(intent);
+                getActivity().overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_left);
             }
         });
         return rootView;

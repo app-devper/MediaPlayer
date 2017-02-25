@@ -6,9 +6,6 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.media.MediaMetadata;
-import android.media.session.MediaController;
-import android.media.session.PlaybackState;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -18,6 +15,7 @@ import android.support.v4.media.MediaMetadataCompat;
 import android.support.v4.media.session.MediaControllerCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import android.support.v7.app.AlertDialog;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
@@ -46,7 +44,6 @@ import java.util.Stack;
 
 public class ContentActivity extends BaseActivity {
 
-    //private GridView contentListView;
     private ListView contentListView;
     private ContentItemAdapter contentAdapter;
     private AndroidUpnpService upnpService;
@@ -56,7 +53,7 @@ public class ContentActivity extends BaseActivity {
     private String type;
     private ContentItem mainContent;
     private Stack<ContentItem> stackContent;
-
+    private Toolbar mToolbar;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -64,21 +61,20 @@ public class ContentActivity extends BaseActivity {
         setContentView(R.layout.activity_content);
 
         initializeToolbar();
-
-        contentAdapter = new ContentItemAdapter(this);
+        setTitle(getIntent().getStringExtra("name"));
 
         contentListView = (ListView) findViewById(R.id.contentList);
+
+        contentAdapter = new ContentItemAdapter(this);
         contentListView.setAdapter(contentAdapter);
         contentListView.setOnItemClickListener(new OnItemClickListener() {
-
             @Override
             public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
-                sMedia(position);
+                selectMedia(position);
             }
         });
 
         contentListView.setOnItemLongClickListener(new OnItemLongClickListener() {
-
             @Override
             public boolean onItemLongClick(AdapterView<?> parent, View v, int position, long id) {
                 ContentItem content = contentAdapter.getItem(position);
@@ -89,10 +85,9 @@ public class ContentActivity extends BaseActivity {
             }
         });
 
-
         upnpService = AppMediaPlayer.getUpnpService();
         cDevice = ShareData.getDevice();
-        setTitle(getIntent().getStringExtra("name"));
+
         stackContent = new Stack<>();
 
         try {
@@ -146,10 +141,9 @@ public class ContentActivity extends BaseActivity {
             return true;
         } else {
             setResult(200);
-            finish();
+            onBackPressed();
             return true;
         }
-
     }
 
     protected Container createRootContainer(Service<?, ?> service) {
@@ -159,7 +153,7 @@ public class ContentActivity extends BaseActivity {
         return rootContainer;
     }
 
-    private void sMedia(int position) {
+    private void selectMedia(int position) {
         ContentItem content = contentAdapter.getItem(position);
         type = content.getType();
         Log.d(TAG, content.isContainer().toString());
@@ -170,32 +164,39 @@ public class ContentActivity extends BaseActivity {
         } else {
             try {
                 if (ShareData.getrDevice().getIslocal()) {
-                    if (type.equals("video")) {
-                        AppMediaPlayer.setMedia(content);
-                    } else if (type.equals("audio")) {
-                        ShareData.aContent = contentAdapter.getAll();
-                        MusicProvider.getInstance().retrieveMedia(ShareData.aContent);
-                        onMediaItemSelected(String.valueOf(content.getResourceUri().hashCode()));
-                    } else if (type.equals("image")) {
-                        ShareData.aContentImage = contentAdapter.getAll();
-                        AppMediaPlayer.setMedia(content);
-                        Intent intent = new Intent();
-                        intent.putExtra("position", position);
-                        intent.setClass(ContentActivity.this, ImageActivity.class);
-                        startActivity(intent);
+                    switch (type) {
+                        case "video":
+                            AppMediaPlayer.setMedia(content);
+                            break;
+                        case "audio":
+                            ShareData.aContent = contentAdapter.getAll();
+                            MusicProvider.getInstance().retrieveMedia(ShareData.aContent);
+                            onMediaItemSelected(String.valueOf(content.getResourceUri().hashCode()));
+                            break;
+                        case "image":
+                            ShareData.aContentImage = contentAdapter.getAll();
+                            AppMediaPlayer.setMedia(content);
+                            Intent intent = new Intent();
+                            intent.putExtra("position", position);
+                            intent.setClass(ContentActivity.this, ImageActivity.class);
+                            startActivity(intent);
+                            break;
                     }
 
                 } else {
-
-                    if (type.equals("video")) {
-                        AppMediaPlayer.stopMusic();
-                        AppMediaPlayer.sendRender(content);
-                    } else if (type.equals("audio")) {
-                        ShareData.aContent = contentAdapter.getAll();
-                        MusicProvider.getInstance().retrieveMedia(ShareData.aContent);
-                        onMediaItemSelected(String.valueOf(content.getResourceUri().hashCode()));
-                    } else if (type.equals("image")) {
-                        AppMediaPlayer.sendRender(content);
+                    switch (type) {
+                        case "video":
+                            AppMediaPlayer.stopMusic();
+                            AppMediaPlayer.sendRender(content);
+                            break;
+                        case "audio":
+                            ShareData.aContent = contentAdapter.getAll();
+                            MusicProvider.getInstance().retrieveMedia(ShareData.aContent);
+                            onMediaItemSelected(String.valueOf(content.getResourceUri().hashCode()));
+                            break;
+                        case "image":
+                            AppMediaPlayer.sendRender(content);
+                            break;
                     }
                 }
             } catch (Exception e) {
@@ -238,10 +239,8 @@ public class ContentActivity extends BaseActivity {
         if (isDownloadManagerAvailable(ContentActivity.this)) {
             String url = content.getResourceUri();
             DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            request.setDescription("Dowload file with Media player");
-            request.setTitle("Dowload " + content.toString());
-            // in order for this if to run, you must use the android 3.2 to
-            // compile your app
+            request.setDescription("Download file with Media player");
+            request.setTitle("Download " + content.toString());
             String[] ss = url.split("\\.");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
                 request.allowScanningByMediaScanner();
@@ -277,5 +276,29 @@ public class ContentActivity extends BaseActivity {
         if (getSupportMediaController() != null) {
             getSupportMediaController().registerCallback(mMediaControllerCallback);
         }
+    }
+
+    @Override
+    public void setTitle(CharSequence title) {
+        mToolbar.setTitle(title);
+    }
+
+    @Override
+    protected void initializeToolbar() {
+        super.initializeToolbar();
+        mToolbar = (Toolbar) findViewById(R.id.toolbar);
+        if (mToolbar == null) {
+            throw new IllegalStateException("Layout is required to include a Toolbar with id " + "'toolbar'");
+        }
+
+        setSupportActionBar(mToolbar);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setDisplayShowHomeEnabled(true);
+        mToolbar.setNavigationOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                onBackPressed();
+            }
+        });
     }
 }

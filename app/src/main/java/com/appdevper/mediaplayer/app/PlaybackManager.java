@@ -30,7 +30,6 @@ import com.appdevper.mediaplayer.model.MusicProvider;
 import com.appdevper.mediaplayer.util.LogHelper;
 import com.appdevper.mediaplayer.util.MediaIDHelper;
 
-
 /**
  * Manage the interactions among the container service, the queue manager and the actual playback.
  */

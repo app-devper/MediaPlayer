@@ -113,7 +113,7 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
                 Bundle extras = ActivityOptions.makeCustomAnimation(ActionBarCastActivity.this, R.anim.fade_in, R.anim.fade_out).toBundle();
                 Class activityClass = mDrawerMenuContents.getActivity(position);
                 startActivity(new Intent(ActionBarCastActivity.this, activityClass), extras);
-                //finish();
+                overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_left);
             }
             mItemToOpenWhenDrawerCloses = -1;
         }
@@ -218,7 +218,7 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
             onBackPressed();
             return true;
         } else if (item.getItemId() == R.id.playlist) {
-            startActivity(new Intent(this, PlayListsActivity.class));
+            startActivity(new Intent(this, PlayListActivity.class));
         }
         return super.onOptionsItemSelected(item);
     }
@@ -236,7 +236,8 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
             fragmentManager.popBackStack();
         } else {
             // Lastly, it will rely on the system behavior for back
-            super.onBackPressed();
+            finish();
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_right);
         }
     }
 
@@ -329,11 +330,6 @@ public abstract class ActionBarCastActivity extends AppCompatActivity {
             mDrawerToggle.syncState();
         }
     }
-
-    /**
-     * Shows the Cast First Time User experience to the user (an overlay that explains what is
-     * the Cast icon)
-     */
 
     private void showFtu() {
         Menu menu = mToolbar.getMenu();

@@ -97,12 +97,12 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
     }
 
     private static InetAddress getLocalInetAddress() {
-        if (isConnectedToLocalNetwork() == false) {
+        if (!isConnectedToLocalNetwork()) {
             Log.e(TAG, "getLocalInetAddress called and no connection");
             return null;
         }
         // TODO: next if block could probably be removed
-        if (isConnectedUsingWifi() == true) {
+        if (isConnectedUsingWifi()) {
             Context context = AppMediaPlayer.getAppContext();
             WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             int ipAddress = wm.getConnectionInfo().getIpAddress();
@@ -119,7 +119,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
                 while (adresses.hasMoreElements()) {
                     InetAddress address = adresses.nextElement();
                     // this is the condition that sometimes gives problems
-                    if (address.isLoopbackAddress() == false && address.isLinkLocalAddress() == false)
+                    if (!address.isLoopbackAddress() && !address.isLinkLocalAddress())
                         return address;
                 }
             }
@@ -136,7 +136,6 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
             mediaServer.stop();
         }
         context.sendBroadcast(new Intent(ServerUpnpService.ACTION_STOPPED));
-
     }
 
     private static boolean isConnectedToLocalNetwork() {
@@ -144,8 +143,8 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
         Context context = AppMediaPlayer.getAppContext();
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo ni = cm.getActiveNetworkInfo();
-        connected = ni != null && ni.isConnected() == true && (ni.getType() & (ConnectivityManager.TYPE_WIFI | ConnectivityManager.TYPE_ETHERNET)) != 0;
-        if (connected == false) {
+        connected = ni != null && ni.isConnected() && (ni.getType() & (ConnectivityManager.TYPE_WIFI | ConnectivityManager.TYPE_ETHERNET)) != 0;
+        if (!connected) {
             Log.d(TAG, "Device not connected to a network, see if it is an AP");
             WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             try {
@@ -162,7 +161,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
         Context context = AppMediaPlayer.getAppContext();
         ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo ni = cm.getActiveNetworkInfo();
-        return ni != null && ni.isConnected() == true && ni.getType() == ConnectivityManager.TYPE_WIFI;
+        return ni != null && ni.isConnected() && ni.getType() == ConnectivityManager.TYPE_WIFI;
     }
 
     class Shutdown extends AsyncTask<UpnpService, Void, Void> {

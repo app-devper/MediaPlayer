@@ -57,10 +57,9 @@ public class SettingPreferenceActivity extends AppCompatActivity {
         mToolbar.setNavigationOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                finish();
+                onBackPressed();
             }
         });
-
     }
 
     public class MyPreferenceFragment extends PreferenceFragment {
@@ -231,7 +230,7 @@ public class SettingPreferenceActivity extends AppCompatActivity {
             CheckBoxPreference videoPref = findPref("allow_video");
             CheckBoxPreference audioPref = findPref("allow_audio");
             CheckBoxPreference imagePref = findPref("allow_image");
-            if (ServerUpnpService.isRunning() == true) {
+            if (ServerUpnpService.isRunning()) {
                 videoPref.setEnabled(false);
                 audioPref.setEnabled(false);
                 imagePref.setEnabled(false);
@@ -257,6 +256,12 @@ public class SettingPreferenceActivity extends AppCompatActivity {
         private void stopServer() {
             sendBroadcast(new Intent(ServerUpnpService.ACTION_STOP_SERVER));
         }
+    }
+
+    @Override
+    public void onBackPressed() {
+        finish();
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_right);
     }
 
 }

@@ -52,7 +52,7 @@
             android:screenOrientation="portrait">
         </activity>
         <activity
-            android:name=".activity.PlayListsActivity"
+            android:name=".activity.PlayListActivity"
             android:configChanges="keyboardHidden"
             android:label="Playlist"
             android:launchMode="singleTask"

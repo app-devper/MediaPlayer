@@ -1,18 +1,4 @@
-/*
- * Copyright (C) 2014 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+
 package com.appdevper.mediaplayer.activity;
 
 import android.content.ComponentName;
@@ -183,13 +169,13 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
                 if (state != null) {
                     MediaControllerCompat.TransportControls controls = getSupportMediaController().getTransportControls();
                     switch (state.getState()) {
-                        case PlaybackState.STATE_PLAYING: // fall through
-                        case PlaybackState.STATE_BUFFERING:
+                        case PlaybackStateCompat.STATE_PLAYING: // fall through
+                        case PlaybackStateCompat.STATE_BUFFERING:
                             controls.pause();
                             stopSeekbarUpdate();
                             break;
-                        case PlaybackState.STATE_PAUSED:
-                        case PlaybackState.STATE_STOPPED:
+                        case PlaybackStateCompat.STATE_PAUSED:
+                        case PlaybackStateCompat.STATE_STOPPED:
                             controls.play();
                             scheduleSeekbarUpdate();
                             break;
@@ -248,7 +234,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
             updateDuration(metadata);
         }
         updateProgress();
-        if (state != null && (state.getState() == PlaybackState.STATE_PLAYING || state.getState() == PlaybackState.STATE_BUFFERING)) {
+        if (state != null && (state.getState() == PlaybackStateCompat.STATE_PLAYING || state.getState() == PlaybackStateCompat.STATE_BUFFERING)) {
             scheduleSeekbarUpdate();
         }
     }
@@ -372,28 +358,28 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
         }
 
         switch (state.getState()) {
-            case PlaybackState.STATE_PLAYING:
+            case PlaybackStateCompat.STATE_PLAYING:
                 mLoading.setVisibility(INVISIBLE);
                 mPlayPause.setVisibility(VISIBLE);
                 mPlayPause.setImageDrawable(mPauseDrawable);
                 mControllers.setVisibility(VISIBLE);
                 scheduleSeekbarUpdate();
                 break;
-            case PlaybackState.STATE_PAUSED:
+            case PlaybackStateCompat.STATE_PAUSED:
                 mControllers.setVisibility(VISIBLE);
                 mLoading.setVisibility(INVISIBLE);
                 mPlayPause.setVisibility(VISIBLE);
                 mPlayPause.setImageDrawable(mPlayDrawable);
                 stopSeekbarUpdate();
                 break;
-            case PlaybackState.STATE_NONE:
-            case PlaybackState.STATE_STOPPED:
+            case PlaybackStateCompat.STATE_NONE:
+            case PlaybackStateCompat.STATE_STOPPED:
                 mLoading.setVisibility(INVISIBLE);
                 mPlayPause.setVisibility(VISIBLE);
                 mPlayPause.setImageDrawable(mPlayDrawable);
                 stopSeekbarUpdate();
                 break;
-            case PlaybackState.STATE_BUFFERING:
+            case PlaybackStateCompat.STATE_BUFFERING:
                 mPlayPause.setVisibility(INVISIBLE);
                 mLoading.setVisibility(VISIBLE);
                 mLine3.setText(R.string.loading);
@@ -403,8 +389,8 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
                 LogHelper.d(TAG, "Unhandled state ", state.getState());
         }
 
-        mSkipNext.setVisibility((state.getActions() & PlaybackState.ACTION_SKIP_TO_NEXT) == 0 ? INVISIBLE : VISIBLE);
-        mSkipPrev.setVisibility((state.getActions() & PlaybackState.ACTION_SKIP_TO_PREVIOUS) == 0 ? INVISIBLE : VISIBLE);
+        mSkipNext.setVisibility((state.getActions() & PlaybackStateCompat.ACTION_SKIP_TO_NEXT) == 0 ? INVISIBLE : VISIBLE);
+        mSkipPrev.setVisibility((state.getActions() & PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS) == 0 ? INVISIBLE : VISIBLE);
     }
 
     private void updateProgress() {
@@ -412,7 +398,7 @@ public class FullScreenPlayerActivity extends ActionBarCastActivity {
             return;
         }
         long currentPosition = mLastPlaybackState.getPosition();
-        if (mLastPlaybackState.getState() != PlaybackState.STATE_PAUSED) {
+        if (mLastPlaybackState.getState() != PlaybackStateCompat.STATE_PAUSED) {
             long timeDelta = SystemClock.elapsedRealtime() - mLastPlaybackState.getLastPositionUpdateTime();
             currentPosition += (int) timeDelta * mLastPlaybackState.getPlaybackSpeed();
         }

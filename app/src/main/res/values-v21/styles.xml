@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <style name="UAmpAppTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="colorPrimary">#ffff5722</item>
         <item name="colorPrimaryDark">#ffbf360c</item>

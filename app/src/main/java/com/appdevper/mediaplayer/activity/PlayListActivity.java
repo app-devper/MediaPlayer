@@ -1,8 +1,6 @@
 package com.appdevper.mediaplayer.activity;
 
 import android.media.MediaMetadata;
-import android.media.session.MediaController;
-import android.media.session.PlaybackState;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.media.MediaMetadataCompat;
@@ -18,8 +16,8 @@ import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.adater.PlayListAdapter;
 import com.appdevper.mediaplayer.model.MusicProvider;
 
-public class PlayListsActivity extends BaseActivity {
-    private final static String TAG = PlayListsActivity.class.getSimpleName();
+public class PlayListActivity extends BaseActivity {
+    private final static String TAG = PlayListActivity.class.getSimpleName();
     private Toolbar mToolbar;
     private ListView listView;
     private PlayListAdapter adapter;
@@ -27,7 +25,7 @@ public class PlayListsActivity extends BaseActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_placeholder);
+        setContentView(R.layout.activity_playlist);
         initializeToolbar();
 
         listView = (ListView) findViewById(R.id.listView);
@@ -49,14 +47,13 @@ public class PlayListsActivity extends BaseActivity {
             throw new IllegalStateException("Layout is required to include a Toolbar with id " + "'toolbar'");
         }
 
-        //mToolbar.setNavigationIcon(R.drawable.abc_ic_ab_back_mtrl_am_alpha);
         setSupportActionBar(mToolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setDisplayShowHomeEnabled(true);
         mToolbar.setNavigationOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                finish();
+               onBackPressed();
             }
         });
     }

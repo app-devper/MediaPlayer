@@ -16,7 +16,6 @@
 package com.appdevper.mediaplayer.app;
 
 import android.media.session.PlaybackState;
-import android.net.Uri;
 import android.support.v4.media.MediaMetadataCompat;
 import android.text.TextUtils;
 import android.util.Log;
@@ -24,19 +23,8 @@ import android.util.Log;
 import com.appdevper.mediaplayer.model.MusicProvider;
 import com.appdevper.mediaplayer.model.MusicProviderSource;
 import com.appdevper.mediaplayer.util.LogHelper;
-import com.google.android.gms.cast.MediaInfo;
-import com.google.android.gms.cast.MediaMetadata;
-import com.google.android.gms.cast.MediaStatus;
-import com.google.android.gms.common.images.WebImage;
-import com.google.android.libraries.cast.companionlibrary.cast.VideoCastManager;
-import com.google.android.libraries.cast.companionlibrary.cast.callbacks.VideoCastConsumerImpl;
-import com.google.android.libraries.cast.companionlibrary.cast.exceptions.CastException;
-import com.google.android.libraries.cast.companionlibrary.cast.exceptions.NoConnectionException;
-import com.google.android.libraries.cast.companionlibrary.cast.exceptions.TransientNetworkDisconnectionException;
 
 import org.fourthline.cling.model.ModelUtil;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import static android.support.v4.media.session.MediaSessionCompat.QueueItem;
 

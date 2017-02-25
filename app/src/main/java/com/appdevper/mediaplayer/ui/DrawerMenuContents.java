@@ -19,7 +19,7 @@ import android.content.Context;
 
 import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.activity.MainActivity;
-import com.appdevper.mediaplayer.activity.PlayListsActivity;
+import com.appdevper.mediaplayer.activity.PlayListActivity;
 import com.appdevper.mediaplayer.activity.RenderListActivity;
 import com.appdevper.mediaplayer.activity.SettingPreferenceActivity;
 
@@ -42,7 +42,7 @@ public class DrawerMenuContents {
         activities[0] = MainActivity.class;
         items.add(populateDrawerItem(ctx.getString(R.string.drawer_allmusic_title), R.drawable.ic_allmusic_black_24dp));
 
-        activities[1] = PlayListsActivity.class;
+        activities[1] = PlayListActivity.class;
         items.add(populateDrawerItem(ctx.getString(R.string.drawer_playlists_title), R.drawable.ic_playlist_music_black_24dp));
 
         activities[2] = SettingPreferenceActivity.class;

@@ -14,7 +14,6 @@
 /.idea
 /app/app.iml
 /MediaPlayer.iml
-app/build/
 
 # Gradle files
 .gradle/
@@ -34,3 +33,4 @@ proguard/
 
 # Created by .ignore support plugin (hsz.mobi)
 projectFilesBackup/
+/local.properties

@@ -81,7 +81,7 @@ public class SelectMediaActivity extends AppCompatActivity {
         mToolbar.setNavigationOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                finish();
+                onBackPressed();
             }
         });
     }
@@ -278,5 +278,11 @@ public class SelectMediaActivity extends AppCompatActivity {
             s = "0" + t;
         }
         return s;
+    }
+
+    @Override
+    public void onBackPressed() {
+        finish();
+        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_right);
     }
 }
