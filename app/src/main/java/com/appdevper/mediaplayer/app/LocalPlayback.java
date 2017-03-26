@@ -60,7 +60,7 @@ public class LocalPlayback implements Playback, AudioManager.OnAudioFocusChangeL
     // we don't have focus, but can duck (play at a low volume)
     private static final int AUDIO_NO_FOCUS_CAN_DUCK = 1;
     // we have full audio focus
-    private static final int AUDIO_FOCUSED  = 2;
+    private static final int AUDIO_FOCUSED = 2;
 
     private final MusicService mService;
     private final WifiManager.WifiLock mWifiLock;
@@ -99,7 +99,7 @@ public class LocalPlayback implements Playback, AudioManager.OnAudioFocusChangeL
         this.mMusicProvider = musicProvider;
         this.mAudioManager = (AudioManager) service.getSystemService(Context.AUDIO_SERVICE);
         // Create the Wifi lock (this does not acquire the lock, this just creates it)
-        this.mWifiLock = ((WifiManager) service.getSystemService(Context.WIFI_SERVICE)).createWifiLock(WifiManager.WIFI_MODE_FULL, "uAmp_lock");
+        this.mWifiLock = ((WifiManager) service.getApplicationContext().getSystemService(Context.WIFI_SERVICE)).createWifiLock(WifiManager.WIFI_MODE_FULL, "uAmp_lock");
     }
 
     @Override
@@ -310,8 +310,8 @@ public class LocalPlayback implements Playback, AudioManager.OnAudioFocusChangeL
             // If we were playing when we lost focus, we need to resume playing.
             if (mPlayOnFocusGain) {
                 if (mMediaPlayer != null && !mMediaPlayer.isPlaying()) {
-                    LogHelper.d(TAG,"configMediaPlayerState startMediaPlayer. seeking to ",
-                        mCurrentPosition);
+                    LogHelper.d(TAG, "configMediaPlayerState startMediaPlayer. seeking to ",
+                            mCurrentPosition);
                     if (mCurrentPosition == mMediaPlayer.getCurrentPosition()) {
                         mMediaPlayer.start();
                         mState = PlaybackState.STATE_PLAYING;
@@ -428,7 +428,7 @@ public class LocalPlayback implements Playback, AudioManager.OnAudioFocusChangeL
      * already exists.
      */
     private void createMediaPlayerIfNeeded() {
-        LogHelper.d(TAG, "createMediaPlayerIfNeeded. needed? ", (mMediaPlayer==null));
+        LogHelper.d(TAG, "createMediaPlayerIfNeeded. needed? ", (mMediaPlayer == null));
         if (mMediaPlayer == null) {
             mMediaPlayer = new MediaPlayer();
             mMediaPlayer.setWakeMode(mService.getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
@@ -446,7 +446,7 @@ public class LocalPlayback implements Playback, AudioManager.OnAudioFocusChangeL
      * "foreground service" status, the wake locks and possibly the MediaPlayer.
      *
      * @param releaseMediaPlayer Indicates whether the Media Player should also
-     *            be released or not
+     *                           be released or not
      */
     private void relaxResources(boolean releaseMediaPlayer) {
         LogHelper.d(TAG, "relaxResources. releaseMediaPlayer=", releaseMediaPlayer);

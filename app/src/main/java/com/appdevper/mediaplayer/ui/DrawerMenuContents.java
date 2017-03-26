@@ -36,20 +36,18 @@ public class DrawerMenuContents {
     private final Class[] activities;
 
     public DrawerMenuContents(Context ctx) {
-        activities = new Class[4];
-        items = new ArrayList<>(4);
+        activities = new Class[3];
+        items = new ArrayList<>(3);
 
         activities[0] = MainActivity.class;
-        items.add(populateDrawerItem(ctx.getString(R.string.drawer_allmusic_title), R.drawable.ic_allmusic_black_24dp));
+        items.add(populateDrawerItem(ctx.getString(R.string.drawer_allmusic_title), R.drawable.ic_home));
 
         activities[1] = PlayListActivity.class;
         items.add(populateDrawerItem(ctx.getString(R.string.drawer_playlists_title), R.drawable.ic_playlist_music_black_24dp));
 
         activities[2] = SettingPreferenceActivity.class;
-        items.add(populateDrawerItem(ctx.getString(R.string.settings_label), R.drawable.ic_playlist_music_black_24dp));
+        items.add(populateDrawerItem(ctx.getString(R.string.settings_label), R.drawable.ic_settings));
 
-        activities[3] = RenderListActivity.class;
-        items.add(populateDrawerItem("Render", R.drawable.ic_playlist_music_black_24dp));
     }
 
     public List<Map<String, ?>> getItems() {

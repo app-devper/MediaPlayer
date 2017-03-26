@@ -39,4 +39,6 @@
     <!-- Margins for full screen activity-->
     <dimen name="text_view_margin">16dp</dimen>
     <dimen name="end_text_margin">16dp</dimen>
+
+    <dimen name="sliding_menu_width">80dp</dimen>
 </resources>

@@ -115,8 +115,7 @@ public class PlaybackManager implements Playback.Callback {
         }
 
         //noinspection ResourceType
-        PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
-                .setActions(getAvailableActions());
+        PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder().setActions(getAvailableActions());
 
         setCustomAction(stateBuilder);
         int state = mPlayback.getState();
@@ -155,11 +154,9 @@ public class PlaybackManager implements Playback.Callback {
         if (mediaId == null) {
             return;
         }
-        String musicId = mediaId;
-        int favoriteIcon = mMusicProvider.isFavorite(musicId) ?
-                R.drawable.ic_star_on : R.drawable.ic_star_off;
+        int favoriteIcon = mMusicProvider.isFavorite(mediaId) ? R.drawable.ic_star_on : R.drawable.ic_star_off;
         LogHelper.d(TAG, "updatePlaybackState, setting Favorite custom action of music ",
-                musicId, " current favorite=", mMusicProvider.isFavorite(musicId));
+                mediaId, " current favorite=", mMusicProvider.isFavorite(mediaId));
         Bundle customActionExtras = new Bundle();
         //WearHelper.setShowCustomActionOnWear(customActionExtras, true);
         stateBuilder.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(
@@ -169,12 +166,11 @@ public class PlaybackManager implements Playback.Callback {
     }
 
     private long getAvailableActions() {
-        long actions =
-                PlaybackStateCompat.ACTION_PLAY |
-                        PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID |
-                        PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH |
-                        PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
-                        PlaybackStateCompat.ACTION_SKIP_TO_NEXT;
+        long actions = PlaybackStateCompat.ACTION_PLAY |
+                PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID |
+                PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH |
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT;
         if (mPlayback.isPlaying()) {
             actions |= PlaybackStateCompat.ACTION_PAUSE;
         }
@@ -261,7 +257,6 @@ public class PlaybackManager implements Playback.Callback {
                 LogHelper.d(TAG, "Default called. Old state is ", oldState);
         }
     }
-
 
     private class MediaSessionCallback extends MediaSessionCompat.Callback {
         @Override

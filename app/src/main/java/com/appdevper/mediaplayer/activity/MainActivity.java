@@ -23,7 +23,7 @@ import android.widget.Toast;
 
 import com.appdevper.mediaplayer.R;
 import com.appdevper.mediaplayer.adater.DeviceListAdapter;
-import com.appdevper.mediaplayer.app.AppConfiguration;
+import com.appdevper.mediaplayer.app.AppConfig;
 import com.appdevper.mediaplayer.app.AppMediaPlayer;
 import com.appdevper.mediaplayer.app.MusicService;
 import com.appdevper.mediaplayer.app.ServerSettings;
@@ -39,7 +39,6 @@ public class MainActivity extends BaseActivity {
 
     private DeviceListRegistryListener deviceListRegistryListener;
     private final static String LOGTAG = MainActivity.class.getSimpleName();
-
 
     private ServiceConnection serviceConnection = new ServiceConnection() {
 
@@ -85,7 +84,6 @@ public class MainActivity extends BaseActivity {
         listServer = (ListView) findViewById(R.id.listServer);
         listServer.setAdapter(deviceList);
         listServer.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-
             @Override
             public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
                 ShareData.setDevice(deviceList.getItem(position).getDevice());
@@ -104,7 +102,7 @@ public class MainActivity extends BaseActivity {
         adRequest = new AdRequest.Builder().addTestDevice(AdRequest.DEVICE_ID_EMULATOR).build();
 
         interstitialAd = new InterstitialAd(this);
-        interstitialAd.setAdUnitId(AppConfiguration.AD_UNIT_ID);
+        interstitialAd.setAdUnitId(AppConfig.AD_UNIT_ID);
 
         interstitialAd.setAdListener(new AdListener() {
             @Override
@@ -160,7 +158,7 @@ public class MainActivity extends BaseActivity {
             fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             fullScreenIntent.putExtra(EXTRA_CURRENT_MEDIA_DESCRIPTION, intent.getParcelableExtra(EXTRA_CURRENT_MEDIA_DESCRIPTION));
             startActivity(fullScreenIntent);
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_left);
+            //overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_left);
         }
         if (intent != null && intent.getBooleanExtra(EXTRA_START_SETTING, false)) {
             Intent fullScreenIntent = new Intent(this, SettingPreferenceActivity.class);
@@ -251,7 +249,7 @@ public class MainActivity extends BaseActivity {
             Log.i(LOGTAG, "onConnect");
             DeviceItem di = new DeviceItem(null, true);
             ShareData.getRenList().add(di);
-            ShareData.setrDevice(di);
+            ShareData.setRenderDevice(di);
             AppMediaPlayer.getUpnpService().getRegistry().addListener(deviceListRegistryListener);
             AppMediaPlayer.getUpnpService().getControlPoint().search();
         }

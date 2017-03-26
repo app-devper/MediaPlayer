@@ -1,6 +1,5 @@
 package com.appdevper.mediaplayer.activity;
 
-import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -16,6 +15,7 @@ import android.preference.Preference.OnPreferenceClickListener;
 import android.preference.PreferenceFragment;
 import android.preference.TwoStatePreference;
 import android.support.v4.app.Fragment;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.util.Linkify;
@@ -85,16 +85,16 @@ public class SettingPreferenceActivity extends AppCompatActivity {
                 }
             });
 
-            Preference selectPref = findPref("media_select");
-            selectPref.setOnPreferenceClickListener(new OnPreferenceClickListener() {
-                @Override
-                public boolean onPreferenceClick(Preference preference) {
-                    if (!ServerUpnpService.isRunning()) {
-                        startActivity(new Intent(SettingPreferenceActivity.this, SelectMediaActivity.class));
-                    }
-                    return false;
-                }
-            });
+//            Preference selectPref = findPref("media_select");
+//            selectPref.setOnPreferenceClickListener(new OnPreferenceClickListener() {
+//                @Override
+//                public boolean onPreferenceClick(Preference preference) {
+//                    if (!ServerUpnpService.isRunning()) {
+//                        startActivity(new Intent(SettingPreferenceActivity.this, SelectMediaActivity.class));
+//                    }
+//                    return false;
+//                }
+//            });
 
             EditTextPreference deName_pref = findPref("deName");
             deName_pref.setSummary(ServerSettings.getDeviceName());
@@ -226,7 +226,7 @@ public class SettingPreferenceActivity extends AppCompatActivity {
 
         private void updateRunningState() {
             TwoStatePreference runningPref = findPref("running_switch");
-            Preference selectPref = findPref("media_select");
+            //Preference selectPref = findPref("media_select");
             CheckBoxPreference videoPref = findPref("allow_video");
             CheckBoxPreference audioPref = findPref("allow_audio");
             CheckBoxPreference imagePref = findPref("allow_image");
@@ -234,18 +234,18 @@ public class SettingPreferenceActivity extends AppCompatActivity {
                 videoPref.setEnabled(false);
                 audioPref.setEnabled(false);
                 imagePref.setEnabled(false);
-                selectPref.setEnabled(false);
+               // selectPref.setEnabled(false);
                 runningPref.setChecked(true);
                 runningPref.setSummary(R.string.running_summary_started);
-                selectPref.setSummary(R.string.running_select_summary);
+               // selectPref.setSummary(R.string.running_select_summary);
             } else {
                 runningPref.setChecked(false);
                 runningPref.setSummary(R.string.running_summary_stopped);
-                selectPref.setSummary(R.string.select_summary);
+               // selectPref.setSummary(R.string.select_summary);
                 videoPref.setEnabled(true);
                 audioPref.setEnabled(true);
                 imagePref.setEnabled(true);
-                selectPref.setEnabled(true);
+               // selectPref.setEnabled(true);
             }
         }
 

@@ -23,7 +23,7 @@ import android.content.SharedPreferences;
  */
 public class PrefUtils {
 
-    private static final String PREF_NAMESPACE = "com.example.android.uamp.utils.PREFS";
+    private static final String PREF_NAMESPACE = "com.appdevper.util.PREFS";
     private static final String FTU_SHOWN = "ftu_shown";
 
     public static SharedPreferences getPreferences(Context context) {

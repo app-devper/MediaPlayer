@@ -8,10 +8,10 @@
         android:summary="@string/running_summary_stopped"
         android:title="@string/running_label" />
 
-    <Preference
-        android:key="media_select"
-        android:summary="@string/select_summary"
-        android:title="@string/select_label" />
+    <!--<Preference-->
+        <!--android:key="media_select"-->
+        <!--android:summary="@string/select_summary"-->
+        <!--android:title="@string/select_label" />-->
 
     <PreferenceCategory
         android:key="settings"

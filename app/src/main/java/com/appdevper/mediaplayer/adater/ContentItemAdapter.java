@@ -23,7 +23,7 @@ import java.util.ArrayList;
 public class ContentItemAdapter extends ArrayAdapter<ContentItem> {
 
     public ContentItemAdapter(Activity context) {
-        super(context, R.layout.media_grid_item, new ArrayList<ContentItem>());
+        super(context, R.layout.media_list_item, new ArrayList<ContentItem>());
     }
 
     public ArrayList<ContentItem> getAll() {

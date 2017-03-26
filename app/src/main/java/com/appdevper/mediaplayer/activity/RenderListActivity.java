@@ -63,10 +63,10 @@ public class RenderListActivity extends BaseActivity {
 
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                ShareData.setrDevice(deviceList.getItem(position));
+                ShareData.setRenderDevice(deviceList.getItem(position));
                 AppMediaPlayer.setService();
-                if (!ShareData.getrDevice().getIslocal())
-                    mService.connectUpnp(ShareData.getrDevice().toString());
+                if (!ShareData.getRenderDevice().getIslocal())
+                    mService.connectUpnp(ShareData.getRenderDevice().toString());
                 else
                     mService.disconnectUpnp();
                 finish();

@@ -94,8 +94,7 @@ public class MediaItemViewHolder {
                     holder.mImageView.setVisibility(View.VISIBLE);
                     break;
                 case STATE_PLAYING:
-                    AnimationDrawable animation = (AnimationDrawable)
-                            ContextCompat.getDrawable(activity, R.drawable.ic_equalizer_white_36dp);
+                    AnimationDrawable animation = (AnimationDrawable) ContextCompat.getDrawable(activity, R.drawable.ic_equalizer_white_36dp);
                     DrawableCompat.setTintList(animation, sColorStatePlaying);
                     holder.mImageView.setImageDrawable(animation);
                     holder.mImageView.setVisibility(View.VISIBLE);
@@ -113,16 +112,16 @@ public class MediaItemViewHolder {
                     holder.mImageView.setImageDrawable(folderDrawable);
                     holder.mImageView.setVisibility(View.VISIBLE);
                     break;
+                case STATE_IMAGE:
+                    Drawable imageDrawable = ContextCompat.getDrawable(activity, R.drawable.ic_play_arrow_black_36dp);
+                    DrawableCompat.setTintList(imageDrawable, sColorStateNotPlaying);
+                    holder.mImageView.setImageDrawable(imageDrawable);
+                    holder.mImageView.setVisibility(View.VISIBLE);
+                    break;
                 default:
                     holder.mImageView.setVisibility(View.GONE);
             }
             convertView.setTag(R.id.tag_mediaitem_state_cache, state);
-        }
-
-        if (state == STATE_IMAGE) {
-            holder.mImageView.setImageTintList(null);
-            holder.mImageView.setVisibility(View.VISIBLE);
-            AppMediaPlayer.getImageLoader().displayImage(item.getResourceUri(), holder.mImageView);
         }
 
         return convertView;

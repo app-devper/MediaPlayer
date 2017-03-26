@@ -13,6 +13,7 @@ import org.seamless.util.MimeType;
 import android.database.Cursor;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.support.design.widget.TabLayout;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
@@ -46,6 +47,7 @@ public class SelectMediaActivity extends AppCompatActivity {
     private ArrayList<String> arrTitle;
     private Toolbar mToolbar;
     private PlaybackControlsFragment mControlsFragment;
+    private TabLayout tabLayout;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -54,6 +56,7 @@ public class SelectMediaActivity extends AppCompatActivity {
 
         initializeToolbar();
 
+        tabLayout = (TabLayout) findViewById(R.id.tabLayout);
         mViewPager = (ViewPager) findViewById(R.id.pager);
 
         UserData.setArSelectId(ServerSettings.getSelectId());
@@ -119,7 +122,7 @@ public class SelectMediaActivity extends AppCompatActivity {
             actionBar.setTitle(ServerSettings.getDeviceName());
             mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager());
             mViewPager.setAdapter(mSectionsPagerAdapter);
-
+            tabLayout.setupWithViewPager(mViewPager);
         }
     }
 

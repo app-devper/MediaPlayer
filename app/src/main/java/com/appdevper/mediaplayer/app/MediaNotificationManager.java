@@ -287,8 +287,7 @@ public class MediaNotificationManager extends BroadcastReceiver {
             }
         }
         notificationBuilder.setStyle(new NotificationCompat.MediaStyle()
-                .setShowActionsInCompactView(
-                        new int[]{playPauseButtonPosition})  // show only play/pause in compact view
+                .setShowActionsInCompactView(new int[]{playPauseButtonPosition})  // show only play/pause in compact view
                 .setMediaSession(mSessionToken))
                 .setColor(mNotificationColor)
                 .setSmallIcon(R.drawable.ic_notification)

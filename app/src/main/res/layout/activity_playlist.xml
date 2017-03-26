@@ -20,8 +20,12 @@
             android:id="@+id/controls_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true">
-
+            android:layout_alignParentBottom="true"
+            android:orientation="vertical">
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@android:color/darker_gray"/>
             <fragment
                 android:id="@+id/fragment_playback_controls"
                 android:name="com.appdevper.mediaplayer.ui.PlaybackControlsFragment"

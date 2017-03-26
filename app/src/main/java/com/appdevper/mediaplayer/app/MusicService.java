@@ -55,7 +55,6 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 
-
 public class MusicService extends Service implements PlaybackManager.PlaybackServiceCallback {
 
     // Extra on MediaSession that contains the Cast device name currently connected to

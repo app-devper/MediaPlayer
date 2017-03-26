@@ -33,7 +33,7 @@ public class ContentDirectoryService extends AbstractContentDirectoryService {
 			if (contentNode.isItem()) {
 				didl.addItem(contentNode.getItem());
 
-				Log.v(LOGTAG, "returing item: " + contentNode.getItem().getTitle());
+				Log.v(LOGTAG, "returning item: " + contentNode.getItem().getTitle());
 
 				return new BrowseResult(new DIDLParser().generate(didl), 1, 1);
 			} else {

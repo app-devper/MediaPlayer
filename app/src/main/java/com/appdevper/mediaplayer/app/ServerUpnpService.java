@@ -104,7 +104,7 @@ public class ServerUpnpService extends AndroidUpnpServiceImpl {
         // TODO: next if block could probably be removed
         if (isConnectedUsingWifi()) {
             Context context = AppMediaPlayer.getAppContext();
-            WifiManager wm = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+            WifiManager wm = (WifiManager) context.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             int ipAddress = wm.getConnectionInfo().getIpAddress();
             if (ipAddress == 0)
                 return null;

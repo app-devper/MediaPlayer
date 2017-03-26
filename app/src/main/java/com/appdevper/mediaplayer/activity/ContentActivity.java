@@ -163,14 +163,14 @@ public class ContentActivity extends BaseActivity {
             upnpService.getControlPoint().execute(new ContentActionCallback(ContentActivity.this, content.getService(), content.getContainer(), contentAdapter));
         } else {
             try {
-                if (ShareData.getrDevice().getIslocal()) {
+                if (ShareData.getRenderDevice().getIslocal()) {
                     switch (type) {
                         case "video":
-                            AppMediaPlayer.setMedia(content);
+                            getSupportMediaController().getTransportControls().stop();
+                            playVideo(content);
                             break;
                         case "audio":
-                            ShareData.aContent = contentAdapter.getAll();
-                            MusicProvider.getInstance().retrieveMedia(ShareData.aContent);
+                            MusicProvider.getInstance().retrieveMedia(contentAdapter.getAll());
                             onMediaItemSelected(String.valueOf(content.getResourceUri().hashCode()));
                             break;
                         case "image":
@@ -182,7 +182,6 @@ public class ContentActivity extends BaseActivity {
                             startActivity(intent);
                             break;
                     }
-
                 } else {
                     switch (type) {
                         case "video":
@@ -190,8 +189,7 @@ public class ContentActivity extends BaseActivity {
                             AppMediaPlayer.sendRender(content);
                             break;
                         case "audio":
-                            ShareData.aContent = contentAdapter.getAll();
-                            MusicProvider.getInstance().retrieveMedia(ShareData.aContent);
+                            MusicProvider.getInstance().retrieveMedia(contentAdapter.getAll());
                             onMediaItemSelected(String.valueOf(content.getResourceUri().hashCode()));
                             break;
                         case "image":
@@ -236,40 +234,21 @@ public class ContentActivity extends BaseActivity {
     }
 
     private void download(ContentItem content) {
-        if (isDownloadManagerAvailable(ContentActivity.this)) {
-            String url = content.getResourceUri();
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            request.setDescription("Download file with Media player");
-            request.setTitle("Download " + content.toString());
-            String[] ss = url.split("\\.");
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
-                request.allowScanningByMediaScanner();
-                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            }
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, content.toString() + "." + ss[ss.length - 1]);
+        String url = content.getResourceUri();
+        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+        request.setDescription("Download file with Media player");
+        request.setTitle("Download " + content.toString());
+        String[] ss = url.split("\\.");
+        request.allowScanningByMediaScanner();
+        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
 
-            // get download service and enqueue file
-            DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-            manager.enqueue(request);
-        } else {
-            Toast.makeText(ContentActivity.this, "Can not download file.", Toast.LENGTH_SHORT).show();
-        }
+        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, content.toString() + "." + ss[ss.length - 1]);
+
+        // get download service and enqueue file
+        DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+        manager.enqueue(request);
     }
 
-    private boolean isDownloadManagerAvailable(Context context) {
-        try {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.GINGERBREAD) {
-                return false;
-            }
-            Intent intent = new Intent(Intent.ACTION_MAIN);
-            intent.addCategory(Intent.CATEGORY_LAUNCHER);
-            intent.setClassName("com.android.providers.downloads.ui", "com.android.providers.downloads.ui.DownloadList");
-            List<ResolveInfo> list = context.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
-            return list.size() > 0;
-        } catch (Exception e) {
-            return false;
-        }
-    }
 
     @Override
     protected void onMediaControllerConnected() {
@@ -297,8 +276,15 @@ public class ContentActivity extends BaseActivity {
         mToolbar.setNavigationOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                onBackPressed();
+                onBack();
             }
         });
+    }
+
+    private void playVideo(ContentItem content) {
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.setDataAndType(Uri.parse(content.getItem().getFirstResource().getValue()), content.getMimeType());
+        startActivity(intent);
     }
 }

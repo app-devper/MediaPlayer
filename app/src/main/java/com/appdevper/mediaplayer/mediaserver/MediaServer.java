@@ -90,7 +90,6 @@ public class MediaServer {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
         byte[] imageInByte = stream.toByteArray();
-        System.out.println("........length......" + imageInByte);
         ByteArrayInputStream bis = new ByteArrayInputStream(imageInByte);
 
         try {

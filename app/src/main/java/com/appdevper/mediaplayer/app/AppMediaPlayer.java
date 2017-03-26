@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.app;
 
+import com.crashlytics.android.Crashlytics;
+import io.fabric.sdk.android.Fabric;
 import java.io.IOException;
 
 import org.fourthline.cling.android.AndroidUpnpService;
@@ -55,10 +57,10 @@ public class AppMediaPlayer extends Application {
     @Override
     public void onCreate() {
         super.onCreate();
+        Fabric.with(this, new Crashlytics());
         sContext = getApplicationContext();
         String applicationId = getResources().getString(R.string.cast_application_id);
-        VideoCastManager.initialize(
-                getApplicationContext(),
+        VideoCastManager.initialize(getApplicationContext(),
                 new CastConfiguration.Builder(applicationId)
                         .enableWifiReconnection()
                         .enableAutoReconnect()
@@ -94,10 +96,7 @@ public class AppMediaPlayer extends Application {
         if (currentContent == null) {
             return false;
         }
-        if (mPlayer != null) {
-            return mPlayer.isPlaying();
-        }
-        return false;
+        return mPlayer != null && mPlayer.isPlaying();
     }
 
     public static void playMusic() {
@@ -261,8 +260,8 @@ public class AppMediaPlayer extends Application {
 
     @SuppressWarnings("unchecked")
     public static void setService() {
-        if (!ShareData.getrDevice().getIslocal()) {
-            renderer = ShareData.getrDevice().getDevice();
+        if (!ShareData.getRenderDevice().getIslocal()) {
+            renderer = ShareData.getRenderDevice().getDevice();
             service = renderer.findService(new UDAServiceId("AVTransport"));
             rService = renderer.findService(new UDAServiceId("RenderingControl"));
         }

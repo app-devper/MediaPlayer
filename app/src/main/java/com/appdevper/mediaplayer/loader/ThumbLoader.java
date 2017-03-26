@@ -19,11 +19,11 @@ import android.widget.ImageView;
 public class ThumbLoader {
 	//private static final String TAG = "ImageLoader";
 
-	MemoryCache memoryCache = new MemoryCache();
+	private MemoryCache memoryCache = new MemoryCache();
 
 	private Map<ImageView, String> imageViews = Collections.synchronizedMap(new WeakHashMap<ImageView, String>());
-	ExecutorService executorService;
-	final int stub_id = R.drawable.ic_launcher;
+	private ExecutorService executorService;
+	private final int stub_id = R.drawable.ic_launcher;
 
 	private Context context;
 
