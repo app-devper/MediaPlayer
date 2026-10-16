@@ -1,0 +1,50 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  linux:
+    name: Linux (JVM + Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+
+      # iOS targets are skipped on Linux (kotlin.native.ignoreDisabledTargets=true).
+      - name: Tests (domain, data, presentation) + Android build
+        run: |
+          ./gradlew --parallel \
+            :domain:jvmTest \
+            :data:jvmTest \
+            :composeApp:jvmTest \
+            :composeApp:assembleDebug \
+            --stacktrace
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-reports
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
