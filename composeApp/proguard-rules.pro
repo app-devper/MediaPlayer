@@ -1,0 +1,5 @@
+-dontwarn org.slf4j.**
+-dontwarn io.ktor.**
+-dontwarn java.lang.management.**
+-keep class io.ktor.server.cio.** { *; }
+-keep class kotlinx.coroutines.** { *; }
