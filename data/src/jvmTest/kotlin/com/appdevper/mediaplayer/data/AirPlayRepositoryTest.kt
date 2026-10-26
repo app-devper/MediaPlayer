@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
@@ -110,6 +111,30 @@ class AirPlayRepositoryTest {
         assertIs<AirPlayStatus.Unsupported>(repo.status.value)
         repo.start("X", requirePin = false)
         assertIs<AirPlayStatus.Unsupported>(repo.status.value)
+    }
+
+    @Test
+    fun anEndedVideoTheSenderAbandonsIsClosedHere() = runBlocking<Unit> {
+        val receiver = FakeReceiver()
+        val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope, abandonedEndMs = 100)
+        val video = assertNotNull(receiver.video)
+        val commands = mutableListOf<CastCommand>()
+        val collecting = scope.launch { repo.commands.collect { commands += it } }
+
+        video.play("http://localhost:7000/master.m3u8", startSeconds = 0f)
+        val load = assertIs<CastCommand.Load>(commands.first())
+        // Stopped 2 s short of the container duration: still the end (it used to need < 1 s).
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 298_000, 300_000), volume = 80))
+        assertEquals(AirPlayVideoInfo(300.0, 300.0, playing = false), video.info())
+
+        // The phone went away without /stop: the session ends here, so a later /rate 1 can't restart it.
+        delay(400)
+        assertEquals(CastCommand.Stop, commands.last())
+        assertNull(video.info())
+        val before = commands.size
+        video.setRate(1f)
+        assertEquals(before, commands.size)
+        collecting.cancel()
     }
 
     @Test

@@ -60,7 +60,7 @@ typedef struct ap_callbacks {
     void (*video_rate)(void *ctx, float rate);
     void (*video_playback_stop)(void *ctx);
     /* What the app's player is doing, for the sender's progress bar. Return false while nothing is
-     * loaded; set *duration < 0 once the video finished. Called on a network thread: no blocking. */
+     * loaded; *duration < 0 makes UxPlay end the session and drop the sender's connection (the app sends it only when something else replaced the video). Called on a network thread: no blocking. */
     bool (*video_info)(void *ctx, double *duration, double *position, float *rate);
 } ap_callbacks_t;
 

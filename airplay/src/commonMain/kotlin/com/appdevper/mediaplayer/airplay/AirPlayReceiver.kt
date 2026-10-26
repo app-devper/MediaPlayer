@@ -65,7 +65,7 @@ interface AirPlayMediaSink {
     fun onAudioFlush() {}
 }
 
-/** Where the app's player stands, for the sender's progress bar. [durationSeconds] < 0 = finished. */
+/** Where the app's player stands, for the sender's progress bar. [durationSeconds] < 0 ends the session and drops the sender's connection; a video that played to the end is reported at its end, paused. */
 data class AirPlayVideoInfo(val durationSeconds: Double, val positionSeconds: Double, val playing: Boolean)
 
 /**

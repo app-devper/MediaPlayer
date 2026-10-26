@@ -1,6 +1,15 @@
 package com.appdevper.mediaplayer.platform
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.onStart
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -8,7 +17,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import com.appdevper.mediaplayer.designsystem.components.ThinSlider
@@ -134,11 +142,17 @@ actual fun NativeMediaPlayer(
     }
 
     // Video: controls float over the picture and hide while it plays; songs: always shown, in theme colors.
-    var lastActivity by remember { mutableLongStateOf(0L) }
+    // Mouse moves and keys go through a flow, not state, so moving the mouse doesn't recompose the player.
+    val activity = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
     var controlsVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(lastActivity, status.playing, seeking, isAudio) {
+    var overControls by remember { mutableStateOf(false) }
+    var controlsFocused by remember { mutableStateOf(false) }
+    val canHide = !isAudio && status.playing && !status.buffering && seeking == null && !overControls && !controlsFocused
+    LaunchedEffect(canHide) {
         controlsVisible = true
-        if (!isAudio && status.playing && seeking == null) {
+        if (!canHide) return@LaunchedEffect
+        activity.onStart { emit(Unit) }.collectLatest {
+            controlsVisible = true
             delay(CONTROLS_HIDE_MS)
             controlsVisible = false
         }
@@ -155,7 +169,21 @@ actual fun NativeMediaPlayer(
     val c = AppTheme.colors
     val content = if (isAudio) c.textPrimary else Color.White
     val controls: @Composable () -> Unit = {
-        Column(Modifier.fillMaxWidth()) {
+        // Stays up while the pointer is on it or one of its controls has keyboard focus.
+        Column(
+            Modifier.fillMaxWidth()
+                .onFocusChanged { controlsFocused = it.hasFocus }
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            when (awaitPointerEvent().type) {
+                                PointerEventType.Enter -> overControls = true
+                                PointerEventType.Exit -> overControls = false
+                            }
+                        }
+                    }
+                },
+        ) {
             // Same seek bar as the song screens (thin track, round thumb).
             ThinSlider(
                 value = seeking ?: if (status.durationMs > 0) (status.positionMs.toFloat() / status.durationMs).coerceIn(0f, 1f) else 0f,
@@ -175,7 +203,8 @@ actual fun NativeMediaPlayer(
                 }
                 val position = seeking?.let { (it * status.durationMs).toLong() } ?: status.positionMs
                 Text(
-                    "${formatClock(position)} / ${formatClock(status.durationMs)}",
+                    // Unknown duration (live stream): just the position.
+                    if (status.durationMs > 0) "${formatClock(position)} / ${formatClock(status.durationMs)}" else formatClock(position),
                     color = content.copy(alpha = 0.85f),
                     style = MaterialTheme.typography.labelMedium,
                 )
@@ -202,23 +231,32 @@ actual fun NativeMediaPlayer(
     }
 
     if (isAudio) {
-        Box(modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.BottomCenter) {
-            status.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, modifier = Modifier.align(Alignment.TopCenter)) }
+        Column(modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.Bottom) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                when {
+                    status.error != null -> Text(
+                        status.error.orEmpty(), color = c.danger, style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    status.buffering && status.playing -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.textSecondary)
+                }
+            }
             controls()
         }
         return
     }
     Box(
         modifier.fillMaxSize()
-            // Any mouse movement brings the controls back.
+            // Any mouse movement or key brings the controls back.
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         awaitPointerEvent()
-                        lastActivity = System.nanoTime()
+                        activity.tryEmit(Unit)
                     }
                 }
             }
+            .onPreviewKeyEvent { activity.tryEmit(Unit); false }
             .pointerInput(onToggleFullscreen) {
                 detectTapGestures(
                     onTap = { togglePlay() },
@@ -254,6 +292,8 @@ actual fun NativeMediaPlayer(
         ) {
             Box(
                 Modifier.fillMaxWidth()
+                    // Clicks on the bar's empty parts (time, gaps, gradient) don't reach the video's play/pause.
+                    .pointerInput(Unit) { detectTapGestures {} }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
                     .padding(start = 12.dp, end = 12.dp, top = 28.dp, bottom = 4.dp),
             ) { controls() }

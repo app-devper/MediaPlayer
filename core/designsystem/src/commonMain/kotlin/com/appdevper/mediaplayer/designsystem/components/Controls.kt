@@ -52,13 +52,13 @@ fun ThinSlider(
     activeColor: Color = AppTheme.colors.primary,
     inactiveColor: Color = AppTheme.colors.trackInactive,
 ) {
-    val c = AppTheme.colors
     val colors = SliderDefaults.colors(
         thumbColor = activeColor,
         activeTrackColor = activeColor,
         inactiveTrackColor = inactiveColor,
-        disabledActiveTrackColor = c.textTertiary,
-        disabledInactiveTrackColor = c.selected,
+        // Disabled (e.g. unknown duration): the same colors, faded, so it fits over video too.
+        disabledActiveTrackColor = activeColor.copy(alpha = 0.38f),
+        disabledInactiveTrackColor = inactiveColor.copy(alpha = inactiveColor.alpha * 0.5f),
     )
     val source = remember { MutableInteractionSource() }
     Slider(
@@ -70,7 +70,7 @@ fun ThinSlider(
         onValueChangeFinished = onValueChangeFinished,
         interactionSource = source,
         thumb = {
-            Box(Modifier.size(14.dp).clip(CircleShape).background(if (enabled) activeColor else c.textTertiary))
+            Box(Modifier.size(14.dp).clip(CircleShape).background(if (enabled) activeColor else activeColor.copy(alpha = 0.38f)))
         },
         track = { state ->
             SliderDefaults.Track(
