@@ -40,19 +40,25 @@ Respect the layers (see README › Architecture):
 |---|---|---|
 | `:domain` | models, repository interfaces, use cases, `PlaybackSession` | import Compose, ktor, platform APIs |
 | `:data` | UPnP stack (`upnp/`), DLNA server (`server/`), platform I/O (`platform/`), repository impls, `dataModule` | leak `Upnp*`/`Didl*` types past the repository (map in `mapper/`) |
-| `:composeApp` | ViewModels (`feature/*`), UI (`ui/`), Koin wiring (`di/`), native players | call repositories directly (ViewModels use use cases only) |
+| `:composeApp` | ViewModels (`feature/*`), app shell (`ui/shell/`), Koin wiring (`di/`), native players | call repositories directly (ViewModels use use cases only) |
+| `:core:designsystem` | theme tokens (`theme/`), icons (`icons/`), components (`components/`) | depend on `:domain`, `:data` or app code (domain → UI helpers live in `composeApp/.../ui/`) |
 
 - New platform behaviour: an interface in `data/platform` bound in each
   `platformDataModule`. Use an `expect` only for stateless functions.
   UI-only platform pieces (player, AirPlay, permissions) go in
   `composeApp/.../platform/PlatformUi.kt`.
-- UI: use the tokens in `ui/theme` (`AppTheme.colors`, `Radius`), icons from
-  `ui/icons/AppIcons`, and building blocks from `ui/components`. Don't use
-  raw Material colors, ripples or Material icons. The ChatGPT-style
-  monochrome look is the design language.
+- UI: use the tokens in `designsystem/theme` (`AppTheme.colors`, `Radius`),
+  icons from `designsystem/icons/AppIcons`, and building blocks from
+  `designsystem/components`. Don't use raw Material colors, ripples or
+  Material icons. The ChatGPT-style monochrome look is the design language.
 - New screen: `feature/<name>/<Name>Screen.kt` + `<Name>ViewModel.kt`, a
-  route in `ui/shell/AppShell.kt`, and the ViewModel registered in
-  `presentationModule`.
+  route in `ui/shell/Routes.kt` wired in `ui/shell/AppNavHost.kt`, and the
+  ViewModel registered in `presentationModule`.
+- New module: apply `mediaplayer.kmp.library` (+ `mediaplayer.kmp.compose`
+  for UI) from `build-logic`; don't repeat targets or Android SDK config.
+  Add its `jvmTest` to the CI gate if it has tests.
+- One top-level class per file; group only small, tightly related
+  composables.
 
 **Exit:** the files and modules to touch are known, with no layer rule broken.
 

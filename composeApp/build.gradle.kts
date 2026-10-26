@@ -1,26 +1,17 @@
 @file:Suppress("DEPRECATION")
 
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
-    alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
-    alias(libs.plugins.jetbrainsCompose)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.mediaplayer.kmp.application)
+    alias(libs.plugins.mediaplayer.kmp.compose)
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
-    jvmToolchain(17)
-
-    androidTarget()
-    jvm()
-
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64(),
-    ).forEach { target ->
-        target.binaries.framework {
+    targets.withType<KotlinNativeTarget>().configureEach {
+        binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
         }
@@ -30,6 +21,7 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":domain"))
             implementation(project(":data"))
+            implementation(project(":core:designsystem"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)
@@ -69,30 +61,12 @@ kotlin {
         jvmTest.dependencies {
             implementation(compose.desktop.uiTestJUnit4)
         }
-
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-            implementation(libs.kotlinx.coroutines.test)
-        }
     }
 }
 
 android {
     namespace = "com.appdevper.mediaplayer"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    defaultConfig {
-        applicationId = "com.appdevper.appplayer"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = libs.versions.app.versionCode.get().toInt()
-        versionName = libs.versions.app.version.get()
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+    defaultConfig.applicationId = "com.appdevper.appplayer"
 
     packaging {
         resources {

@@ -17,6 +17,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.di.domainModule
 import com.appdevper.mediaplayer.di.presentationModule
 import com.appdevper.mediaplayer.domain.model.MediaEntry
@@ -33,7 +34,6 @@ import com.appdevper.mediaplayer.ui.shell.BrowseRoute
 import com.appdevper.mediaplayer.ui.shell.HomeRoute
 import com.appdevper.mediaplayer.ui.shell.PlayerRoute
 import com.appdevper.mediaplayer.ui.shell.ServerRoute
-import com.appdevper.mediaplayer.ui.theme.AppTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

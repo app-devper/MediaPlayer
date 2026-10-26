@@ -21,11 +21,12 @@ A single Compose Multiplatform app that merges
 
 ```
 composeApp  (presentation)  ──►  domain  ◄──  data
-  ViewModels, Compose UI,          entities,       UPnP/DLNA stack, media server,
+  ViewModels, screens,             entities,       UPnP/DLNA stack, media server,
   Koin wiring, native players      repository      platform I/O, repository
-                                   contracts,      implementations
-                                   use cases,
-                                   PlaybackSession
+        │                          contracts,      implementations
+        ▼                          use cases,
+core:designsystem                  PlaybackSession
+  theme, icons, components
 ```
 
 * **`:domain`**: pure Kotlin with no framework or platform code. Holds the models
@@ -38,17 +39,27 @@ composeApp  (presentation)  ──►  domain  ◄──  data
 * **`:composeApp`**: MVVM. One ViewModel per screen (`ShellViewModel`, `BrowseViewModel`,
   `PlayerViewModel`, `ServerViewModel`) exposes a `StateFlow` UI state and calls only use cases.
   Koin (`di/AppModule.kt`) is the composition root.
+* **`:core:designsystem`**: Compose-only building blocks with no app or domain code: design
+  tokens, the icon set and reusable components.
 
 ```
 composeApp/src/commonMain/kotlin/com/appdevper/mediaplayer/
   di/          Koin modules + initKoin()
   feature/     home · browse · player · server · shell  (Screen + ViewModel)
-  ui/theme/    design tokens (colors, type, radii), light & dark
-  ui/icons/    outline icon set + logo
-  ui/components/  pill buttons, list rows, composer field, thin slider…
-  ui/shell/    sidebar / drawer, "Play on" picker, mini player, navigation
+  ui/shell/    routes, nav host, sidebar / drawer, top bar + "Play on" picker, mini player
+  ui/          domain → UI helpers (MediaKind/MediaDevice icons, formatClock)
   platform/    expect: native player, AirPlay button, permissions
+
+core/designsystem/src/commonMain/kotlin/com/appdevper/mediaplayer/designsystem/
+  theme/       design tokens (colors, type, radii), light & dark
+  icons/       outline icon set + logo
+  components/  pill buttons, list rows, composer field, thin slider…
+
+build-logic/   Gradle convention plugins shared by every module:
+               mediaplayer.kmp.library · mediaplayer.kmp.application · mediaplayer.kmp.compose
 ```
+
+Source files hold one top-level class (or one closely related group of composables) each.
 
 ## Design
 
@@ -58,7 +69,7 @@ The UI follows the ChatGPT style:
 * a centered content column (max 768dp) with a rounded "composer" search field at the bottom
 * a "Play on ▾" picker in the top bar, styled like ChatGPT's model picker
 * a sidebar that is a modal drawer on phones and collapses on wide screens
-* thin outline icons (Lucide geometry, 1.75px stroke) in `ui/icons/AppIcons.kt`
+* thin outline icons (Lucide geometry, 1.75px stroke) in `core/designsystem/.../icons/AppIcons.kt`
 
 **App icon:** master files are `art/app-icon.svg` (full-bleed) and `art/app-icon-rounded.svg`.
 * Android uses an adaptive vector (`res/drawable/ic_launcher_foreground.xml`, with a themed

@@ -37,20 +37,20 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.appdevper.mediaplayer.designsystem.components.AppSwitch
+import com.appdevper.mediaplayer.designsystem.components.CenteredColumn
+import com.appdevper.mediaplayer.designsystem.components.GhostIconButton
+import com.appdevper.mediaplayer.designsystem.components.IconTile
+import com.appdevper.mediaplayer.designsystem.components.PillButton
+import com.appdevper.mediaplayer.designsystem.components.PillStyle
+import com.appdevper.mediaplayer.designsystem.components.StatusDot
+import com.appdevper.mediaplayer.designsystem.icons.AppIcons
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.usecase.countOf
 import com.appdevper.mediaplayer.platform.rememberMediaPermissionRequest
-import com.appdevper.mediaplayer.ui.components.AppSwitch
-import com.appdevper.mediaplayer.ui.components.CenteredColumn
-import com.appdevper.mediaplayer.ui.components.GhostIconButton
-import com.appdevper.mediaplayer.ui.components.IconTile
-import com.appdevper.mediaplayer.ui.components.PillButton
-import com.appdevper.mediaplayer.ui.components.PillStyle
-import com.appdevper.mediaplayer.ui.components.StatusDot
-import com.appdevper.mediaplayer.ui.icons.AppIcons
-import com.appdevper.mediaplayer.ui.theme.AppTheme
-import com.appdevper.mediaplayer.ui.theme.Radius
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
