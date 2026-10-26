@@ -50,8 +50,9 @@ kotlin {
         }
         jvmMain.dependencies {
             // FFmpeg decodes mirroring video and AAC on the desktop; natives only for the build machine.
-            implementation(libs.bytedeco.ffmpeg)
-            implementation(libs.bytedeco.javacpp)
+            // api: the desktop app's own media player uses FFmpeg too.
+            api(libs.bytedeco.ffmpeg)
+            api(libs.bytedeco.javacpp)
             runtimeOnly("org.bytedeco:ffmpeg:${libs.versions.bytedeco.ffmpeg.get()}:$bytedecoPlatform")
             runtimeOnly("org.bytedeco:javacpp:${libs.versions.bytedeco.javacpp.get()}:$bytedecoPlatform")
         }

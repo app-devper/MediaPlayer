@@ -57,7 +57,6 @@ kotlin {
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
-            implementation(libs.vlcj)
         }
 
         jvmTest.dependencies {

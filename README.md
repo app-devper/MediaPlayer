@@ -9,15 +9,14 @@ A single Compose Multiplatform app that merges
 |---|---|---|---|
 | Find DLNA/UPnP media servers & renderers (SSDP) | ✅ | ✅ ¹ | ✅ |
 | Browse server folders (ContentDirectory) | ✅ | ✅ | ✅ |
-| Play video / music / photos on this device | ExoPlayer | AVPlayer | VLC (vlcj) ² |
+| Play video / music / photos on this device | ExoPlayer | AVPlayer | FFmpeg (bytedeco) |
 | Play on a TV / speaker (AVTransport + volume) | ✅ | ✅ | ✅ |
 | **AirPlay** (Apple TV, AirPlay speakers/TVs) | — | ✅ native | — |
 | Built-in DLNA media server (share this device) | MediaStore | Documents folder | chosen folders |
 | Receive casts: DLNA renderer (other apps "Play to" this device) ³ | ✅ | ✅ | ✅ |
-| **Receive AirPlay**: screen mirroring, AirPlay video (YouTube…) and audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ ² |
+| **Receive AirPlay**: screen mirroring, AirPlay video (YouTube…) and audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ |
 
 ¹ Real devices need Apple's multicast entitlement (see below). The simulator works without it.
-² Without VLC installed, the desktop app opens media in the system player.
 ³ Off by default (My Server › Receive), since anyone on the Wi‑Fi could then play media on the screen.
   Plays while the app is open; only http(s) media URLs are accepted.
 ⁴ Off by default (My Server › Receive); a sender's first connection needs the code shown on screen
@@ -110,7 +109,7 @@ Screen Mirroring (Control Center) and in AirPlay audio menus on Apple devices on
 
 * screen mirroring (H.264) opens the Mirror screen; the sender's audio plays with it
 * **AirPlay video** (the AirPlay button in YouTube, Safari and other apps): the video itself plays in
-  the app's player (HLS on Android via ExoPlayer, on the desktop via VLC), controlled from the sender,
+  the app's player (HLS on Android via ExoPlayer, on the desktop via FFmpeg), controlled from the sender,
   which also gets the progress
 * music/podcasts (ALAC or AAC) play without a screen
 * the first connection from each sender asks for the code shown on screen (switchable); paired senders
