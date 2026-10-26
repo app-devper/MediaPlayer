@@ -30,7 +30,7 @@ fun AppSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boo
             checkedTrackColor = c.primary,
             checkedThumbColor = c.onPrimary,
             checkedBorderColor = c.primary,
-            uncheckedTrackColor = if (c.isDark) Color(0xFF4A4A4A) else Color(0xFFE3E3E3),
+            uncheckedTrackColor = c.trackInactive,
             uncheckedThumbColor = Color.White,
             uncheckedBorderColor = Color.Transparent,
         ),
@@ -52,7 +52,7 @@ fun ThinSlider(
     val colors = SliderDefaults.colors(
         thumbColor = c.primary,
         activeTrackColor = c.primary,
-        inactiveTrackColor = if (c.isDark) Color(0xFF4A4A4A) else Color(0xFFE3E3E3),
+        inactiveTrackColor = c.trackInactive,
         disabledActiveTrackColor = c.textTertiary,
         disabledInactiveTrackColor = c.selected,
     )
