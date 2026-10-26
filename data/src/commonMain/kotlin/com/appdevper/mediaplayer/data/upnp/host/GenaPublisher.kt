@@ -55,7 +55,7 @@ internal class GenaPublisher(
             }
             return if (renewed == null) call.respond(HttpStatusCode.PreconditionFailed) else call.respondSubscribed(renewSid, timeout)
         }
-        val callback = parseCallback(call.request.header("CALLBACK"), call.request.origin.remoteHost)
+        val callback = parseCallback(call.request.header("CALLBACK"), call.request.origin.remoteAddress)
         if (call.request.header("NT") != "upnp:event" || callback == null) return call.respond(HttpStatusCode.PreconditionFailed)
 
         val sub = Subscription("uuid:${MediaServer.randomUuid()}", callback, TimeSource.Monotonic.markNow() + timeout.seconds)
