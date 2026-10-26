@@ -74,12 +74,12 @@ apart.
 **Risk tier.** Decide it now from what the change touches (the change sets
 the tier, not who wrote it); it decides stage 6 and how the PR is approved.
 When rows overlap, the highest tier wins (a LAN receiver behind an off-by-default
-setting is still High).
+setting is still High), except `release/*`, which is Medium as stated.
 
 | Tier | Touches | Review (stage 6) | Approval (stage 7) |
 |---|---|---|---|
 | Low | docs (README), copy, tests only, additive app changes behind a setting that is off by default | `/code-review` | the user's "go" to open the PR covers it |
-| Medium | ordinary app changes (UI, player, domain, data); the process itself (`.claude/skills/*`, `.github/pull_request_template.md`), since it decides how everything else is reviewed; `release/*` (its own diff is the version bump, its content was reviewed in its PRs) | `/code-review` | the user approves the PR before it lands |
+| Medium | ordinary app changes (UI, player, domain, data); the process itself (`.claude/skills/*`, `.github/pull_request_template.md`), since it decides how everything else is reviewed; `release/*` (always Medium: everything in it already passed its own PR's review at that PR's tier; the release review checks the bump and that each PR in the changelog went through) | `/code-review` | the user approves the PR before it lands |
 | High | anything listening on the LAN or parsing what arrives from it (`data/server`, `data/upnp`, `:airplay`, native C/C++), crypto/pairing, file access, `.github/workflows/*`, build/signing config, `hotfix/*` | `/code-review` + `/security-review`, both blocking | the user reviews the risky files themselves (point them to the exact paths) and approves |
 
 ## 4. Build
@@ -141,9 +141,10 @@ A reviewer with fresh context reads the diff against the whole repo and the
 change's intent: does it solve the problem (for a bug: the root cause, not
 the symptom), does it fit the system, does it break something else.
 
-- Every tier: `/code-review`. Fresh context matters: if it runs inline in
-  the session that wrote the code, run it again in a subagent (Agent tool)
-  for anything Medium or High. Use `/simplify` for cleanups if the diff grew.
+- Every tier: `/code-review`. Medium and High also get a review from fresh
+  context: a new subagent (Agent tool, not a fork of this session) given
+  the diff range and the change's intent. Use `/simplify` for cleanups if
+  the diff grew.
 - High tier: also `/security-review`. Before acting on a finding, have a
   separate subagent try to refute it (read the code path, decide real or
   false positive with a confidence); keep only the ones that hold up.
@@ -169,7 +170,8 @@ again with stage 5 (output shown).
 
 ```bash
 git push -u origin feature/<slug>
-gh pr create --base develop --title "feat(scope): …" --body "…"
+gh pr create --base develop --title "feat(scope): …" --body-file <filled template>
+gh pr comment <n> --body "Approved by the author at $(git rev-parse HEAD)"   # the user's go covers this head
 ```
 
 Use `.github/pull_request_template.md`: what and why, risk tier, testing
@@ -180,12 +182,15 @@ revert**. Claude drafts it; the user is the author of record and signs off.
 - **Push and open the PR only after the user says so.** Claude's own review
   never counts as the approval; the user directing the work is the required
   reviewer (High tier: they look at the risky paths themselves).
-- An approval covers the commits it saw. When the user approves, record it
-  on the PR: `gh pr comment <n> --body "Approved by the author at $(git rev-parse --short HEAD)"`.
-  Commits after that SHA (review fixes, rebases) are summarised to the user
-  and confirmed before they're pushed and landed (`pr` skill, step 2).
+- An approval covers the commits it saw, recorded on the PR as above (full
+  SHA). Every later approval (Medium/High sign-off, or confirming commits
+  made after it) is recorded the same way at the new head. Commits after the
+  last recorded SHA (review fixes) are summarised to the user and confirmed
+  before they're pushed and landed (`pr` skill, step 2). Don't rebase an
+  approved branch; if it had to be, the whole PR is approved again.
 
-Land it with the `pr` skill (squash, delete the branch, sync `develop`).
+PRs into `develop` land with the `pr` skill (squash, delete the branch, sync
+`develop`). Release and hotfix PRs stop here and land in stage 8 step 5.
 Never push to `develop` directly.
 
 ## 8. Release: develop → main
@@ -199,10 +204,12 @@ Never push to `develop` directly.
      `app-versionCode` (+1, Android)
    - `iosApp/iosApp/Info.plist`: `CFBundleShortVersionString` and `CFBundleVersion`
    - `ServerScreen.kt`: the "Version" row
-4. **PR:** `gh pr create --base main --title "release: vX.Y.Z"` with the
-   template: the changelog (PR list since the last tag) under "What and why",
-   tier Medium, and under "How to revert": "ship the previous tag's
-   artifacts again; revert the release commit on `main` and back-merge".
+4. **PR:** `gh pr create --base main --title "release: vX.Y.Z" --body-file <filled template>`:
+   the changelog (PR list since the last tag) under "What and why", tier
+   Medium, and under "How to revert": "users go back to the previous tag's
+   artifacts; the fix goes forward as a `hotfix/*` PR". Don't revert a release
+   squash on `main`: it carries every PR since the last tag, and the
+   back-merge would remove them from `develop` too.
    CI `Linux (JVM + Android)` must be green, and run the stage-5 iOS check
    on the release branch. Stages 6–7 apply: `/code-review` of the release
    diff, and the user approves before it lands.
@@ -226,11 +233,17 @@ Never push to `develop` directly.
 
 ## 9. Hotfix: a shipped build is broken
 
-`git-flow` hotfix recipe: `hotfix/<slug>` from `main` → stages 4–7 at
-**High** tier (a test reproducing the bug first; `/code-review` +
-`/security-review`; push and open the PR into `main`, titled `fix(scope): …`,
-only after the user says so and has looked at the fix) → release steps 3 and
-5–8 with a **patch** bump. Urgency shortens the wait, not the steps.
+`git-flow` hotfix recipe: `hotfix/<slug>` from `main`, at **High** tier, in
+this order:
+
+1. stages 4–6: a test reproducing the bug first, the fix, verify,
+   `/code-review` + `/security-review`;
+2. release step 3: the **patch** version bump, on the hotfix branch;
+3. stage 7 up to opening the PR into `main` (titled `fix(scope): …`), only
+   after the user says so and has looked at the fix;
+4. release steps 5–8: land, tag, build, publish.
+
+Urgency shortens the wait, not the steps.
 
 ## When something breaks
 

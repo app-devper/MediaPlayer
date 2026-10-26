@@ -24,16 +24,19 @@ This repo follows **git flow** (see the `git-flow` skill): feature PRs target
    - **Review answered:** every finding from the tier's reviews is fixed or
      closed with a reason. An open Important finding blocks.
    - **Approval covers the head commit:** find the last "Approved by the
-     author at <sha>" comment (`gh pr view <n> --comments`) and list what
-     came after it, local commits included (`git log <sha>..HEAD --oneline`).
-     Anything listed is shown to the user and confirmed; "land" right after
-     seeing the list counts. No such comment → ask the user to approve the
-     current head and record it.
+     author at <sha>" comment (`gh pr view <n> --comments`), `git fetch`, and
+     list what came after it, local commits included
+     (`git log <sha>..HEAD --oneline`). Anything listed is shown to the user
+     and confirmed ("land" right after seeing the list counts), then record a
+     new approval at the head (`dev-flow` stage 7). No such comment, or
+     `<sha>` isn't an ancestor of HEAD (`git merge-base --is-ancestor`; the
+     branch was rebased) → show the PR's whole commit list and ask the user
+     to approve the current head.
    - **Revert path:** the PR body says how to revert.
 
 3. **Push the confirmed commits**
    ```bash
-   git push
+   git push                      # after a rebase the user re-approved: git push --force-with-lease
    ```
 
 4. **Check mergeability.** `CONFLICTING` → stop and report; do **not**
