@@ -8,23 +8,32 @@ import com.appdevper.mediaplayer.airplay.AirPlayException
 import com.appdevper.mediaplayer.airplay.AirPlayMediaSink
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.airplay.AirPlayReceiver
+import com.appdevper.mediaplayer.airplay.AirPlayVideoControl
+import com.appdevper.mediaplayer.airplay.AirPlayVideoInfo
 import com.appdevper.mediaplayer.data.platform.AppStorage
 import com.appdevper.mediaplayer.data.platform.MulticastLock
 import com.appdevper.mediaplayer.data.repository.AirPlayRepositoryImpl
 import com.appdevper.mediaplayer.data.repository.SettingsRepositoryImpl
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
+import com.appdevper.mediaplayer.domain.model.CastCommand
+import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
+import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.TransportState
 import com.russhwolf.settings.MapSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -34,6 +43,7 @@ private class FakeReceiver(var failWith: String? = null) : AirPlayReceiver {
     override val events = MutableSharedFlow<AirPlayEvent>(extraBufferCapacity = 16)
     override var sink: AirPlayMediaSink? = null
     override var access: AirPlayAccess = object : AirPlayAccess {}
+    override var video: AirPlayVideoControl? = null
     override val port: Int? get() = if (configs.isNotEmpty()) 7000 else null
     override fun start(config: AirPlayConfig) {
         failWith?.let { throw AirPlayException(it) }
@@ -98,6 +108,46 @@ class AirPlayRepositoryTest {
         assertIs<AirPlayStatus.Unsupported>(repo.status.value)
         repo.start("X", requirePin = false)
         assertIs<AirPlayStatus.Unsupported>(repo.status.value)
+    }
+
+    @Test
+    fun airPlayVideoDrivesOurPlayerAndReportsProgress() = runBlocking<Unit> {
+        val receiver = FakeReceiver()
+        val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope)
+        val video = assertNotNull(receiver.video)
+        val commands = mutableListOf<CastCommand>()
+        val collecting = scope.launch { repo.commands.collect { commands += it } }
+        receiver.events.emit(AirPlayEvent.ClientConnecting("Worawit's iPhone", "iPhone17,1", "aa"))
+
+        val url = "http://localhost:7000/master.m3u8"
+        video.play(url, startSeconds = 12.5f)
+        val load = assertIs<CastCommand.Load>(commands[0])
+        assertEquals(url, load.entry.streamUrl)
+        assertEquals("AirPlay from Worawit's iPhone", load.entry.title)
+        assertEquals("application/x-mpegURL", load.entry.mimeType)
+        assertEquals(CastCommand.Seek(12_500), commands[1])
+        assertNull(video.info()) // player hasn't reported yet
+
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.PLAYING, 13_000, 300_000)))
+        assertEquals(AirPlayVideoInfo(300.0, 13.0, playing = true), video.info())
+
+        video.setRate(0f)
+        video.seek(60f)
+        video.setRate(1f)
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(60_000), CastCommand.Play), commands.drop(2))
+
+        // Played to the end: the sender is told it's over.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 300_000, 300_000)))
+        assertEquals(-1.0, video.info()?.durationSeconds)
+
+        // The user played something else here: also over.
+        repo.publish(ReceiverPlayback(load.entry.copy(streamUrl = "http://nas/movie.mp4"), RendererStatus(TransportState.PLAYING, 0, 0)))
+        assertEquals(-1.0, video.info()?.durationSeconds)
+
+        video.stop()
+        assertEquals(CastCommand.Stop, commands.last())
+        assertNull(video.info())
+        collecting.cancel()
     }
 
     @Test

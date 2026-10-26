@@ -14,6 +14,7 @@ internal object NativeAirPlay {
         height: Int,
         fps: Int,
         requirePin: Boolean,
+        video: Boolean,
         listener: NativeListener,
     ): Int
 
@@ -43,4 +44,10 @@ internal interface NativeListener {
     fun onAudioFlush()
     fun onVolume(db: Float)
     fun onReset(reason: Int)
+    fun onVideoPlay(url: String, startSeconds: Float)
+    fun onVideoScrub(seconds: Float)
+    fun onVideoRate(rate: Float)
+    fun onVideoPlaybackStop()
+    /** [duration s, position s, rate], or null while nothing is loaded; duration < 0 = finished. */
+    fun videoInfo(): DoubleArray?
 }

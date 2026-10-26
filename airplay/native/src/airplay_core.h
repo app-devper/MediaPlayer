@@ -45,6 +45,16 @@ typedef struct ap_callbacks {
     void (*audio_volume)(void *ctx, float db);
     /* connection lost or the client went away uncleanly: the app should restart the receiver */
     void (*reset)(void *ctx, int reason);
+
+    /* AirPlay video (YouTube, Safari…): play [url] (http/https, or this receiver's local HLS
+     * server for YouTube) from [start_seconds]; then seek / rate (0 pause, 1 play) / stop. */
+    void (*video_play)(void *ctx, const char *url, float start_seconds);
+    void (*video_scrub)(void *ctx, float seconds);
+    void (*video_rate)(void *ctx, float rate);
+    void (*video_playback_stop)(void *ctx);
+    /* What the app's player is doing, for the sender's progress bar. Return false while nothing is
+     * loaded; set *duration < 0 once the video finished. Called on a network thread: no blocking. */
+    bool (*video_info)(void *ctx, double *duration, double *position, float *rate);
 } ap_callbacks_t;
 
 typedef struct ap_config {
@@ -53,6 +63,7 @@ typedef struct ap_config {
     const char *keyfile;        /* where the Ed25519 identity is kept, so paired clients stay paired */
     int width, height, fps;     /* display the client should target (0 = 1920x1080@30) */
     bool require_pin;           /* first connection from a client needs the on-screen PIN */
+    bool video;                 /* accept AirPlay video (HLS / URLs) besides mirroring and audio */
 } ap_config_t;
 
 /* Starts advertising and accepting clients. Returns 0 on success. Only one receiver per process. */

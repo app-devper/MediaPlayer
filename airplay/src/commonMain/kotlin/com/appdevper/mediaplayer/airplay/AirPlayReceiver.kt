@@ -14,6 +14,8 @@ class AirPlayConfig(
     val fps: Int = 30,
     /** A sender's first connection needs the PIN shown on this screen. */
     val requirePin: Boolean = false,
+    /** Accept AirPlay video (YouTube and other apps' AirPlay button), played via [AirPlayReceiver.video]. */
+    val video: Boolean = true,
 ) {
     init {
         require(deviceId.size == 6) { "deviceId must be 6 bytes" }
@@ -55,6 +57,23 @@ interface AirPlayMediaSink {
     fun onAudioFlush() {}
 }
 
+/** Where the app's player stands, for the sender's progress bar. [durationSeconds] < 0 = finished. */
+data class AirPlayVideoInfo(val durationSeconds: Double, val positionSeconds: Double, val playing: Boolean)
+
+/**
+ * AirPlay video ("play this URL", e.g. YouTube): the sender sends an http(s) URL, or the receiver's
+ * own local HLS address for YouTube, and then controls playback. Called on network threads.
+ */
+interface AirPlayVideoControl {
+    fun play(url: String, startSeconds: Float)
+    fun seek(seconds: Float)
+    /** 0 = pause, 1 = play. */
+    fun setRate(rate: Float)
+    fun stop()
+    /** Must answer immediately (cached state); null while nothing is loaded. */
+    fun info(): AirPlayVideoInfo?
+}
+
 /** Which senders may connect and which have paired before (for PIN mode). */
 interface AirPlayAccess {
     fun admit(deviceId: String, model: String, name: String): Boolean = true
@@ -66,6 +85,7 @@ interface AirPlayReceiver {
     val events: SharedFlow<AirPlayEvent>
     var sink: AirPlayMediaSink?
     var access: AirPlayAccess
+    var video: AirPlayVideoControl?
 
     /** The port senders connect to while running (advertised over mDNS), else null. */
     val port: Int?

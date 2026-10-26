@@ -79,6 +79,8 @@ class FakeServer : MediaServerRepository {
 class FakeAirPlay(status: AirPlayStatus = AirPlayStatus.Stopped) : AirPlayRepository {
     override val status = MutableStateFlow(status)
     override val activity = MutableStateFlow(AirPlayActivity())
+    override val commands = MutableSharedFlow<CastCommand>()
+    override fun publish(playback: ReceiverPlayback) {}
     override suspend fun start(name: String, requirePin: Boolean) { status.value = AirPlayStatus.Running(name) }
     override suspend fun stop() { status.value = AirPlayStatus.Stopped }
 }

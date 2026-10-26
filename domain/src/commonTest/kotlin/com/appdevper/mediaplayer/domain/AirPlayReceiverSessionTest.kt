@@ -2,6 +2,8 @@ package com.appdevper.mediaplayer.domain
 
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
+import com.appdevper.mediaplayer.domain.model.CastCommand
+import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
@@ -15,8 +17,11 @@ import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -30,6 +35,9 @@ private class FakeAirPlay(supported: Boolean = true) : AirPlayRepository {
     val calls = mutableListOf<String>()
     override val status = MutableStateFlow(if (supported) AirPlayStatus.Stopped else AirPlayStatus.Unsupported)
     override val activity = MutableStateFlow(AirPlayActivity())
+    override val commands = MutableSharedFlow<CastCommand>()
+    val published = mutableListOf<ReceiverPlayback>()
+    override fun publish(playback: ReceiverPlayback) { published += playback }
     override suspend fun start(name: String, requirePin: Boolean) {
         calls += "start:$name:pin=$requirePin"
         status.value = AirPlayStatus.Running(name)
@@ -112,6 +120,31 @@ class AirPlayReceiverSessionTest {
         runCurrent()
         assertFalse(again.isCompleted)
         again.cancel()
+    }
+
+    @Test
+    fun airPlayVideoPlaysOnOurPlayerAndReportsBack() = runTest {
+        val airPlay = FakeAirPlay()
+        val playback = PlaybackSession(SilentRenderer(), backgroundScope)
+        val session = AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playback, backgroundScope)
+        session.start()
+        val opened = backgroundScope.launch { session.openPlayer.first() }
+        val commands = mutableListOf<LocalPlayerCommand>()
+        backgroundScope.launch { playback.localCommands.take(2).toList(commands) }
+        runCurrent()
+
+        val video = MediaEntry("v", "-1", "YouTube", MediaKind.VIDEO, streamUrl = "http://localhost:7000/master.m3u8")
+        airPlay.commands.emit(CastCommand.Load(video, autoPlay = true))
+        airPlay.commands.emit(CastCommand.Seek(30_000))
+        airPlay.commands.emit(CastCommand.Pause)
+        runCurrent()
+        assertEquals(listOf(video), playback.state.value.queue)
+        assertTrue(opened.isCompleted)
+        assertEquals(listOf<LocalPlayerCommand>(LocalPlayerCommand.Seek(30_000), LocalPlayerCommand.Pause), commands)
+
+        playback.reportLocalStatus(RendererStatus(TransportState.PAUSED, 30_000, 300_000))
+        runCurrent()
+        assertEquals(ReceiverPlayback(video, RendererStatus(TransportState.PAUSED, 30_000, 300_000)), airPlay.published.last())
     }
 
     @Test

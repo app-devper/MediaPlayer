@@ -17,7 +17,8 @@ import kotlinx.coroutines.launch
 
 /**
  * This device as an AirPlay receiver: starts/stops it from settings, asks the UI to show the
- * mirrored screen when a sender starts mirroring, and pauses our own player while a sender plays.
+ * mirrored screen when a sender starts mirroring, plays AirPlay video on the local player, and
+ * pauses our own player while a sender mirrors or streams audio.
  */
 class AirPlayReceiverSession(
     private val airPlay: AirPlayRepository,
@@ -33,6 +34,11 @@ class AirPlayReceiverSession(
     /** Emits when a sender starts mirroring, so the UI can bring up the mirrored screen. */
     val openMirror: SharedFlow<Unit> = _openMirror.asSharedFlow()
 
+    private val _openPlayer = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Emits when a sender plays a video here (AirPlay video), so the UI can bring up the player. */
+    val openPlayer: SharedFlow<Unit> = _openPlayer.asSharedFlow()
+
     private var started = false
 
     fun start() {
@@ -43,6 +49,11 @@ class AirPlayReceiverSession(
                 .map { s -> if (s.airPlayEnabled) s.name to s.airPlayRequirePin else null }
                 .distinctUntilChanged()
                 .collectLatest { config -> if (config == null) airPlay.stop() else airPlay.start(config.first, config.second) }
+        }
+        // AirPlay video goes through the same local player as DLNA casts.
+        scope.launch { airPlay.commands.collect { playback.apply(it) { _openPlayer.tryEmit(Unit) } } }
+        scope.launch {
+            playback.state.map { it.receiverPlayback() }.distinctUntilChanged().collect(airPlay::publish)
         }
         scope.launch {
             var wasMirroring = false

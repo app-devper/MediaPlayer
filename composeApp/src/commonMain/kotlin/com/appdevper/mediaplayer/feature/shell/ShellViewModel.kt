@@ -14,10 +14,12 @@ import com.appdevper.mediaplayer.domain.playback.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase
 import com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 
 data class ShellUiState(
@@ -41,8 +43,8 @@ class ShellViewModel(
     airPlay: AirPlayReceiverSession,
 ) : ViewModel() {
 
-    /** Another device cast something here: show the player. */
-    val openPlayer: SharedFlow<Unit> = receiver.openPlayer
+    /** Another device cast something here (DLNA or AirPlay video): show the player. */
+    val openPlayer: Flow<Unit> = merge(receiver.openPlayer, airPlay.openPlayer)
 
     /** An iPhone/iPad/Mac started mirroring: show it. */
     val openMirror: SharedFlow<Unit> = airPlay.openMirror

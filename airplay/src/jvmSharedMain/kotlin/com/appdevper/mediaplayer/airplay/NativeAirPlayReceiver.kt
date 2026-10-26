@@ -13,6 +13,7 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
 
     @Volatile override var sink: AirPlayMediaSink? = null
     @Volatile override var access: AirPlayAccess = object : AirPlayAccess {}
+    @Volatile override var video: AirPlayVideoControl? = null
     override val port: Int? get() = NativeAirPlay.port().takeIf { it > 0 }
 
     // Restarting after a lost connection can't happen on the native thread reporting it (stop joins it).
@@ -45,6 +46,13 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
         override fun onAudio(data: ByteArray, ptsNs: Long) { sink?.onAudio(data, ptsNs) }
         override fun onAudioFlush() { sink?.onAudioFlush() }
         override fun onVolume(db: Float) = emit(AirPlayEvent.Volume(db))
+        override fun onVideoPlay(url: String, startSeconds: Float) { video?.play(url, startSeconds) }
+        override fun onVideoScrub(seconds: Float) { video?.seek(seconds) }
+        override fun onVideoRate(rate: Float) { video?.setRate(rate) }
+        override fun onVideoPlaybackStop() { video?.stop() }
+        override fun videoInfo(): DoubleArray? = video?.info()?.let {
+            doubleArrayOf(it.durationSeconds, it.positionSeconds, if (it.playing) 1.0 else 0.0)
+        }
         override fun onReset(reason: Int) {
             emit(AirPlayEvent.ConnectionLost(reason))
             control.execute { config?.let { runCatching { startNative(it) } } }
@@ -75,7 +83,7 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
 
     private fun startNative(config: AirPlayConfig) {
         val result = NativeAirPlay.start(
-            config.name, config.deviceId, config.keyFile, config.width, config.height, config.fps, config.requirePin, listener,
+            config.name, config.deviceId, config.keyFile, config.width, config.height, config.fps, config.requirePin, config.video, listener,
         )
         if (result != 0) throw AirPlayException(errorText(result))
     }

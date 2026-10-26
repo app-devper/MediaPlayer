@@ -18,6 +18,8 @@
 #ifndef PAIRING_H
 #define PAIRING_H
 
+#include <stdbool.h>
+
 #define PAIRING_SIG_SIZE (2 * X25519_KEY_SIZE)
 
 #define SRP_USERNAME_SIZE 24 /* accomodates up to an 8-octet MAC address */
@@ -42,6 +44,8 @@ void pairing_get_public_key(pairing_t *pairing, unsigned char public_key[ED25519
 pairing_session_t *pairing_session_init(pairing_t *pairing);
 void pairing_session_set_setup_status(pairing_session_t *session);
 int pairing_session_check_handshake_status(pairing_session_t *session);
+/* MediaPlayer: true once pair-verify completed (the client proved its key) on this session. */
+bool pairing_session_is_verified(pairing_session_t *session);
 int pairing_session_handshake(pairing_session_t *session, const unsigned char ecdh_key[X25519_KEY_SIZE],
                               const unsigned char ed_key[ED25519_KEY_SIZE]);
 int pairing_session_get_public_key(pairing_session_t *session, unsigned char ecdh_key[X25519_KEY_SIZE]);

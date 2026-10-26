@@ -110,9 +110,11 @@ static void video_process(void *cls, raop_ntp_t *ntp, video_decode_struct *data)
 }
 
 static void video_reset(void *cls, reset_type_t type) {
-    (void) cls; (void) type;
+    (void) cls;
     remote_clock_offset = 0;
     CALL0(video_stop);
+    /* the sender ended AirPlay video, or another client took over */
+    if (type == RESET_TYPE_HLS_SHUTDOWN || type == RESET_TYPE_HLS_EOS || type == RESET_TYPE_NOHOLD) CALL0(video_playback_stop);
 }
 
 static void video_flush(void *cls) { (void) cls; }
@@ -175,12 +177,53 @@ static void audio_remote_control_id(void *cls, const char *dacp_id, const char *
 static void audio_set_progress(void *cls, uint32_t *start, uint32_t *curr, uint32_t *end) { (void) cls; (void) start; (void) curr; (void) end; }
 static void export_dacp(void *cls, const char *active_remote, const char *dacp_id) { (void) cls; (void) active_remote; (void) dacp_id; }
 static void mirror_video_running(void *cls, bool running) { (void) cls; (void) running; }
-static void on_video_play(void *cls, const char *location, const float start) { (void) cls; (void) location; (void) start; }
-static void on_video_scrub(void *cls, const float position) { (void) cls; (void) position; }
-static void on_video_rate(void *cls, const float rate) { (void) cls; (void) rate; }
-static void on_video_stop(void *cls) { (void) cls; }
-static void on_video_acquire_playback_info(void *cls, playback_info_t *info) { (void) cls; memset(info, 0, sizeof(*info)); }
-static float on_video_playlist_remove(void *cls) { (void) cls; return 0.0f; }
+
+/* AirPlay video: forwarded to the app's player. */
+static void on_video_play(void *cls, const char *location, const float start) {
+    (void) cls;
+    CALL(video_play, location, start);
+}
+
+static void on_video_scrub(void *cls, const float position) {
+    (void) cls;
+    CALL(video_scrub, position);
+}
+
+static void on_video_rate(void *cls, const float rate) {
+    (void) cls;
+    CALL(video_rate, rate);
+}
+
+static void on_video_stop(void *cls) {
+    (void) cls;
+    CALL0(video_playback_stop);
+}
+
+static void on_video_acquire_playback_info(void *cls, playback_info_t *info) {
+    (void) cls;
+    memset(info, 0, sizeof(*info));
+    double duration = 0, position = 0;
+    float rate = 0;
+    if (!cb.video_info || !cb.video_info(cb.ctx, &duration, &position, &rate)) {
+        info->position = -1.0; /* "not available yet" to UxPlay */
+        return;
+    }
+    info->duration = duration;
+    info->position = position;
+    info->rate = rate;
+    info->seek_start = 0;
+    info->seek_duration = duration > 0 ? duration : 0;
+    info->ready_to_play = true;
+    info->playback_likely_to_keep_up = true;
+}
+
+static float on_video_playlist_remove(void *cls) {
+    (void) cls;
+    double duration = 0, position = 0;
+    float rate = 0;
+    if (cb.video_info && cb.video_info(cb.ctx, &duration, &position, &rate)) return (float) position;
+    return 0.0f;
+}
 static void get_custom_profile(void *cls, const char **profile) { (void) cls; *profile = NULL; }
 
 /* endregion */
@@ -225,6 +268,9 @@ int ap_start(const ap_config_t *config, const ap_callbacks_t *callbacks) {
     };
     for (int bit = 0; bit < 32; bit++) dnssd_set_airplay_features(dnssd, bit, features[bit]);
     dnssd_set_airplay_features(dnssd, 42, 0);
+    /* AirPlay video (as uxplay.cpp does for -hls): bit 0 video, bit 4 HTTP Live Streaming */
+    dnssd_set_airplay_features(dnssd, 0, config->video ? 1 : 0);
+    dnssd_set_airplay_features(dnssd, 4, config->video ? 1 : 0);
 
     raop_callbacks_t raop_cbs;
     memset(&raop_cbs, 0, sizeof(raop_cbs));
@@ -286,6 +332,11 @@ int ap_start(const ap_config_t *config, const ap_callbacks_t *callbacks) {
     if (config->fps) {
         raop_set_plist(raop, "refreshRate", config->fps);
         raop_set_plist(raop, "maxFPS", config->fps);
+    }
+    if (config->video) {
+        static const char none[] = "";
+        raop_set_plist(raop, "hls", 1);
+        raop_set_lang(raop, none, none, none); /* keeps the pointers: must outlive raop */
     }
 
     unsigned short tcp[3] = { 0, 0, 0 };

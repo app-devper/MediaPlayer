@@ -115,7 +115,9 @@ http_handler_scrub(raop_conn_t *conn, http_request_t *request, http_response_t *
     float scrub_position = 0.0f;
     if (data) {
         data++;
-        const char *position = strstr(data, "=") + 1;
+        /* MediaPlayer: no "=" in the query used to dereference NULL + 1 */
+        const char *equals = strstr(data, "=");
+        const char *position = equals ? equals + 1 : data;
         char *end = NULL;
         double value = strtod(position, &end);
         if (end && end != position) {
@@ -138,7 +140,9 @@ http_handler_rate(raop_conn_t *conn, http_request_t *request, http_response_t *r
     float rate_value = 0.0f;
     if (data) {
         data++;
-        const char *rate = strstr(data, "=") + 1;
+        /* MediaPlayer: no "=" in the query used to dereference NULL + 1 */
+        const char *equals = strstr(data, "=");
+        const char *rate = equals ? equals + 1 : data;
         char *end = NULL;
         float value = strtof(rate, &end);
         if (end && end != rate) {

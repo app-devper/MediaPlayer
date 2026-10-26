@@ -158,6 +158,12 @@ pairing_session_check_handshake_status(pairing_session_t *session)
     }
 }
 
+bool
+pairing_session_is_verified(pairing_session_t *session)
+{
+    return session && session->status == STATUS_FINISHED;
+}
+
 int
 pairing_session_handshake(pairing_session_t *session, const unsigned char ecdh_key[X25519_KEY_SIZE],
                           const unsigned char ed_key[ED25519_KEY_SIZE])

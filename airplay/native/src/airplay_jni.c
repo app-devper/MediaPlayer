@@ -19,6 +19,7 @@ static pthread_key_t detach_key;
 static struct {
     jmethodID log, connections, admit, show_pin, register_client, is_registered;
     jmethodID video_format, video, video_stop, audio_format, audio, audio_flush, audio_volume, reset;
+    jmethodID video_play, video_scrub, video_rate, video_playback_stop, video_info;
 } m;
 
 static void detach_thread(void *unused) {
@@ -169,6 +170,49 @@ static void cb_reset(void *ctx, int reason) {
     WITH_ENV((*env)->CallVoidMethod(env, l, m.reset, (jint) reason));
 }
 
+static void cb_video_play(void *ctx, const char *url, float start) {
+    (void) ctx;
+    WITH_ENV({
+        jstring s = jstr(env, url);
+        (*env)->CallVoidMethod(env, l, m.video_play, s, (jfloat) start);
+        (*env)->DeleteLocalRef(env, s);
+    });
+}
+
+static void cb_video_scrub(void *ctx, float seconds) {
+    (void) ctx;
+    WITH_ENV((*env)->CallVoidMethod(env, l, m.video_scrub, (jfloat) seconds));
+}
+
+static void cb_video_rate(void *ctx, float rate) {
+    (void) ctx;
+    WITH_ENV((*env)->CallVoidMethod(env, l, m.video_rate, (jfloat) rate));
+}
+
+static void cb_video_playback_stop(void *ctx) {
+    (void) ctx;
+    WITH_ENV((*env)->CallVoidMethod(env, l, m.video_playback_stop));
+}
+
+/* Kotlin returns [duration, position, rate] or null while nothing is loaded. */
+static bool cb_video_info(void *ctx, double *duration, double *position, float *rate) {
+    (void) ctx;
+    bool loaded = false;
+    WITH_ENV({
+        jdoubleArray a = (jdoubleArray) (*env)->CallObjectMethod(env, l, m.video_info);
+        if (!(*env)->ExceptionCheck(env) && a && (*env)->GetArrayLength(env, a) == 3) {
+            jdouble v[3];
+            (*env)->GetDoubleArrayRegion(env, a, 0, 3, v);
+            *duration = v[0];
+            *position = v[1];
+            *rate = (float) v[2];
+            loaded = true;
+        }
+        if (a) (*env)->DeleteLocalRef(env, a);
+    });
+    return loaded;
+}
+
 static bool lookup_methods(JNIEnv *env, jobject obj) {
     jclass c = (*env)->GetObjectClass(env, obj);
 #define M(field, name, sig) m.field = (*env)->GetMethodID(env, c, name, sig); if (!m.field) return false;
@@ -186,6 +230,11 @@ static bool lookup_methods(JNIEnv *env, jobject obj) {
     M(audio_flush, "onAudioFlush", "()V")
     M(audio_volume, "onVolume", "(F)V")
     M(reset, "onReset", "(I)V")
+    M(video_play, "onVideoPlay", "(Ljava/lang/String;F)V")
+    M(video_scrub, "onVideoScrub", "(F)V")
+    M(video_rate, "onVideoRate", "(F)V")
+    M(video_playback_stop, "onVideoPlaybackStop", "()V")
+    M(video_info, "videoInfo", "()[D")
 #undef M
     (*env)->DeleteLocalRef(env, c);
     return true;
@@ -194,7 +243,7 @@ static bool lookup_methods(JNIEnv *env, jobject obj) {
 JNIEXPORT jint JNICALL
 Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject thiz, jstring name, jbyteArray hw_addr,
                                                            jstring keyfile, jint width, jint height, jint fps,
-                                                           jboolean require_pin, jobject callbacks) {
+                                                           jboolean require_pin, jboolean video, jobject callbacks) {
     (void) thiz;
     ap_stop();
     if (listener) {
@@ -219,6 +268,7 @@ Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject 
     config.height = height;
     config.fps = fps;
     config.require_pin = require_pin;
+    config.video = video;
 
     ap_callbacks_t cb = {
         .log = cb_log, .connections = cb_connections, .admit = cb_admit, .show_pin = cb_show_pin,
@@ -226,6 +276,8 @@ Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject 
         .video_format = cb_video_format, .video = cb_video, .video_stop = cb_video_stop,
         .audio_format = cb_audio_format, .audio = cb_audio, .audio_flush = cb_audio_flush,
         .audio_volume = cb_audio_volume, .reset = cb_reset,
+        .video_play = cb_video_play, .video_scrub = cb_video_scrub, .video_rate = cb_video_rate,
+        .video_playback_stop = cb_video_playback_stop, .video_info = cb_video_info,
     };
     int result = ap_start(&config, &cb);
     (*env)->ReleaseStringUTFChars(env, name, name_c);

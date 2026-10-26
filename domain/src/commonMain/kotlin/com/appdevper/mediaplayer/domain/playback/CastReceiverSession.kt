@@ -1,14 +1,6 @@
 package com.appdevper.mediaplayer.domain.playback
 
-import com.appdevper.mediaplayer.domain.model.CastCommand
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
-import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.appdevper.mediaplayer.domain.model.PlaybackState
-import com.appdevper.mediaplayer.domain.model.PlaybackTarget
-import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
-import com.appdevper.mediaplayer.domain.model.RendererStatus
-import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -49,39 +41,9 @@ class CastReceiverSession(
                 .distinctUntilChanged()
                 .collectLatest { name -> if (name == null) receiver.stop() else receiver.start(name) }
         }
-        scope.launch { receiver.commands.collect(::handle) }
+        scope.launch { receiver.commands.collect { playback.apply(it) { _openPlayer.tryEmit(Unit) } } }
         scope.launch {
-            playback.state.map(::snapshot).distinctUntilChanged().collect(receiver::publish)
+            playback.state.map { it.receiverPlayback() }.distinctUntilChanged().collect(receiver::publish)
         }
-    }
-
-    private fun handle(command: CastCommand) {
-        when (command) {
-            is CastCommand.Load -> {
-                playback.setTarget(PlaybackTarget.Local)
-                playback.play(command.entry, listOf(command.entry), autoPlay = command.autoPlay)
-                _openPlayer.tryEmit(Unit)
-            }
-            CastCommand.Play -> {
-                playback.sendLocal(LocalPlayerCommand.Play)
-                _openPlayer.tryEmit(Unit) // the player may have been closed since the load
-            }
-            CastCommand.Pause -> playback.sendLocal(LocalPlayerCommand.Pause)
-            CastCommand.Stop -> playback.sendLocal(LocalPlayerCommand.Stop)
-            is CastCommand.Seek -> playback.sendLocal(LocalPlayerCommand.Seek(command.positionMs))
-            is CastCommand.SetVolume -> playback.setLocalVolume(command.volume)
-            is CastCommand.SetMute -> playback.setLocalMuted(command.muted)
-        }
-    }
-
-    private fun snapshot(s: PlaybackState): ReceiverPlayback {
-        val entry = s.current.takeIf { s.target == PlaybackTarget.Local }
-        val status = when {
-            entry == null -> null
-            // Photos are shown by the photo viewer, which has nothing to report.
-            entry.kind == MediaKind.IMAGE -> RendererStatus(TransportState.PLAYING, 0, 0)
-            else -> s.local
-        }
-        return ReceiverPlayback(entry, status, s.localVolume, s.localMuted)
     }
 }

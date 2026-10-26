@@ -5,23 +5,34 @@ import com.appdevper.mediaplayer.airplay.AirPlayConfig
 import com.appdevper.mediaplayer.airplay.AirPlayEvent
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.airplay.AirPlayReceiver
+import com.appdevper.mediaplayer.airplay.AirPlayVideoControl
+import com.appdevper.mediaplayer.airplay.AirPlayVideoInfo
 import com.appdevper.mediaplayer.airplay.airPlayGain
 import com.appdevper.mediaplayer.data.platform.AppStorage
 import com.appdevper.mediaplayer.data.platform.MulticastLock
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
+import com.appdevper.mediaplayer.domain.model.CastCommand
+import com.appdevper.mediaplayer.domain.model.MediaEntry
+import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
+import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.Volatile
 
 /** [AirPlayRepository] over the :airplay receiver; [receiver] is null where AirPlay isn't available. */
 class AirPlayRepositoryImpl(
@@ -41,9 +52,72 @@ class AirPlayRepositoryImpl(
 
     private val mutex = Mutex()
 
+    private val _commands = MutableSharedFlow<CastCommand>(extraBufferCapacity = 64)
+    override val commands: Flow<CastCommand> = _commands.asSharedFlow()
+
+    // Read from native threads (AirPlayVideoControl.info), written from the app scope.
+    @Volatile private var playback = ReceiverPlayback()
+    @Volatile private var videoUrl: String? = null
+    @Volatile private var videoLoaded = false
+
+    override fun publish(playback: ReceiverPlayback) {
+        this.playback = playback
+        val url = playback.entry?.streamUrl
+        if (url != null && url == videoUrl) videoLoaded = true
+    }
+
+    /** AirPlay video (YouTube, Safari…) → the same local player as DLNA casts. */
+    private val video = object : AirPlayVideoControl {
+        override fun play(url: String, startSeconds: Float) {
+            videoUrl = url
+            videoLoaded = false
+            val entry = MediaEntry(
+                id = url,
+                parentId = "-1",
+                title = _activity.value.client?.let { "AirPlay from $it" } ?: "AirPlay video",
+                kind = MediaKind.VIDEO,
+                streamUrl = url,
+                mimeType = if (".m3u8" in url) "application/x-mpegURL" else null,
+            )
+            _commands.tryEmit(CastCommand.Load(entry, autoPlay = true))
+            if (startSeconds > 0f) _commands.tryEmit(CastCommand.Seek((startSeconds * 1000).toLong()))
+        }
+
+        override fun seek(seconds: Float) {
+            _commands.tryEmit(CastCommand.Seek((seconds * 1000).toLong()))
+        }
+
+        override fun setRate(rate: Float) {
+            _commands.tryEmit(if (rate > 0f) CastCommand.Play else CastCommand.Pause)
+        }
+
+        override fun stop() {
+            if (videoUrl == null) return
+            videoUrl = null
+            _commands.tryEmit(CastCommand.Stop)
+        }
+
+        override fun info(): AirPlayVideoInfo? {
+            val url = videoUrl ?: return null
+            val p = playback
+            if (p.entry?.streamUrl != url) {
+                // Something else plays here now: tell the sender its video is over.
+                return if (videoLoaded) AirPlayVideoInfo(-1.0, 0.0, playing = false) else null
+            }
+            val status = p.status ?: return null
+            val finished = status.state == TransportState.STOPPED && status.durationMs > 0 && status.positionMs >= status.durationMs - 1_000
+            return AirPlayVideoInfo(
+                durationSeconds = if (finished) -1.0 else status.durationMs / 1000.0,
+                positionSeconds = status.positionMs / 1000.0,
+                playing = status.state == TransportState.PLAYING || status.state == TransportState.TRANSITIONING,
+            )
+        }
+    }
+
     init {
         receiver?.let { r ->
             r.sink = player
+            r.video = video
             r.access = object : AirPlayAccess {
                 override fun isPaired(publicKey: String) = publicKey in settings.airPlayPairedKeys
             }

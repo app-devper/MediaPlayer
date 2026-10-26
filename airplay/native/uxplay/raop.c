@@ -127,6 +127,35 @@ typedef struct raop_conn_s raop_conn_t;
 #include "raop_handlers.h"
 #include "http_handlers.h"
 
+/* MediaPlayer: the local HLS server must only answer this device's own player. */
+static bool
+conn_is_loopback(raop_conn_t *conn) {
+    const unsigned char *a = conn->remote;
+    if (conn->remotelen == 4) return a[0] == 127;
+    if (conn->remotelen == 16) {
+        static const unsigned char v6_loopback[16] = { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,1 };
+        static const unsigned char v4_mapped[12] = { 0,0,0,0, 0,0,0,0, 0,0,0xff,0xff };
+        if (!memcmp(a, v6_loopback, 16)) return true;
+        return !memcmp(a, v4_mapped, 12) && a[12] == 127;
+    }
+    return false;
+}
+
+/* MediaPlayer: AirPlay video requests (/play, /scrub, /reverse...) are only taken from a client
+ * that completed pair-verify on a RAOP connection from the same address. Upstream accepts them
+ * from anyone on the network, bypassing PIN pairing. */
+static bool
+conn_has_verified_raop_peer(raop_t *raop, raop_conn_t *conn) {
+    for (int i = 1; ; i++) {
+        raop_conn_t *other = (raop_conn_t *) httpd_get_connection_by_type(raop->httpd, CONNECTION_TYPE_RAOP, i);
+        if (!other) return false;
+        if (other->remotelen == conn->remotelen && !memcmp(other->remote, conn->remote, conn->remotelen) &&
+            pairing_session_is_verified(other->session)) {
+            return true;
+        }
+    }
+}
+
 static void *
 conn_init(void *opaque, unsigned char *local, int locallen, unsigned char *remote, int remotelen, unsigned int zone_id) {
     raop_t *raop = opaque;
@@ -268,6 +297,17 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
     const char *client_session_id = http_request_get_header(request, "X-Apple-Session-ID");
     const char *host = http_request_get_header(request, "Host");
     hls_request =  (host && !cseq && !client_session_id);
+
+    /* MediaPlayer: see conn_is_loopback / conn_has_verified_raop_peer */
+    if ((hls_request && !conn_is_loopback(conn)) ||
+        (client_session_id && !cseq && conn->connection_type != CONNECTION_TYPE_AIRPLAY &&
+         !conn_has_verified_raop_peer(raop, conn))) {
+        logger_log(raop->logger, LOGGER_WARNING, "rejecting AirPlay video/HLS request from an unverified client");
+        *response = http_response_create();
+        http_response_init(*response, protocol, 403, "Forbidden");
+        http_response_set_disconnect(*response, 1);
+        goto finish; /* finishes and sends the response */
+    }
 
     if (conn->connection_type == CONNECTION_TYPE_UNKNOWN) {
         if (cseq || ble) {

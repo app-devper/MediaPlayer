@@ -51,6 +51,7 @@ kotlin {
             implementation(libs.koin.android)
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.ui)
+            implementation(libs.media3.exoplayer.hls) // AirPlay video (YouTube) is HLS
         }
 
         jvmMain.dependencies {

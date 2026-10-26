@@ -14,7 +14,7 @@ A single Compose Multiplatform app that merges
 | **AirPlay** (Apple TV, AirPlay speakers/TVs) | — | ✅ native | — |
 | Built-in DLNA media server (share this device) | MediaStore | Documents folder | chosen folders |
 | Receive casts: DLNA renderer (other apps "Play to" this device) ³ | ✅ | ✅ | ✅ |
-| **Receive AirPlay**: screen mirroring + audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ |
+| **Receive AirPlay**: screen mirroring, AirPlay video (YouTube…) and audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ ² |
 
 ¹ Real devices need Apple's multicast entitlement (see below). The simulator works without it.
 ² Without VLC installed, the desktop app opens media in the system player.
@@ -109,6 +109,9 @@ Turn on **My Server › Receive › AirPlay from iPhone, iPad and Mac**. The app
 Screen Mirroring (Control Center) and in AirPlay audio menus on Apple devices on the same Wi‑Fi:
 
 * screen mirroring (H.264) opens the Mirror screen; the sender's audio plays with it
+* **AirPlay video** (the AirPlay button in YouTube, Safari and other apps): the video itself plays in
+  the app's player (HLS on Android via ExoPlayer, on the desktop via VLC), controlled from the sender,
+  which also gets the progress
 * music/podcasts (ALAC or AAC) play without a screen
 * the first connection from each sender asks for the code shown on screen (switchable); paired senders
   are remembered
