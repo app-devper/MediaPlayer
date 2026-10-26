@@ -58,6 +58,12 @@ data class PlaybackState(
     val queue: List<MediaEntry> = emptyList(),
     val index: Int = -1,
     val remote: RemotePlayback = RemotePlayback(),
+    /** Whether the local player starts as soon as the current item loads. */
+    val autoPlay: Boolean = true,
+    /** Last state reported by the local player, null until it reports. */
+    val local: RendererStatus? = null,
+    val localVolume: Int = 100,
+    val localMuted: Boolean = false,
 ) {
     val current: MediaEntry? get() = queue.getOrNull(index)
     val hasNext: Boolean get() = index < queue.lastIndex
@@ -71,6 +77,8 @@ data class ServerSettings(
     val shareAudio: Boolean,
     val shareImage: Boolean,
     val folders: List<String>,
+    /** Lets other devices play on this one (DLNA renderer). Off by default: anyone on the LAN could cast. */
+    val receiverEnabled: Boolean = false,
 ) {
     val sharedKinds: Set<MediaKind>
         get() = buildSet {
@@ -91,4 +99,38 @@ sealed interface ServerStatus {
     data object Starting : ServerStatus
     data class Running(val name: String, val url: String, val counts: Map<MediaKind, Int>) : ServerStatus
     data class Failed(val message: String) : ServerStatus
+}
+
+/** Commands for the on-screen player that don't come from its own controls (e.g. a DLNA controller). */
+sealed interface LocalPlayerCommand {
+    data object Play : LocalPlayerCommand
+    data object Pause : LocalPlayerCommand
+    /** Pause and rewind; the player reports [TransportState.STOPPED] until it plays again. */
+    data object Stop : LocalPlayerCommand
+    data class Seek(val positionMs: Long) : LocalPlayerCommand
+}
+
+/** What another device asks this one to do while it acts as a receiver. */
+sealed interface CastCommand {
+    data class Load(val entry: MediaEntry, val autoPlay: Boolean) : CastCommand
+    data object Play : CastCommand
+    data object Pause : CastCommand
+    data object Stop : CastCommand
+    data class Seek(val positionMs: Long) : CastCommand
+    data class SetVolume(val volume: Int) : CastCommand
+    data class SetMute(val muted: Boolean) : CastCommand
+}
+
+/** Local playback as reported back to the sending device. [status] is null when nothing is loaded. */
+data class ReceiverPlayback(
+    val entry: MediaEntry? = null,
+    val status: RendererStatus? = null,
+    val volume: Int = 100,
+    val muted: Boolean = false,
+)
+
+sealed interface ReceiverStatus {
+    data object Stopped : ReceiverStatus
+    data class Running(val name: String) : ReceiverStatus
+    data class Failed(val message: String) : ReceiverStatus
 }

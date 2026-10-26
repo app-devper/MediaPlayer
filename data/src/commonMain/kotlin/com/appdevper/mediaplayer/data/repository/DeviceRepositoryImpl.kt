@@ -13,9 +13,11 @@ import kotlinx.coroutines.flow.stateIn
 class DeviceRepositoryImpl(
     private val controlPoint: ControlPoint,
     scope: CoroutineScope,
+    /** UDNs of devices this app runs itself and shouldn't offer as targets (our own renderer). */
+    private val ownUdns: () -> Set<String> = { emptySet() },
 ) : DeviceRepository {
     override val devices: StateFlow<List<MediaDevice>> = controlPoint.devices
-        .map { list -> list.map { it.toDomain() } }
+        .map { list -> list.filter { it.udn !in ownUdns() }.map { it.toDomain() } }
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
     override val isSearching: StateFlow<Boolean> = controlPoint.searching
 

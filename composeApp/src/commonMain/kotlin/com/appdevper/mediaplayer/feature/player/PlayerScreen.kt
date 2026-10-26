@@ -109,6 +109,10 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                             isAudio = isAudio,
                             onEnded = { vm.onLocalEnded() },
                             modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
+                            autoPlay = state.autoPlay,
+                            volume = if (state.localMuted) 0f else state.localVolume / 100f,
+                            commands = vm.localCommands,
+                            onStatus = vm::reportLocalStatus,
                         )
                     }
                 }

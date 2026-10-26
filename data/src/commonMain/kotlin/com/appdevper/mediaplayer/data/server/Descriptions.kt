@@ -2,6 +2,7 @@ package com.appdevper.mediaplayer.data.server
 
 import com.appdevper.mediaplayer.data.upnp.UpnpTypes
 import com.appdevper.mediaplayer.data.upnp.Xml
+import com.appdevper.mediaplayer.data.upnp.host.Scpd
 
 /** Static UPnP description documents served by the built-in media server. */
 internal object Descriptions {
@@ -43,84 +44,59 @@ internal object Descriptions {
 </root>
 """.trimStart()
 
-    private fun arg(name: String, dir: String, variable: String) =
-        "<argument><name>$name</name><direction>$dir</direction><relatedStateVariable>$variable</relatedStateVariable></argument>"
-
-    private fun action(name: String, vararg args: String) =
-        "<action><name>$name</name><argumentList>${args.joinToString("")}</argumentList></action>"
-
-    private fun variable(name: String, type: String, events: Boolean = false, allowed: List<String> = emptyList()) = buildString {
-        append("<stateVariable sendEvents=\"${if (events) "yes" else "no"}\"><name>$name</name><dataType>$type</dataType>")
-        if (allowed.isNotEmpty()) append("<allowedValueList>${allowed.joinToString("") { "<allowedValue>$it</allowedValue>" }}</allowedValueList>")
-        append("</stateVariable>")
-    }
-
-    private fun scpd(actions: String, variables: String) =
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?><scpd xmlns=\"urn:schemas-upnp-org:service-1-0\">" +
-            "<specVersion><major>1</major><minor>0</minor></specVersion>" +
-            "<actionList>$actions</actionList><serviceStateTable>$variables</serviceStateTable></scpd>"
-
-    val contentDirectory: String = scpd(
-        actions = action("GetSearchCapabilities", arg("SearchCaps", "out", "SearchCapabilities")) +
-            action("GetSortCapabilities", arg("SortCaps", "out", "SortCapabilities")) +
-            action("GetSystemUpdateID", arg("Id", "out", "SystemUpdateID")) +
-            action(
+    val contentDirectory: String = Scpd.document(
+        actions = Scpd.action("GetSearchCapabilities", Scpd.arg("SearchCaps", "out", "SearchCapabilities")) +
+            Scpd.action("GetSortCapabilities", Scpd.arg("SortCaps", "out", "SortCapabilities")) +
+            Scpd.action("GetSystemUpdateID", Scpd.arg("Id", "out", "SystemUpdateID")) +
+            Scpd.action(
                 "Browse",
-                arg("ObjectID", "in", "A_ARG_TYPE_ObjectID"),
-                arg("BrowseFlag", "in", "A_ARG_TYPE_BrowseFlag"),
-                arg("Filter", "in", "A_ARG_TYPE_Filter"),
-                arg("StartingIndex", "in", "A_ARG_TYPE_Index"),
-                arg("RequestedCount", "in", "A_ARG_TYPE_Count"),
-                arg("SortCriteria", "in", "A_ARG_TYPE_SortCriteria"),
-                arg("Result", "out", "A_ARG_TYPE_Result"),
-                arg("NumberReturned", "out", "A_ARG_TYPE_Count"),
-                arg("TotalMatches", "out", "A_ARG_TYPE_Count"),
-                arg("UpdateID", "out", "A_ARG_TYPE_UpdateID"),
+                Scpd.arg("ObjectID", "in", "A_ARG_TYPE_ObjectID"),
+                Scpd.arg("BrowseFlag", "in", "A_ARG_TYPE_BrowseFlag"),
+                Scpd.arg("Filter", "in", "A_ARG_TYPE_Filter"),
+                Scpd.arg("StartingIndex", "in", "A_ARG_TYPE_Index"),
+                Scpd.arg("RequestedCount", "in", "A_ARG_TYPE_Count"),
+                Scpd.arg("SortCriteria", "in", "A_ARG_TYPE_SortCriteria"),
+                Scpd.arg("Result", "out", "A_ARG_TYPE_Result"),
+                Scpd.arg("NumberReturned", "out", "A_ARG_TYPE_Count"),
+                Scpd.arg("TotalMatches", "out", "A_ARG_TYPE_Count"),
+                Scpd.arg("UpdateID", "out", "A_ARG_TYPE_UpdateID"),
             ),
-        variables = variable("SearchCapabilities", "string") +
-            variable("SortCapabilities", "string") +
-            variable("SystemUpdateID", "ui4", events = true) +
-            variable("A_ARG_TYPE_ObjectID", "string") +
-            variable("A_ARG_TYPE_BrowseFlag", "string", allowed = listOf("BrowseMetadata", "BrowseDirectChildren")) +
-            variable("A_ARG_TYPE_Filter", "string") +
-            variable("A_ARG_TYPE_Index", "ui4") +
-            variable("A_ARG_TYPE_Count", "ui4") +
-            variable("A_ARG_TYPE_SortCriteria", "string") +
-            variable("A_ARG_TYPE_Result", "string") +
-            variable("A_ARG_TYPE_UpdateID", "ui4"),
+        variables = Scpd.variable("SearchCapabilities", "string") +
+            Scpd.variable("SortCapabilities", "string") +
+            Scpd.variable("SystemUpdateID", "ui4", events = true) +
+            Scpd.variable("A_ARG_TYPE_ObjectID", "string") +
+            Scpd.variable("A_ARG_TYPE_BrowseFlag", "string", allowed = listOf("BrowseMetadata", "BrowseDirectChildren")) +
+            Scpd.variable("A_ARG_TYPE_Filter", "string") +
+            Scpd.variable("A_ARG_TYPE_Index", "ui4") +
+            Scpd.variable("A_ARG_TYPE_Count", "ui4") +
+            Scpd.variable("A_ARG_TYPE_SortCriteria", "string") +
+            Scpd.variable("A_ARG_TYPE_Result", "string") +
+            Scpd.variable("A_ARG_TYPE_UpdateID", "ui4"),
     )
 
-    val connectionManager: String = scpd(
-        actions = action("GetProtocolInfo", arg("Source", "out", "SourceProtocolInfo"), arg("Sink", "out", "SinkProtocolInfo")) +
-            action("GetCurrentConnectionIDs", arg("ConnectionIDs", "out", "CurrentConnectionIDs")) +
-            action(
+    val connectionManager: String = Scpd.document(
+        actions = Scpd.action("GetProtocolInfo", Scpd.arg("Source", "out", "SourceProtocolInfo"), Scpd.arg("Sink", "out", "SinkProtocolInfo")) +
+            Scpd.action("GetCurrentConnectionIDs", Scpd.arg("ConnectionIDs", "out", "CurrentConnectionIDs")) +
+            Scpd.action(
                 "GetCurrentConnectionInfo",
-                arg("ConnectionID", "in", "A_ARG_TYPE_ConnectionID"),
-                arg("RcsID", "out", "A_ARG_TYPE_RcsID"),
-                arg("AVTransportID", "out", "A_ARG_TYPE_AVTransportID"),
-                arg("ProtocolInfo", "out", "A_ARG_TYPE_ProtocolInfo"),
-                arg("PeerConnectionManager", "out", "A_ARG_TYPE_ConnectionManager"),
-                arg("PeerConnectionID", "out", "A_ARG_TYPE_ConnectionID"),
-                arg("Direction", "out", "A_ARG_TYPE_Direction"),
-                arg("Status", "out", "A_ARG_TYPE_ConnectionStatus"),
+                Scpd.arg("ConnectionID", "in", "A_ARG_TYPE_ConnectionID"),
+                Scpd.arg("RcsID", "out", "A_ARG_TYPE_RcsID"),
+                Scpd.arg("AVTransportID", "out", "A_ARG_TYPE_AVTransportID"),
+                Scpd.arg("ProtocolInfo", "out", "A_ARG_TYPE_ProtocolInfo"),
+                Scpd.arg("PeerConnectionManager", "out", "A_ARG_TYPE_ConnectionManager"),
+                Scpd.arg("PeerConnectionID", "out", "A_ARG_TYPE_ConnectionID"),
+                Scpd.arg("Direction", "out", "A_ARG_TYPE_Direction"),
+                Scpd.arg("Status", "out", "A_ARG_TYPE_ConnectionStatus"),
             ),
-        variables = variable("SourceProtocolInfo", "string", events = true) +
-            variable("SinkProtocolInfo", "string", events = true) +
-            variable("CurrentConnectionIDs", "string", events = true) +
-            variable("A_ARG_TYPE_ConnectionStatus", "string", allowed = listOf("OK", "ContentFormatMismatch", "InsufficientBandwidth", "UnreliableChannel", "Unknown")) +
-            variable("A_ARG_TYPE_ConnectionManager", "string") +
-            variable("A_ARG_TYPE_Direction", "string", allowed = listOf("Input", "Output")) +
-            variable("A_ARG_TYPE_ProtocolInfo", "string") +
-            variable("A_ARG_TYPE_ConnectionID", "i4") +
-            variable("A_ARG_TYPE_AVTransportID", "i4") +
-            variable("A_ARG_TYPE_RcsID", "i4"),
+        variables = Scpd.variable("SourceProtocolInfo", "string", events = true) +
+            Scpd.variable("SinkProtocolInfo", "string", events = true) +
+            Scpd.variable("CurrentConnectionIDs", "string", events = true) +
+            Scpd.variable("A_ARG_TYPE_ConnectionStatus", "string", allowed = listOf("OK", "ContentFormatMismatch", "InsufficientBandwidth", "UnreliableChannel", "Unknown")) +
+            Scpd.variable("A_ARG_TYPE_ConnectionManager", "string") +
+            Scpd.variable("A_ARG_TYPE_Direction", "string", allowed = listOf("Input", "Output")) +
+            Scpd.variable("A_ARG_TYPE_ProtocolInfo", "string") +
+            Scpd.variable("A_ARG_TYPE_ConnectionID", "i4") +
+            Scpd.variable("A_ARG_TYPE_AVTransportID", "i4") +
+            Scpd.variable("A_ARG_TYPE_RcsID", "i4"),
     )
-
-    fun soapResponse(serviceType: String, action: String, values: List<Pair<String, String>>): String = buildString {
-        append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
-        append("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body>")
-        append("<u:${action}Response xmlns:u=\"$serviceType\">")
-        for ((k, v) in values) append("<$k>").append(Xml.escape(v)).append("</$k>")
-        append("</u:${action}Response></s:Body></s:Envelope>")
-    }
 }

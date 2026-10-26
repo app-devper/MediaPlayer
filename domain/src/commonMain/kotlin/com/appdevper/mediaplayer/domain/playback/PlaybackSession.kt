@@ -1,20 +1,25 @@
 package com.appdevper.mediaplayer.domain.playback
 
+import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RemotePlayback
+import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -23,6 +28,8 @@ import kotlinx.coroutines.launch
  * App-wide playback session: the queue, the current item and where it plays.
  * Local playback is rendered by the UI's native player; remote playback is driven from here
  * through [RendererRepository], polling the renderer once a second and auto-advancing.
+ * The local player can also be driven from outside its own controls through [localCommands]
+ * (e.g. by a DLNA controller) and reports back with [reportLocalStatus].
  */
 class PlaybackSession(
     private val renderer: RendererRepository,
@@ -31,6 +38,12 @@ class PlaybackSession(
 ) {
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
+
+    // Buffered so a command sent before the player is on screen still reaches it.
+    private val localCommandChannel = Channel<LocalPlayerCommand>(Channel.UNLIMITED)
+
+    /** Commands for the on-screen player; collect from exactly one place (the player). */
+    val localCommands: Flow<LocalPlayerCommand> = localCommandChannel.receiveAsFlow()
 
     private var pollJob: Job? = null
     private var loadJob: Job? = null
@@ -48,18 +61,21 @@ class PlaybackSession(
     /**
      * Starts playing [entry]; the queue becomes the playable siblings of the same family
      * (photos with photos, audio/video with audio/video) — same as the old QueueHelper.
+     * With [autoPlay] false the local player loads paused and waits for [LocalPlayerCommand.Play].
      */
-    fun play(entry: MediaEntry, siblings: List<MediaEntry>) {
+    fun play(entry: MediaEntry, siblings: List<MediaEntry>, autoPlay: Boolean = true) {
         val photos = entry.kind == MediaKind.IMAGE
         val queue = siblings.filter { it == entry || (it.isPlayable && (it.kind == MediaKind.IMAGE) == photos) }
             .ifEmpty { listOf(entry) }
-        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0)) }
+        dropLocalCommands()
+        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, local = null) }
         if (remoteDevice != null) loadCurrent()
     }
 
     fun playAt(index: Int) {
         if (index !in _state.value.queue.indices) return
-        _state.update { it.copy(index = index) }
+        dropLocalCommands()
+        _state.update { it.copy(index = index, autoPlay = true, local = null) }
         if (remoteDevice != null) loadCurrent()
     }
 
@@ -79,8 +95,28 @@ class PlaybackSession(
 
     fun clear() {
         stopPolling()
-        _state.update { it.copy(queue = emptyList(), index = -1, remote = RemotePlayback()) }
+        dropLocalCommands()
+        _state.update { it.copy(queue = emptyList(), index = -1, remote = RemotePlayback(), local = null) }
     }
+
+    // region local player
+
+    fun sendLocal(command: LocalPlayerCommand) {
+        localCommandChannel.trySend(command)
+    }
+
+    fun reportLocalStatus(status: RendererStatus?) = _state.update { it.copy(local = status) }
+
+    fun setLocalVolume(volume: Int) = _state.update { it.copy(localVolume = volume.coerceIn(0, 100)) }
+
+    fun setLocalMuted(muted: Boolean) = _state.update { it.copy(localMuted = muted) }
+
+    /** Commands queued for the previous item must not hit the next one. */
+    private fun dropLocalCommands() {
+        while (localCommandChannel.tryReceive().isSuccess) Unit
+    }
+
+    // endregion
 
     // region remote control
 

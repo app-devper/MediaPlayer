@@ -7,7 +7,9 @@ import com.appdevper.mediaplayer.di.platformAppModule
 import com.appdevper.mediaplayer.di.presentationModule
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
+import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerStatus
+import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
@@ -26,11 +28,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.coroutines.launch
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.parameter.parametersOf
@@ -63,7 +65,11 @@ class PresentationTest {
         assertNotNull(koin.get<BrowseViewModel> { parametersOf("uuid:x", "0", "Root") })
     }
 
-    private val session = PlaybackSession(FakeRenderer(), CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+    private val session = PlaybackSession(FakeRenderer(), appScope)
+
+    private fun receiverSession(settings: FakeSettings = FakeSettings(), receiver: FakeReceiver = FakeReceiver()) =
+        CastReceiverSession(receiver, settings, session, appScope)
 
     @Test
     fun browseLoadsFiltersAndPlays() = runTest {
@@ -99,6 +105,7 @@ class PresentationTest {
         val vm = ServerViewModel(
             ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
             StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
+            receiverSession(settings),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
 
@@ -118,12 +125,36 @@ class PresentationTest {
     }
 
     @Test
+    fun receiverToggleStartsAndStopsReceiving() = runTest {
+        val server = FakeServer()
+        val settings = FakeSettings()
+        val receiver = FakeReceiver()
+        val receiving = receiverSession(settings, receiver).also { it.start() }
+        val vm = ServerViewModel(
+            ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
+            StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
+            receiving,
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        assertEquals(ReceiverStatus.Stopped, vm.uiState.value.receiver) // off by default
+
+        vm.setReceiverEnabled(true)
+        assertEquals(ReceiverStatus.Running("Worawit's MacBook"), vm.uiState.value.receiver)
+        assertTrue(settings.serverSettings.value.receiverEnabled)
+        assertEquals(0, server.starts.size) // the DLNA server is unaffected
+
+        vm.setReceiverEnabled(false)
+        assertEquals(ReceiverStatus.Stopped, vm.uiState.value.receiver)
+    }
+
+    @Test
     fun shellCombinesDevicesAndTarget() = runTest {
         val vm = ShellViewModel(
             com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
             session,
+            receiverSession(),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         assertEquals(listOf("Living Room NAS"), vm.uiState.value.servers.map { it.name })

@@ -20,6 +20,15 @@ object Soap {
         append("</u:").append(action).append("></s:Body></s:Envelope>")
     }
 
+    /** A control response from a local service. */
+    fun response(serviceType: String, action: String, values: List<Pair<String, String>>): String = buildString {
+        append("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+        append("<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\"><s:Body>")
+        append("<u:${action}Response xmlns:u=\"$serviceType\">")
+        for ((k, v) in values) append("<$k>").append(Xml.escape(v)).append("</$k>")
+        append("</u:${action}Response></s:Body></s:Envelope>")
+    }
+
     fun fault(code: Int, description: String): String =
         "<?xml version=\"1.0\" encoding=\"utf-8\"?>" +
             "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">" +

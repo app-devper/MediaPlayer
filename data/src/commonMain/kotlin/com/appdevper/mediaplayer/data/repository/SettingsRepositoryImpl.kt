@@ -22,6 +22,10 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
     val serverUdn: String
         get() = s.getStringOrNull(KEY_UDN) ?: "uuid:${MediaServer.randomUuid()}".also { s.putString(KEY_UDN, it) }
 
+    /** Separate stable UDN for the renderer: controllers cache devices by UDN. */
+    val rendererUdn: String
+        get() = s.getStringOrNull(KEY_RENDERER_UDN) ?: "uuid:${MediaServer.randomUuid()}".also { s.putString(KEY_RENDERER_UDN, it) }
+
     override fun update(transform: (ServerSettings) -> ServerSettings) {
         val next = transform(_serverSettings.value).let { it.copy(name = it.name.trim().ifEmpty { defaultName }) }
         s.putString(KEY_NAME, next.name)
@@ -30,6 +34,7 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         s.putBoolean(KEY_AUDIO, next.shareAudio)
         s.putBoolean(KEY_IMAGE, next.shareImage)
         s.putString(KEY_FOLDERS, next.folders.joinToString("\n"))
+        s.putBoolean(KEY_RECEIVER, next.receiverEnabled)
         _serverSettings.value = next
     }
 
@@ -40,6 +45,7 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         shareAudio = s.getBoolean(KEY_AUDIO, true),
         shareImage = s.getBoolean(KEY_IMAGE, true),
         folders = s.getStringOrNull(KEY_FOLDERS)?.split('\n')?.filter { it.isNotBlank() } ?: defaultSharedFolders(),
+        receiverEnabled = s.getBoolean(KEY_RECEIVER, false),
     )
 
     private companion object {
@@ -50,5 +56,7 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         const val KEY_IMAGE = "allow_image"
         const val KEY_FOLDERS = "shared_folders"
         const val KEY_UDN = "server_udn"
+        const val KEY_RENDERER_UDN = "renderer_udn"
+        const val KEY_RECEIVER = "receiver_enabled"
     }
 }
