@@ -9,6 +9,8 @@ app-versionCode = "20"
 android-compileSdk = "36"
 android-minSdk = "24"
 android-targetSdk = "36"
+android-ndk = "28.2.13676358"
+cmake = "3.22.1"
 
 androidx-activityCompose = "1.13.0"
 androidx-core-ktx = "1.18.0"
