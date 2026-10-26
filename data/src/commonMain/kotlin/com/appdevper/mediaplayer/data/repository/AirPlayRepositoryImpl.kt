@@ -34,6 +34,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
+import kotlin.math.roundToInt
 import kotlin.time.TimeSource
 
 /** [AirPlayRepository] over the :airplay receiver; [receiver] is null where AirPlay isn't available. */
@@ -64,6 +65,16 @@ class AirPlayRepositoryImpl(
     @Volatile private var videoLoaded = false
     private var videoSequence = 0
 
+    // The sender's volume (its volume buttons) as 0..100; also sent while it plays AirPlay video.
+    @Volatile private var senderVolume: Int? = null
+    // Our player's volume before an AirPlay video changed it, restored when the video stops.
+    @Volatile private var volumeBeforeVideo: Int? = null
+
+    private fun applyVideoVolume(volume: Int) {
+        if (volumeBeforeVideo == null) volumeBeforeVideo = playback.volume
+        _commands.tryEmit(CastCommand.SetVolume(volume))
+    }
+
     override fun publish(playback: ReceiverPlayback) {
         this.playback = playback
         if (playback.entry?.id != null && playback.entry?.id == videoId) videoLoaded = true
@@ -87,6 +98,7 @@ class AirPlayRepositoryImpl(
                 mimeType = if (".m3u8" in url) "application/x-mpegURL" else null,
             )
             _commands.tryEmit(CastCommand.Load(entry, autoPlay = true, startPositionMs = (startSeconds * 1000).toLong().coerceAtLeast(0)))
+            senderVolume?.let(::applyVideoVolume)
         }
 
         // Only while a video is current: after /stop, YouTube sends /rate 1 before the next /play,
@@ -105,6 +117,8 @@ class AirPlayRepositoryImpl(
             if (videoId == null) return
             videoId = null
             _commands.tryEmit(CastCommand.Stop)
+            volumeBeforeVideo?.let { _commands.tryEmit(CastCommand.SetVolume(it)) }
+            volumeBeforeVideo = null
         }
 
         override fun info(): AirPlayVideoInfo? {
@@ -170,7 +184,10 @@ class AirPlayRepositoryImpl(
 
     private fun onEvent(event: AirPlayEvent) {
         when (event) {
-            is AirPlayEvent.Connections -> if (event.open == 0) _activity.value = AirPlayActivity()
+            is AirPlayEvent.Connections -> if (event.open == 0) {
+                _activity.value = AirPlayActivity()
+                senderVolume = null
+            }
             is AirPlayEvent.ClientConnecting -> _activity.update { it.copy(client = event.name) }
             is AirPlayEvent.ShowPin -> _activity.update { it.copy(pin = event.pin) }
             is AirPlayEvent.ClientPaired -> {
@@ -181,13 +198,22 @@ class AirPlayRepositoryImpl(
             AirPlayEvent.MirroringStopped -> _activity.update { it.copy(mirroring = false) }
             is AirPlayEvent.AudioStarted -> _activity.update { it.copy(audioOnly = !event.withScreen && !it.mirroring, pin = null) }
             AirPlayEvent.AudioStopped -> _activity.update { it.copy(audioOnly = false, nowPlaying = null) }
-            is AirPlayEvent.Volume -> player.setVolume(airPlayGain(event.db))
+            is AirPlayEvent.Volume -> {
+                // Comes over the audio (RAOP) connection, also while the sender plays AirPlay video.
+                val gain = airPlayGain(event.db)
+                player.setVolume(gain)
+                senderVolume = (gain * 100).roundToInt()
+                if (videoId != null) applyVideoVolume(senderVolume!!)
+            }
             is AirPlayEvent.Track -> updateNowPlaying { it.copy(title = event.info.title, artist = event.info.artist, album = event.info.album) }
             is AirPlayEvent.Artwork -> updateNowPlaying { it.copy(artwork = event.image) }
             is AirPlayEvent.Progress -> updateNowPlaying {
                 it.copy(positionMs = event.positionMs, durationMs = event.durationMs, reportedAt = TimeSource.Monotonic.markNow())
             }
-            is AirPlayEvent.ConnectionLost -> _activity.value = AirPlayActivity()
+            is AirPlayEvent.ConnectionLost -> {
+                _activity.value = AirPlayActivity()
+                senderVolume = null
+            }
         }
     }
 }

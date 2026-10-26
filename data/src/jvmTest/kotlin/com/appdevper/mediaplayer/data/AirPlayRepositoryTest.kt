@@ -166,6 +166,18 @@ class AirPlayRepositoryTest {
         video.setRate(1f)
         video.seek(10f)
         assertEquals(before, commands.size)
+
+        // The sender's volume buttons (sent as AirPlay audio volume) drive the video player,
+        // and our own volume comes back when the video stops.
+        repo.publish(ReceiverPlayback(volume = 80))
+        receiver.events.emit(AirPlayEvent.Volume(-15f))
+        assertEquals(before, commands.size) // no video now: only the AirPlay audio player follows
+        video.play(url, startSeconds = 0f)
+        assertEquals(CastCommand.SetVolume(25), commands.last()) // the last volume applies to the new video
+        receiver.events.emit(AirPlayEvent.Volume(0f))
+        assertEquals(CastCommand.SetVolume(100), commands.last())
+        video.stop()
+        assertEquals(CastCommand.SetVolume(80), commands.last())
         collecting.cancel()
     }
 
