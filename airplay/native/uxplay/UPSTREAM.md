@@ -18,6 +18,9 @@ Copied unchanged, except:
     verified RAOP connection (`conn_has_verified_raop_peer`); upstream takes `/play` from anyone,
     bypassing PIN pairing.
     Local HLS server requests are only answered from loopback (`conn_is_loopback`).
+  - The check above applies to every non-RTSP request that isn't local HLS or pairing, whether or
+    not it carries X-Apple-Session-ID (a request without it and without Host skipped the check;
+    found by /security-review).
   - `pairing.c/.h`: `pairing_session_is_verified()` for the check above.
   - `http_handlers.h` `scrub`/`rate`: a query without `=` dereferenced `NULL + 1`.
   - `http_handlers.h` `supported_hls_proc_names`: adds `YouTubeMusic` (same HLS format as YouTube;

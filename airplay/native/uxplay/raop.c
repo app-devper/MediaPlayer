@@ -311,9 +311,11 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
     const char *host = http_request_get_header(request, "Host");
     hls_request =  (host && !cseq && !client_session_id);
 
-    /* MediaPlayer: see conn_is_loopback / conn_has_verified_raop_peer */
+    /* MediaPlayer: see conn_is_loopback / conn_has_verified_raop_peer. Every HTTP (non-RTSP) request
+       that isn't local HLS or pairing needs a verified client, with or without X-Apple-Session-ID:
+       leaving the header (and Host) out used to skip this check and reach /stop, /scrub, /reverse... */
     if ((hls_request && !conn_is_loopback(conn)) ||
-        (client_session_id && !cseq && !is_pairing_url(url) &&
+        (!cseq && !ble && !hls_request && !is_pairing_url(url) &&
          !pairing_session_is_verified(conn->session) && !conn_has_verified_raop_peer(raop, conn))) {
         logger_log(raop->logger, LOGGER_WARNING, "rejecting AirPlay video/HLS request from an unverified client");
         *response = http_response_create();

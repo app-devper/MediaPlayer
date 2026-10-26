@@ -67,6 +67,15 @@ class AirPlayVideoE2ETest {
         AirPlayTestClient("127.0.0.1", port).use { c ->
             assertEquals(403, c.http("POST", "/scrub?position=5").status)
         }
+        // Leaving out the session id (and Host) must not skip the check.
+        for ((method, path) in listOf(
+            "POST" to "/stop", "POST" to "/scrub?position=5", "POST" to "/rate?value=0",
+            "GET" to "/playback-info", "POST" to "/reverse",
+        )) {
+            AirPlayTestClient("127.0.0.1", port).use { c ->
+                assertEquals(403, c.http(method, path, sessionId = null, host = false).status, "$method $path")
+            }
+        }
         assertTrue(calls.isEmpty(), "nothing reached the player: $calls")
     }
 

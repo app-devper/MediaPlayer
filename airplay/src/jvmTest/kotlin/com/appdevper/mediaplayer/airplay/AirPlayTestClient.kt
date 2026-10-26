@@ -48,10 +48,17 @@ internal class AirPlayTestClient(host: String, port: Int) : AutoCloseable {
     }
 
     /** HTTP request as on iOS's AirPlay (video) connection. */
-    fun http(method: String, path: String, body: ByteArray = ByteArray(0), contentType: String? = null, sessionId: String? = SESSION): Response {
+    fun http(
+        method: String,
+        path: String,
+        body: ByteArray = ByteArray(0),
+        contentType: String? = null,
+        sessionId: String? = SESSION,
+        host: Boolean = true,
+    ): Response {
         val headers = buildMap {
             put("User-Agent", "AirPlay/600.8.41")
-            put("Host", "receiver")
+            if (host) put("Host", "receiver")
             sessionId?.let { put("X-Apple-Session-ID", it) }
             contentType?.let { put("Content-Type", it) }
         }
