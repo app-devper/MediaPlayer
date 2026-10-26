@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "alac_decoder.h"
 #include "dnssd.h"
 #include "logger.h"
 #include "raop.h"
@@ -24,6 +25,12 @@ static ap_callbacks_t cb;
 static uint64_t remote_clock_offset = 0;
 static int open_connections = 0;
 static double current_volume_db = 0.0;
+
+/* ALAC is decoded here so the app only ever sees PCM or AAC (Android has no ALAC decoder). */
+static pthread_mutex_t audio_lock = PTHREAD_MUTEX_INITIALIZER;
+static int audio_ct = 0;
+static alac_decoder_t *alac = NULL;
+static int16_t pcm[ALAC_FRAMES_PER_PACKET * ALAC_CHANNELS];
 
 #define CALL(fn, ...) do { if (cb.fn) cb.fn(cb.ctx, __VA_ARGS__); } while (0)
 #define CALL0(fn) do { if (cb.fn) cb.fn(cb.ctx); } while (0)
@@ -115,12 +122,29 @@ static void video_resume(void *cls) { (void) cls; }
 static void audio_get_format(void *cls, unsigned char *ct, unsigned short *spf, bool *using_screen,
                              bool *is_media, uint64_t *audio_format) {
     (void) cls; (void) is_media; (void) audio_format;
-    CALL(audio_format, (int) *ct, (int) *spf, *using_screen);
+    pthread_mutex_lock(&audio_lock);
+    audio_ct = *ct;
+    if (audio_ct == AP_AUDIO_ALAC && !alac) alac = alac_decoder_create();
+    bool decoded = audio_ct == AP_AUDIO_ALAC && alac;
+    pthread_mutex_unlock(&audio_lock);
+    if (decoded) {
+        CALL(audio_format, AP_AUDIO_PCM, ALAC_FRAMES_PER_PACKET, *using_screen);
+    } else {
+        CALL(audio_format, (int) *ct, (int) *spf, *using_screen);
+    }
 }
 
 static void audio_process(void *cls, raop_ntp_t *ntp, audio_decode_struct *data) {
     (void) cls; (void) ntp;
-    CALL(audio, data->data, data->data_len, local_pts(data->ntp_time_local, data->ntp_time_remote));
+    uint64_t pts = local_pts(data->ntp_time_local, data->ntp_time_remote);
+    if (data->ct != AP_AUDIO_ALAC) {
+        CALL(audio, data->data, data->data_len, pts);
+        return;
+    }
+    pthread_mutex_lock(&audio_lock);
+    int frames = alac ? alac_decoder_decode(alac, data->data, data->data_len, pcm, ALAC_FRAMES_PER_PACKET) : -1;
+    if (frames > 0) CALL(audio, (const uint8_t *) pcm, frames * ALAC_CHANNELS * (int) sizeof(int16_t), pts);
+    pthread_mutex_unlock(&audio_lock);
 }
 
 static void audio_flush(void *cls) {
@@ -174,6 +198,11 @@ static void stop_locked(void) {
     }
     open_connections = 0;
     remote_clock_offset = 0;
+    pthread_mutex_lock(&audio_lock);
+    if (alac) alac_decoder_destroy(alac);
+    alac = NULL;
+    audio_ct = 0;
+    pthread_mutex_unlock(&audio_lock);
 }
 
 int ap_start(const ap_config_t *config, const ap_callbacks_t *callbacks) {

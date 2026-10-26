@@ -36,7 +36,8 @@ typedef struct ap_callbacks {
     void (*video)(void *ctx, const uint8_t *data, int len, uint64_t pts_ns);
     /* mirroring ended (the client stopped or switched to something else) */
     void (*video_stop)(void *ctx);
-    /* audio stream: compression type (AP_AUDIO_*) and samples per frame, then encoded frames */
+    /* audio stream: compression type (AP_AUDIO_*) and samples per frame, then encoded frames.
+     * ALAC is decoded here and reported as AP_AUDIO_PCM: 44100 Hz, 16 bit little-endian, stereo. */
     void (*audio_format)(void *ctx, int ct, int spf, bool using_screen);
     void (*audio)(void *ctx, const uint8_t *data, int len, uint64_t pts_ns);
     void (*audio_flush)(void *ctx);

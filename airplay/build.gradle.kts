@@ -5,6 +5,25 @@ plugins {
     alias(libs.plugins.mediaplayer.kmp.library)
 }
 
+val hostPlatform: String = run {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = if (System.getProperty("os.arch").lowercase() in setOf("aarch64", "arm64")) "arm64" else "x64"
+    when {
+        "mac" in os -> "macos-$arch"
+        "win" in os -> "windows-$arch"
+        else -> "linux-$arch"
+    }
+}
+
+/** JavaCPP classifier for the build machine (desktop builds bundle only its natives). */
+val bytedecoPlatform: String = when (hostPlatform) {
+    "macos-arm64" -> "macosx-arm64"
+    "macos-x64" -> "macosx-x86_64"
+    "windows-x64" -> "windows-x86_64"
+    "linux-arm64" -> "linux-arm64"
+    else -> "linux-x86_64"
+}
+
 // AirPlay receiver (screen mirroring + audio): UxPlay's GPL-3.0 protocol library in native/,
 // built with CMake for Android (AGP externalNativeBuild) and for the desktop build machine.
 kotlin {
@@ -22,6 +41,13 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
+        }
+        jvmMain.dependencies {
+            // FFmpeg decodes mirroring video and AAC on the desktop; natives only for the build machine.
+            implementation(libs.bytedeco.ffmpeg)
+            implementation(libs.bytedeco.javacpp)
+            runtimeOnly("org.bytedeco:ffmpeg:${libs.versions.bytedeco.ffmpeg.get()}:$bytedecoPlatform")
+            runtimeOnly("org.bytedeco:javacpp:${libs.versions.bytedeco.javacpp.get()}:$bytedecoPlatform")
         }
     }
 }
@@ -46,15 +72,6 @@ android {
 val nativeSrc = layout.projectDirectory.dir("native")
 val hostBuildDir = layout.buildDirectory.dir("native/host")
 val hostResourcesDir = layout.buildDirectory.dir("generated/airplay/resources")
-val hostPlatform: String = run {
-    val os = System.getProperty("os.name").lowercase()
-    val arch = if (System.getProperty("os.arch").lowercase() in setOf("aarch64", "arm64")) "arm64" else "x64"
-    when {
-        "mac" in os -> "macos-$arch"
-        "win" in os -> "windows-$arch"
-        else -> "linux-$arch"
-    }
-}
 
 /** cmake/ninja from PATH, else the Android SDK's (which AGP installs for the Android build anyway). */
 fun sdkTool(name: String): String {
@@ -75,7 +92,7 @@ val configureNativeHost by tasks.registering(Exec::class) {
     commandLine(
         sdkTool("cmake"), "-S", nativeSrc.asFile.absolutePath, "-B", hostBuildDir.get().asFile.absolutePath,
         "-G", "Ninja", "-DCMAKE_MAKE_PROGRAM=${sdkTool("ninja")}", "-DCMAKE_BUILD_TYPE=Release",
-        "-DAIRPLAY_BUILD_JNI=ON", "-DAIRPLAY_BUILD_PROBE=OFF",
+        "-DAIRPLAY_BUILD_JNI=ON", "-DAIRPLAY_BUILD_PROBE=OFF", "-DAIRPLAY_BUILD_TESTS=ON",
     )
 }
 
@@ -91,6 +108,14 @@ val bundleNativeHost by tasks.registering(Copy::class) {
     from(hostBuildDir) { include("*mediaplayer_airplay.*") }
     into(hostResourcesDir.map { it.dir("native/$hostPlatform") })
 }
+
+// Native unit tests (ALAC round trip), run with the JVM tests.
+val nativeHostTest by tasks.registering(Exec::class) {
+    dependsOn(configureNativeHost)
+    val dir = hostBuildDir.get().asFile.absolutePath
+    commandLine("sh", "-c", "'${sdkTool("cmake")}' --build '$dir' --target alac_roundtrip_test && '$dir/alac_roundtrip_test'")
+}
+tasks.named("jvmTest") { dependsOn(nativeHostTest) }
 
 kotlin.sourceSets.jvmMain {
     resources.srcDir(bundleNativeHost.map { hostResourcesDir.get() })

@@ -9,6 +9,7 @@ set(CMAKE_C_VISIBILITY_PRESET hidden)
 
 option(AIRPLAY_BUILD_PROBE "Build the airplay_probe host executable (manual testing)" OFF)
 option(AIRPLAY_BUILD_JNI "Build the JNI library" ON)
+option(AIRPLAY_BUILD_TESTS "Build the native tests (host only)" OFF)
 
 include(FetchContent)
 
@@ -93,10 +94,20 @@ else()
     target_link_libraries(uxplay PUBLIC Threads::Threads)
 endif()
 
+# --- Apple ALAC decoder (Android has none; used on every platform for one code path) -------
+set(CMAKE_CXX_STANDARD 11)
+add_library(alac STATIC
+    alac/ALACDecoder.cpp alac/ALACBitUtilities.c alac/EndianPortable.c
+    alac/ag_dec.c alac/dp_dec.c alac/matrix_dec.c src/alac_decoder.cpp
+)
+target_include_directories(alac PUBLIC alac src)
+# Upstream only recognises x86 as little-endian; every target we build for is little-endian.
+target_compile_definitions(alac PRIVATE TARGET_RT_LITTLE_ENDIAN=1)
+
 # --- Our wrapper ----------------------------------------------------------------------------
 add_library(airplay_core STATIC src/airplay_core.c)
 target_include_directories(airplay_core PUBLIC src)
-target_link_libraries(airplay_core PUBLIC uxplay)
+target_link_libraries(airplay_core PUBLIC uxplay alac)
 
 if(AIRPLAY_BUILD_JNI)
     if(NOT ANDROID)
@@ -112,4 +123,11 @@ endif()
 if(AIRPLAY_BUILD_PROBE)
     add_executable(airplay_probe src/airplay_probe.c)
     target_link_libraries(airplay_probe PRIVATE airplay_core)
+endif()
+
+if(AIRPLAY_BUILD_TESTS)
+    add_executable(alac_roundtrip_test tests/alac_roundtrip_test.cpp
+        alac/ALACEncoder.cpp alac/ag_enc.c alac/dp_enc.c alac/matrix_enc.c)
+    target_compile_definitions(alac_roundtrip_test PRIVATE TARGET_RT_LITTLE_ENDIAN=1)
+    target_link_libraries(alac_roundtrip_test PRIVATE alac)
 endif()
