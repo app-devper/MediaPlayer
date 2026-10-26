@@ -93,7 +93,7 @@ class CastReceiverSessionTest {
         session.start()
         val opened = backgroundScope.launch { session.openPlayer.first() }
         val commands = mutableListOf<LocalPlayerCommand>()
-        backgroundScope.launch { playback.localCommands.take(3).toList(commands) }
+        backgroundScope.launch { playback.localCommands.take(4).toList(commands) }
         runCurrent()
 
         receiver.commands.emit(CastCommand.Load(clip, autoPlay = false))
@@ -111,8 +111,13 @@ class CastReceiverSessionTest {
         assertEquals(30, s.localVolume)
         assertTrue(s.localMuted)
         assertTrue(opened.isCompleted)
+        val reopened = backgroundScope.launch { session.openPlayer.first() }
+        runCurrent()
+        receiver.commands.emit(CastCommand.Play) // player closed meanwhile → Play brings it back
+        runCurrent()
+        assertTrue(reopened.isCompleted)
         assertTrue("stop" in renderer.calls) // the TV we were casting to is released
-        assertEquals(listOf(LocalPlayerCommand.Play, LocalPlayerCommand.Seek(42_000), LocalPlayerCommand.Stop), commands)
+        assertEquals(listOf(LocalPlayerCommand.Play, LocalPlayerCommand.Seek(42_000), LocalPlayerCommand.Stop, LocalPlayerCommand.Play), commands)
     }
 
     @Test

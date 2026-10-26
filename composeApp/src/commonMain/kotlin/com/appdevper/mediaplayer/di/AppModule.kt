@@ -3,6 +3,7 @@ package com.appdevper.mediaplayer.di
 import com.appdevper.mediaplayer.data.di.AppScope
 import com.appdevper.mediaplayer.data.di.dataModule
 import com.appdevper.mediaplayer.data.di.platformDataModule
+import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.AppStartupUseCase
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
@@ -32,6 +33,7 @@ import org.koin.mp.KoinPlatform
 /** Use cases + the app-wide playback session (domain layer wiring). */
 val domainModule = module {
     single { PlaybackSession(get(), get(AppScope)) }
+    single { CastReceiverSession(get(), get(), get(), get(AppScope)) }
     factoryOf(::ObserveDevicesUseCase)
     factoryOf(::RefreshDevicesUseCase)
     factoryOf(::GetDeviceUseCase)

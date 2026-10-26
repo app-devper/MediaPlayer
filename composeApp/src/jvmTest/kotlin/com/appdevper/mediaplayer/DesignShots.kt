@@ -23,7 +23,9 @@ import com.appdevper.mediaplayer.di.presentationModule
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
+import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.repository.LibraryRepository
 import com.appdevper.mediaplayer.domain.repository.MediaServerRepository
@@ -61,8 +63,9 @@ class DesignShots {
                     single<DeviceRepository> { FakeDevices() }
                     single<LibraryRepository> { FakeLibrary() }
                     single<RendererRepository> { FakeRenderer() }
-                    single<SettingsRepository> { FakeSettings() }
+                    single<SettingsRepository> { FakeSettings().apply { update { it.copy(receiverEnabled = true) } } }
                     single<MediaServerRepository> { server }
+                    single<CastReceiverRepository> { FakeReceiver().apply { status.value = ReceiverStatus.Running("Worawit's MacBook") } }
                 },
                 domainModule, presentationModule,
             )

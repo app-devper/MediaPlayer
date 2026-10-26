@@ -62,7 +62,10 @@ class CastReceiverSession(
                 playback.play(command.entry, listOf(command.entry), autoPlay = command.autoPlay)
                 _openPlayer.tryEmit(Unit)
             }
-            CastCommand.Play -> playback.sendLocal(LocalPlayerCommand.Play)
+            CastCommand.Play -> {
+                playback.sendLocal(LocalPlayerCommand.Play)
+                _openPlayer.tryEmit(Unit) // the player may have been closed since the load
+            }
             CastCommand.Pause -> playback.sendLocal(LocalPlayerCommand.Pause)
             CastCommand.Stop -> playback.sendLocal(LocalPlayerCommand.Stop)
             is CastCommand.Seek -> playback.sendLocal(LocalPlayerCommand.Seek(command.positionMs))

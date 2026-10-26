@@ -1,18 +1,23 @@
 package com.appdevper.mediaplayer
 
+import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
+import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerCapabilities
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.repository.LibraryRepository
 import com.appdevper.mediaplayer.domain.repository.MediaServerRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -66,4 +71,12 @@ class FakeServer : MediaServerRepository {
         status.value = ServerStatus.Running(settings.name, "http://192.168.1.160:8191", mapOf(MediaKind.VIDEO to 12, MediaKind.AUDIO to 340))
     }
     override suspend fun stop() { status.value = ServerStatus.Stopped }
+}
+
+class FakeReceiver : CastReceiverRepository {
+    override val status = MutableStateFlow<ReceiverStatus>(ReceiverStatus.Stopped)
+    override val commands = MutableSharedFlow<CastCommand>()
+    override suspend fun start(name: String) { status.value = ReceiverStatus.Running(name) }
+    override suspend fun stop() { status.value = ReceiverStatus.Stopped }
+    override fun publish(playback: ReceiverPlayback) {}
 }

@@ -13,9 +13,12 @@ A single Compose Multiplatform app that merges
 | Play on a TV / speaker (AVTransport + volume) | ✅ | ✅ | ✅ |
 | **AirPlay** (Apple TV, AirPlay speakers/TVs) | — | ✅ native | — |
 | Built-in DLNA media server (share this device) | MediaStore | Documents folder | chosen folders |
+| Receive casts: DLNA renderer (other apps "Play to" this device) ³ | ✅ | ✅ | ✅ |
 
 ¹ Real devices need Apple's multicast entitlement (see below). The simulator works without it.
 ² Without VLC installed, the desktop app opens media in the system player.
+³ Off by default (My Server › Receive), since anyone on the Wi‑Fi could then play media on the screen.
+  Plays while the app is open; only http(s) media URLs are accepted.
 
 ## Architecture (Clean Architecture + MVVM)
 

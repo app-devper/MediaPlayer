@@ -17,6 +17,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -30,7 +31,12 @@ import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
+import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
+import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.ui.formatClock
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
@@ -49,6 +55,10 @@ actual fun NativeMediaPlayer(
     isAudio: Boolean,
     onEnded: () -> Unit,
     modifier: Modifier,
+    autoPlay: Boolean,
+    volume: Float,
+    commands: Flow<LocalPlayerCommand>,
+    onStatus: (RendererStatus) -> Unit,
 ) {
     if (!vlcAvailable) {
         Column(modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -64,31 +74,75 @@ actual fun NativeMediaPlayer(
     var timeMs by remember { mutableLongStateOf(0L) }
     var lengthMs by remember { mutableLongStateOf(0L) }
     var seeking by remember { mutableStateOf<Float?>(null) }
-    var volume by remember { mutableFloatStateOf(100f) }
+    var sliderVolume by remember { mutableFloatStateOf(100f) }
+    // "Stopped" = loaded but not started, finished, or stopped by a controller; reported as STOPPED rather than PAUSED.
+    var stopped by remember(url) { mutableStateOf(!autoPlay) }
     val ended by rememberUpdatedState(onEnded)
+    val report by rememberUpdatedState(onStatus)
+    fun status() = RendererStatus(
+        state = when {
+            stopped -> TransportState.STOPPED
+            playing -> TransportState.PLAYING
+            else -> TransportState.PAUSED
+        },
+        positionMs = timeMs,
+        durationMs = lengthMs,
+    )
 
     val component = remember { CallbackMediaPlayerComponent() }
     DisposableEffect(url) {
         val listener = object : MediaPlayerEventAdapter() {
-            override fun playing(mediaPlayer: MediaPlayer) { playing = true }
+            override fun playing(mediaPlayer: MediaPlayer) {
+                playing = true
+                stopped = false
+            }
             override fun paused(mediaPlayer: MediaPlayer) { playing = false }
             override fun stopped(mediaPlayer: MediaPlayer) { playing = false }
             override fun timeChanged(mediaPlayer: MediaPlayer, newTime: Long) { timeMs = newTime }
             override fun lengthChanged(mediaPlayer: MediaPlayer, newLength: Long) { lengthMs = newLength }
             override fun finished(mediaPlayer: MediaPlayer) {
                 playing = false
+                stopped = true
                 // Never re-enter libVLC from its own event thread.
                 SwingUtilities.invokeLater { ended() }
             }
         }
         val mp = component.mediaPlayer()
         mp.events().addMediaPlayerEventListener(listener)
-        mp.media().play(url)
+        if (autoPlay) mp.media().play(url) else mp.media().startPaused(url)
         onDispose {
+            report(status().copy(state = TransportState.STOPPED))
             mp.events().removeMediaPlayerEventListener(listener)
             mp.controls().stop()
             component.release()
         }
+    }
+
+    LaunchedEffect(url) {
+        val controls = component.mediaPlayer().controls()
+        commands.collect { cmd ->
+            when (cmd) {
+                // After "finished" libVLC needs the media restarted, not resumed.
+                LocalPlayerCommand.Play -> if (stopped && lengthMs > 0 && timeMs >= lengthMs - 500) component.mediaPlayer().media().play(url) else controls.play()
+                LocalPlayerCommand.Pause -> controls.setPause(true)
+                LocalPlayerCommand.Stop -> {
+                    stopped = true
+                    controls.setPause(true)
+                    controls.setTime(0)
+                }
+                is LocalPlayerCommand.Seek -> controls.setTime(cmd.positionMs)
+            }
+        }
+    }
+    LaunchedEffect(url) {
+        while (true) {
+            report(status())
+            delay(STATUS_INTERVAL_MS)
+        }
+    }
+    LaunchedEffect(volume) {
+        sliderVolume = volume.coerceIn(0f, 1f) * 100f
+        component.mediaPlayer().audio().setVolume(sliderVolume.toInt())
     }
 
     val onVideoSlider = SliderDefaults.colors(
@@ -121,9 +175,9 @@ actual fun NativeMediaPlayer(
             Text(formatClock(lengthMs), color = Color.White, style = MaterialTheme.typography.labelSmall)
             Icon(AppIcons.Volume, null, tint = Color.White, modifier = Modifier.padding(start = 8.dp))
             Slider(
-                value = volume,
+                value = sliderVolume,
                 onValueChange = {
-                    volume = it
+                    sliderVolume = it
                     component.mediaPlayer().audio().setVolume(it.toInt())
                 },
                 valueRange = 0f..100f,

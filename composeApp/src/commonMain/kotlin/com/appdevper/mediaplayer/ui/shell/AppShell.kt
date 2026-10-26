@@ -23,6 +23,7 @@ import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,6 +63,12 @@ fun AppShell(startDestination: Any = HomeRoute) {
         dest?.hasRoute<PlayerRoute>() == true -> Selection.NowPlaying
         dest?.hasRoute<ServerRoute>() == true -> Selection.MyServer
         else -> Selection.Home
+    }
+    LaunchedEffect(vm, nav) {
+        vm.openPlayer.collect {
+            // Even singleTop replaces the entry (and the running player) when it's already on screen.
+            if (nav.currentDestination?.hasRoute<PlayerRoute>() != true) nav.navigate(PlayerRoute) { launchSingleTop = true }
+        }
     }
     val onPlayer = selection == Selection.NowPlaying
     val canGoBack = selection != Selection.Home && nav.previousBackStackEntry != null

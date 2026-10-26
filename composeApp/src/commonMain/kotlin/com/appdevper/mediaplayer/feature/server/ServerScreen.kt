@@ -48,6 +48,7 @@ import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.usecase.countOf
 import com.appdevper.mediaplayer.platform.rememberMediaPermissionRequest
@@ -77,6 +78,10 @@ fun ServerScreen() {
                 SettingRow("Server name") { NameField(settings.name, vm::rename) }
                 Divider()
                 SettingRow("Start sharing when the app opens") { AppSwitch(settings.autoStart, vm::setAutoStart) }
+            }
+            Group("Receive") {
+                SettingRow("Let other devices play here", AppIcons.Cast) { AppSwitch(settings.receiverEnabled, vm::setReceiverEnabled) }
+                ReceiverHint(state.receiver, enabled = settings.receiverEnabled, name = settings.name)
             }
             Group("Share") {
                 SettingRow("Videos", AppIcons.Film) { AppSwitch(settings.shareVideo, vm::setShareVideo) }
@@ -154,6 +159,18 @@ private fun StatusCard(state: ServerUiState, onStart: () -> Unit, onStop: () -> 
             Text("Media access was denied, so there's nothing to share. Allow it in system settings.", style = MaterialTheme.typography.bodySmall, color = c.danger)
         }
     }
+}
+
+@Composable
+private fun ReceiverHint(status: ReceiverStatus, enabled: Boolean, name: String) {
+    val c = AppTheme.colors
+    val (text, color) = when {
+        status is ReceiverStatus.Failed -> "Couldn't start: ${status.message}" to c.danger
+        status is ReceiverStatus.Running -> "Shows up as “$name” in the Play to / Cast menu of DLNA apps on your Wi‑Fi." to c.textTertiary
+        enabled -> "Starting…" to c.textTertiary
+        else -> "Phones and computers on your Wi‑Fi can send videos, music and photos to this device." to c.textTertiary
+    }
+    Text(text, style = MaterialTheme.typography.bodySmall, color = color, modifier = Modifier.padding(start = 30.dp, bottom = 10.dp))
 }
 
 @Composable
