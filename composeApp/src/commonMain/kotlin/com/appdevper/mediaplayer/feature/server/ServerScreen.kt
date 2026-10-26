@@ -2,6 +2,7 @@ package com.appdevper.mediaplayer.feature.server
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -33,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -78,26 +81,27 @@ fun ServerScreen() {
             Group("General") {
                 SettingRow("Server name") { NameField(settings.name, vm::rename) }
                 Divider()
-                SettingRow("Start sharing when the app opens") { AppSwitch(settings.autoStart, vm::setAutoStart) }
+                SwitchRow("Start sharing when the app opens", settings.autoStart, vm::setAutoStart)
             }
             Group("Receive") {
-                SettingRow("Let other devices play here", AppIcons.Cast) { AppSwitch(settings.receiverEnabled, vm::setReceiverEnabled) }
+                SwitchRow("Let other devices play here", settings.receiverEnabled, vm::setReceiverEnabled, AppIcons.Cast)
                 ReceiverHint(state.receiver, enabled = settings.receiverEnabled, name = settings.name)
                 if (state.airPlay != AirPlayStatus.Unsupported) {
                     Divider()
-                    SettingRow("AirPlay from iPhone, iPad and Mac", AppIcons.Tv) { AppSwitch(settings.airPlayEnabled, vm::setAirPlayEnabled) }
-                    if (settings.airPlayEnabled) {
-                        SettingRow("Ask for a code on first connection") { AppSwitch(settings.airPlayRequirePin, vm::setAirPlayRequirePin) }
-                    }
+                    SwitchRow("AirPlay from iPhone, iPad and Mac", settings.airPlayEnabled, vm::setAirPlayEnabled, AppIcons.Tv)
                     AirPlayHint(state.airPlay, enabled = settings.airPlayEnabled, name = settings.name)
+                    if (settings.airPlayEnabled) {
+                        // An AirPlay option: indented under it, after the AirPlay hint it would otherwise split.
+                        SwitchRow("Ask for a code on first connection", settings.airPlayRequirePin, vm::setAirPlayRequirePin, indent = true)
+                    }
                 }
             }
             Group("Share") {
-                SettingRow("Videos", AppIcons.Film) { AppSwitch(settings.shareVideo, vm::setShareVideo) }
+                SwitchRow("Videos", settings.shareVideo, vm::setShareVideo, AppIcons.Film)
                 Divider()
-                SettingRow("Music", AppIcons.Music) { AppSwitch(settings.shareAudio, vm::setShareAudio) }
+                SwitchRow("Music", settings.shareAudio, vm::setShareAudio, AppIcons.Music)
                 Divider()
-                SettingRow("Photos", AppIcons.Image) { AppSwitch(settings.shareImage, vm::setShareImage) }
+                SwitchRow("Photos", settings.shareImage, vm::setShareImage, AppIcons.Image)
             }
             if (state.capabilities.canChooseFolders) {
                 Group("Folders") {
@@ -235,6 +239,29 @@ private fun SettingRow(
         if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = c.textSecondary)
         Text(label, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f))
         control()
+    }
+}
+
+/** A setting with a switch: the whole row toggles it, and screen readers read the label with its state. */
+@Composable
+private fun SwitchRow(
+    label: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    indent: Boolean = false,
+) {
+    val c = AppTheme.colors
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 52.dp)
+            .toggleable(checked, remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange)
+            .padding(start = if (indent) 30.dp else 0.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = c.textSecondary)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f))
+        AppSwitch(checked, onCheckedChange = null)
     }
 }
 

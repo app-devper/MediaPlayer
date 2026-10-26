@@ -86,7 +86,8 @@ fun HomeScreen(
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 3) {
                     state.servers.forEach { d ->
-                        OutlineCard(onClick = { onOpenServer(d) }, modifier = Modifier.weight(1f).widthIn(min = 200.dp)) {
+                        // Capped: one server alone shouldn't stretch across a wide window.
+                        OutlineCard(onClick = { onOpenServer(d) }, modifier = Modifier.widthIn(min = 200.dp, max = 360.dp).fillMaxWidth()) {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Thumbnail(d.iconUrl, d.icon(), size = 36.dp, shape = Radius.medium)
                                 Column {

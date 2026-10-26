@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -25,6 +26,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
@@ -42,7 +46,10 @@ fun GhostIconButton(
     tint: Color = AppTheme.colors.textSecondary,
 ) {
     Box(
-        modifier.size(size).interactive(if (enabled) onClick else null, shape = Radius.small),
+        // Touch target ≥ 48dp (44pt) even when the button looks smaller; disabled ones say so to screen readers.
+        modifier.minimumInteractiveComponentSize().size(size)
+            .interactive(if (enabled) onClick else null, shape = Radius.small)
+            .then(if (enabled) Modifier else Modifier.semantics { role = Role.Button; disabled() }),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription, Modifier.size(iconSize), tint = if (enabled) tint else tint.copy(alpha = 0.35f))

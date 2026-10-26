@@ -66,7 +66,7 @@ fun MirrorScreen() {
                     else -> "Waiting for a device"
                 },
                 message = when (val s = state.status) {
-                    is AirPlayStatus.Running -> "On an iPhone or iPad open Control Center › Screen Mirroring, or on a Mac the Control Center, and pick “${s.name}”."
+                    is AirPlayStatus.Running -> "Pick “${s.name}” in Control Center › Screen Mirroring on an iPhone, iPad or Mac, or from the AirPlay button in apps like YouTube and Music."
                     is AirPlayStatus.Failed -> "AirPlay couldn't start: ${s.message}"
                     AirPlayStatus.Unsupported -> "This device can't receive AirPlay."
                     AirPlayStatus.Stopped -> "Turn on AirPlay in My Server › Receive."

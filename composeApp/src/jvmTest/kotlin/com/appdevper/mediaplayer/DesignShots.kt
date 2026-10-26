@@ -8,6 +8,12 @@ import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -121,7 +127,17 @@ class DesignShots {
         s.setTarget(PlaybackTarget.Renderer(fakeTv))
         s.play(song, listOf(song, song2))
     }, start = PlayerRoute)
-    @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1100, dark = true, start = ServerRoute)
+    @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1100, dark = true, start = ServerRoute, always = true) {
+        // A switch row is one toggle that carries its label and state, and activating it (as a screen
+        // reader does; the row is below this test window, so no pointer click) toggles the setting.
+        val videos = onNode(hasText("Videos") and isToggleable())
+        videos.assertIsOn()
+        videos.performSemanticsAction(SemanticsActions.OnClick)
+        // The setting is saved through the ViewModel, then comes back to the screen.
+        waitUntil(timeoutMillis = 5_000) { runCatching { videos.assertIsOff() }.isSuccess }
+        videos.performSemanticsAction(SemanticsActions.OnClick)
+        waitUntil(timeoutMillis = 5_000) { runCatching { videos.assertIsOn() }.isSuccess }
+    }
     @Test fun mirrorWaitingDesktopDark() = shot("6-mirror-waiting-desktop-dark", 1280, 800, dark = true, start = MirrorRoute)
     @Test fun mirrorFullscreenDesktopDark() = shot(
         "8-mirror-fullscreen-desktop-dark", 1280, 800, dark = true, start = MirrorRoute, always = true,

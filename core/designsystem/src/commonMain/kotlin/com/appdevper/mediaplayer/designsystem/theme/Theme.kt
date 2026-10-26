@@ -55,12 +55,14 @@ val LightAppColors = AppColors(
     trackInactive = Color(0xFFE3E3E3),
     textPrimary = Color(0xFF0D0D0D),
     textSecondary = Color(0xFF5D5D5D),
-    textTertiary = Color(0xFF8F8F8F),
+    // ≥ 4.5:1 on background and surfaceSecondary (was #8F8F8F, 3.2:1).
+    textTertiary = Color(0xFF6E6E6E),
     primary = Color(0xFF0D0D0D),
     onPrimary = Color(0xFFFFFFFF),
     success = Color(0xFF10A37F),
     danger = Color(0xFFE02E2A),
-    scrim = Color(0x66000000),
+    // Dark enough that the screen behind a dialog doesn't compete with it.
+    scrim = Color(0x99000000),
     isDark = false,
 )
 
@@ -75,12 +77,13 @@ val DarkAppColors = AppColors(
     trackInactive = Color(0xFF4A4A4A),
     textPrimary = Color(0xFFECECEC),
     textSecondary = Color(0xFFB4B4B4),
-    textTertiary = Color(0xFF8E8E8E),
+    // ≥ 4.5:1 on background and surface (was #8E8E8E, 4.1:1 on surface).
+    textTertiary = Color(0xFF999999),
     primary = Color(0xFFFFFFFF),
     onPrimary = Color(0xFF0D0D0D),
     success = Color(0xFF10A37F),
     danger = Color(0xFFF87171),
-    scrim = Color(0x99000000),
+    scrim = Color(0xB3000000),
     isDark = true,
 )
 

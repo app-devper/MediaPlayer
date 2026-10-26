@@ -226,6 +226,9 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
         )
         Spacer(Modifier.height(4.dp))
         Text(item.title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, textAlign = TextAlign.Center, maxLines = 2)
+        listOfNotNull(item.artist, item.album).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, textAlign = TextAlign.Center, maxLines = 2)
+        }
         Row(
             Modifier.border(1.dp, c.border, Radius.pill).padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
