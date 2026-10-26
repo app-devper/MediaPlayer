@@ -5,7 +5,8 @@ description: End-to-end delivery flow for app-devper/MediaPlayer (KMP DLNA playe
 
 # dev-flow: idea → release for MediaPlayer
 
-One flow, nine stages. Each stage names the skill that does the work and the
+One flow, nine stages. Claude does most of the reading (verify, review);
+the user decides what to build, signs off on risk and approves what lands. Each stage names the skill that does the work and the
 exit check that must hold before moving on. Skip a stage only where it says
 so. Branching and PR mechanics are owned by `git-flow` and `pr`; this skill
 only sequences them.
@@ -65,7 +66,21 @@ Respect the layers (see README › Architecture):
 ## 3. Branch
 
 `git-flow` → `feature/<slug>` from an up-to-date `develop`. One concern per
-branch.
+branch, and keep it small: a PR over ~1,000 changed lines (not counting
+vendored code or generated files) almost always gets findings and is hard to
+revert. Split it (e.g. engine first, UI second) unless the parts can't land
+apart.
+
+**Risk tier.** Decide it now from what the change touches (the change sets
+the tier, not who wrote it); it decides stage 6 and how the PR is approved.
+When rows overlap, the highest tier wins (a LAN receiver behind an off-by-default
+setting is still High), except `release/*`, which is Medium as stated.
+
+| Tier | Touches | Review (stage 6) | Approval (stage 7) |
+|---|---|---|---|
+| Low | docs (README), copy, tests only, additive app changes behind a setting that is off by default | `/code-review` | the user's "go" to open the PR covers it |
+| Medium | ordinary app changes (UI, player, domain, data); the process itself (`.claude/skills/*`, `.github/pull_request_template.md`), since it decides how everything else is reviewed; `release/*` (always Medium: everything in it already passed its own PR's review at that PR's tier; the release review checks the bump and that each PR in the changelog went through) | `/code-review` | the user approves the PR before it lands |
+| High | anything listening on the LAN or parsing what arrives from it (`data/server`, `data/upnp`, `:airplay`, native C/C++), crypto/pairing, file access, `.github/workflows/*`, build/signing config, `hotfix/*` | `/code-review` + `/security-review`, both blocking | the user reviews the risky files themselves (point them to the exact paths) and approves |
 
 ## 4. Build
 
@@ -106,25 +121,77 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
   DLNA app/TV on the same Wi‑Fi).
 - A fresh clone needs `local.properties` with `sdk.dir=…` (gitignored).
 
-**Exit:** everything above is green, and the change was seen working, not
-just compiled.
+- **Show, don't claim.** Paste the command and its result (test counts,
+  `BUILD SUCCESSFUL`, the screenshot, the log lines) instead of "tests
+  pass". Anything not run is said as such ("not checked on iOS device").
+- UI changes are also checked against the design rules: the tokens and
+  components in stage 2, contrast ≥ 4.5:1 for text, touch targets ≥ 48dp /
+  44pt, labelled controls. For a wider UI pass, the `ui-ux-pro-max` data
+  lives in another repo on this machine:
+  `python3 /Users/admin/ProjectPos/PortForMe/.agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain ux`
+  (or `--stack jetpack-compose`). If that path doesn't exist, use the rules
+  above and say the skill wasn't available.
 
-## 6. Review
+**Exit:** everything above is green with its output shown, and the change
+was seen working, not just compiled.
 
-`/code-review` on the diff, `/simplify` for cleanups, and `/security-review`
-when touching the HTTP server, SOAP parsing or anything exposed to the LAN.
-Fix findings before opening the PR.
+## 6. Review (before the PR, blocking)
+
+A reviewer with fresh context reads the diff against the whole repo and the
+change's intent: does it solve the problem (for a bug: the root cause, not
+the symptom), does it fit the system, does it break something else.
+
+- Every tier: `/code-review`. Medium and High also get a review from fresh
+  context: a new subagent (Agent tool, not a fork of this session) given
+  the diff range and the change's intent. Use `/simplify` for cleanups if
+  the diff grew.
+- High tier: also `/security-review`. Before acting on a finding, have a
+  separate subagent try to refute it (read the code path, decide real or
+  false positive with a confidence); keep only the ones that hold up.
+- Each finding is tagged **Important** (a real bug or risk), **Nit**, or
+  **Pre-existing** (not introduced by this change: note it, don't block on
+  it, open an issue or a follow-up).
+- **Every finding gets an answer**: fixed (with the commit), or closed with a
+  one-line reason (false positive, intentional, not worth it). An open
+  Important finding blocks the PR.
+- Fix the **class** of bug, not just the instance the reviewer pointed at
+  (grep for the same pattern), and add a test that fails without the fix.
+- **Converge:** after the first full review, re-review only the new diff and
+  don't repeat answered findings. After **three** review-and-fix rounds,
+  stop and rethink the approach with the user instead of patching again.
+- A finding that keeps coming back (across PRs) is fixed at the source: a
+  rule in this skill, a test helper, a lint/convention plugin, or the
+  design system — not by remembering it next time.
+
+**Exit:** reviews done for the tier, every finding answered, fixes verified
+again with stage 5 (output shown).
 
 ## 7. PR into develop
 
 ```bash
 git push -u origin feature/<slug>
-gh pr create --base develop --title "feat(scope): …" --body "…"
+gh pr create --base develop --title "feat(scope): …" --body-file <filled template>
+gh pr comment <n> --body "Approved by the author at $(git rev-parse HEAD)"   # the user's go covers this head
 ```
 
-Body: what changed, why, how it was verified (stage 5, including the iOS
-check). Land it with the `pr` skill (squash, delete the branch, sync
-`develop`). Never push to `develop` directly.
+Use `.github/pull_request_template.md`: what and why, risk tier, testing
+(the commands that ran and what they returned, screenshots for UI, what was
+*not* checked), review (each finding and how it was answered), and **how to
+revert**. Claude drafts it; the user is the author of record and signs off.
+
+- **Push and open the PR only after the user says so.** Claude's own review
+  never counts as the approval; the user directing the work is the required
+  reviewer (High tier: they look at the risky paths themselves).
+- An approval covers the commits it saw, recorded on the PR as above (full
+  SHA). Every later approval (Medium/High sign-off, or confirming commits
+  made after it) is recorded the same way at the new head. Commits after the
+  last recorded SHA (review fixes) are summarised to the user and confirmed
+  before they're pushed and landed (`pr` skill, step 2). Don't rebase an
+  approved branch; if it had to be, the whole PR is approved again.
+
+PRs into `develop` land with the `pr` skill (squash, delete the branch, sync
+`develop`). Release and hotfix PRs stop here and land in stage 8 step 5.
+Never push to `develop` directly.
 
 ## 8. Release: develop → main
 
@@ -137,9 +204,15 @@ check). Land it with the `pr` skill (squash, delete the branch, sync
      `app-versionCode` (+1, Android)
    - `iosApp/iosApp/Info.plist`: `CFBundleShortVersionString` and `CFBundleVersion`
    - `ServerScreen.kt`: the "Version" row
-4. **PR:** `gh pr create --base main --title "release: vX.Y.Z" --body "<changelog: PR list since last tag>"`.
+4. **PR:** `gh pr create --base main --title "release: vX.Y.Z" --body-file <filled template>`:
+   the changelog (PR list since the last tag) under "What and why", tier
+   Medium, and under "How to revert": "users go back to the previous tag's
+   artifacts; the fix goes forward as a `hotfix/*` PR". Don't revert a release
+   squash on `main`: it carries every PR since the last tag, and the
+   back-merge would remove them from `develop` too.
    CI `Linux (JVM + Android)` must be green, and run the stage-5 iOS check
-   on the release branch.
+   on the release branch. Stages 6–7 apply: `/code-review` of the release
+   diff, and the user approves before it lands.
 5. **Land:** `pr` skill (squash into `main`; it also back-merges into `develop`).
 6. **Tag:** nothing tags automatically.
    ```bash
@@ -160,9 +233,25 @@ check). Land it with the `pr` skill (squash, delete the branch, sync
 
 ## 9. Hotfix: a shipped build is broken
 
-`git-flow` hotfix recipe: `hotfix/<slug>` from `main` → stages 4–6 (a test
-reproducing the bug first) → PR into `main` titled `fix(scope): …` → release
-steps 3 and 5–8 with a **patch** bump.
+`git-flow` hotfix recipe: `hotfix/<slug>` from `main`, at **High** tier, in
+this order:
+
+1. stages 4–6: a test reproducing the bug first, the fix, verify,
+   `/code-review` + `/security-review`;
+2. release step 3: the **patch** version bump, on the hotfix branch;
+3. stage 7 up to opening the PR into `main` (titled `fix(scope): …`), only
+   after the user says so and has looked at the fix;
+4. release steps 5–8: land, tag, build, publish.
+
+Urgency shortens the wait, not the steps.
+
+## When something breaks
+
+A bug that reached `develop` or a release: fix it the usual way (test that
+reproduces it first), then ask **which stage should have caught it** — shape,
+design, a missing test, verify, review, or the tier was too low — and fix that
+stage (this skill, a test, CI) in the same PR or a follow-up. Revert first if
+the fix isn't quick: every PR says how.
 
 ## Guard rails
 
