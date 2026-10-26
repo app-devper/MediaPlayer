@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.data.di
 
+import com.appdevper.mediaplayer.data.renderer.MediaRenderer
+import com.appdevper.mediaplayer.data.repository.CastReceiverRepositoryImpl
 import com.appdevper.mediaplayer.data.repository.DeviceRepositoryImpl
 import com.appdevper.mediaplayer.data.repository.LibraryRepositoryImpl
 import com.appdevper.mediaplayer.data.repository.MediaServerRepositoryImpl
@@ -10,6 +12,8 @@ import com.appdevper.mediaplayer.data.upnp.ContentDirectoryClient
 import com.appdevper.mediaplayer.data.upnp.ControlPoint
 import com.appdevper.mediaplayer.data.upnp.SoapClient
 import com.appdevper.mediaplayer.data.upnp.SsdpEngine
+import com.appdevper.mediaplayer.domain.model.ReceiverStatus
+import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.repository.LibraryRepository
 import com.appdevper.mediaplayer.domain.repository.MediaServerRepository
@@ -49,11 +53,18 @@ val dataModule = module {
     single { ControlPoint(get(), get(), get(AppScope)) }
     single { ContentDirectoryClient(get()) }
     single { MediaServer(get(), get(AppScope), get()) }
+    single { MediaRenderer(get(), get(), get(AppScope)) }
 
     // Repositories
     single { SettingsRepositoryImpl() } bind SettingsRepository::class
-    single<DeviceRepository> { DeviceRepositoryImpl(get(), get(AppScope)) }
+    single<DeviceRepository> {
+        val settings = get<SettingsRepositoryImpl>()
+        val renderer = get<MediaRenderer>()
+        // Hide our own renderer only while it runs, so a stale UDN never hides a real device.
+        DeviceRepositoryImpl(get(), get(AppScope)) { if (renderer.state.value is ReceiverStatus.Running) setOf(settings.rendererUdn) else emptySet() }
+    }
     single<LibraryRepository> { LibraryRepositoryImpl(get(), get()) }
     single<RendererRepository> { RendererRepositoryImpl(get(), get()) }
     single<MediaServerRepository> { MediaServerRepositoryImpl(get(), get(), get(), get(), get(AppScope)) }
+    single<CastReceiverRepository> { CastReceiverRepositoryImpl(get(), get()) }
 }
