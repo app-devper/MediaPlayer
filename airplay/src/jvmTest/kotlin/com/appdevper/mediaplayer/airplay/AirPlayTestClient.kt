@@ -33,11 +33,14 @@ internal class AirPlayTestClient(host: String, port: Int) : AutoCloseable {
         val text get() = String(body, Charsets.ISO_8859_1)
     }
 
-    /** RTSP request as on iOS's RAOP connection. Status 0 = the receiver closed the connection. */
-    fun rtsp(method: String, path: String, body: ByteArray = ByteArray(0)): Response {
+    /**
+     * RTSP request as on iOS's RAOP connection (CSeq), or with [sessionId] and no CSeq as iOS does
+     * when it pairs on the AirPlay (video) connection itself. Status 0 = the receiver closed the connection.
+     */
+    fun rtsp(method: String, path: String, body: ByteArray = ByteArray(0), sessionId: String? = null): Response {
         // Like iOS: a GET /info with a Content-Type only asks for the TXT records.
         val headers = buildMap {
-            put("CSeq", (++cseq).toString())
+            if (sessionId == null) put("CSeq", (++cseq).toString()) else put("X-Apple-Session-ID", sessionId)
             put("User-Agent", "AirPlay/600.8.41")
             if (body.isNotEmpty()) put("Content-Type", "application/octet-stream")
         }
@@ -56,7 +59,8 @@ internal class AirPlayTestClient(host: String, port: Int) : AutoCloseable {
     }
 
     /** pair-setup + pair-verify as an iPhone does; returns whether the receiver accepted us. */
-    fun pairVerify(): Boolean {
+    fun pairVerify(sessionId: String? = null): Boolean {
+        fun rtsp(method: String, path: String, body: ByteArray) = rtsp(method, path, body, sessionId)
         val ed = KeyPairGenerator.getInstance("Ed25519").generateKeyPair()
         val edPub = (ed.public as EdECPublicKey).raw()
         val serverEd = rtsp("POST", "/pair-setup", edPub).body

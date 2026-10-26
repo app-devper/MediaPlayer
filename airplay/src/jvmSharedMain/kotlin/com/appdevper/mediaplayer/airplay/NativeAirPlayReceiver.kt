@@ -20,8 +20,17 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
     private val control = Executors.newSingleThreadExecutor { r -> Thread(r, "airplay-control").apply { isDaemon = true } }
     @Volatile private var config: AirPlayConfig? = null
 
+    /** UxPlay log level printed to stderr (logcat on Android): AIRPLAY_LOG=info|debug, default errors only. */
+    private val logLevel: Int = when (System.getenv("AIRPLAY_LOG")?.lowercase()) {
+        "debug" -> 7
+        "info" -> 6
+        else -> 3
+    }
+
     private val listener = object : NativeListener {
-        override fun onLog(level: Int, message: String) = Unit
+        override fun onLog(level: Int, message: String) {
+            if (level <= logLevel) System.err.println("[airplay] ${message.trimEnd()}")
+        }
         override fun onConnections(open: Int) = emit(AirPlayEvent.Connections(open))
         override fun admit(deviceId: String, model: String, name: String): Boolean =
             access.admit(deviceId, model, name).also { if (it) emit(AirPlayEvent.ClientConnecting(name, model, deviceId)) }
@@ -83,7 +92,8 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
 
     private fun startNative(config: AirPlayConfig) {
         val result = NativeAirPlay.start(
-            config.name, config.deviceId, config.keyFile, config.width, config.height, config.fps, config.requirePin, config.video, listener,
+            config.name, config.deviceId, config.keyFile, config.width, config.height, config.fps, config.requirePin, config.video,
+            logLevel, listener,
         )
         if (result != 0) throw AirPlayException(errorText(result))
     }

@@ -15,6 +15,7 @@ internal object NativeAirPlay {
         fps: Int,
         requirePin: Boolean,
         video: Boolean,
+        logLevel: Int,
         listener: NativeListener,
     ): Int
 

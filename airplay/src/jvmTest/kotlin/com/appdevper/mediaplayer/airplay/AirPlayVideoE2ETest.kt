@@ -99,6 +99,17 @@ class AirPlayVideoE2ETest {
     }
 
     @Test
+    fun aSenderThatPairsOnTheVideoConnectionCanPlay() {
+        // What YouTube does: pair-setup/pair-verify on the AirPlay connection itself, then /play.
+        val port = start()
+        AirPlayTestClient("127.0.0.1", port).use { video ->
+            assertTrue(video.pairVerify(sessionId = AirPlayTestClient.SESSION))
+            assertEquals(200, video.http("POST", "/play", playBody, "application/x-apple-binary-plist").status)
+        }
+        assertEquals(listOf("play http://192.168.1.50:8080/clip.mp4 @12.5"), calls.toList())
+    }
+
+    @Test
     fun theLocalHlsServerOnlyAnswersThisDevice() {
         val port = start()
         val lan = assertNotNull(lanAddress())

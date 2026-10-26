@@ -12,9 +12,11 @@ Copied unchanged, except:
   BoringSSL doesn't provide (same output: base64 without newlines).
 
 - AirPlay video (HLS) hardening, since this app turns HLS support on:
-  - `raop.c` `conn_request()`: AirPlay video requests (`X-Apple-Session-ID`, no `CSeq`) are refused
-    with 403 unless the same address has a RAOP connection that completed pair-verify
-    (`conn_has_verified_raop_peer`); upstream takes `/play` from anyone, bypassing PIN pairing.
+  - `raop.c` `conn_request()`: AirPlay video requests (`X-Apple-Session-ID`, no `CSeq`) other than
+    pairing/info (`is_pairing_url`) are refused with 403 unless that connection completed
+    pair-verify (iOS pairs on the AirPlay connection itself for YouTube) or the same address has a
+    verified RAOP connection (`conn_has_verified_raop_peer`); upstream takes `/play` from anyone,
+    bypassing PIN pairing.
     Local HLS server requests are only answered from loopback (`conn_is_loopback`).
   - `pairing.c/.h`: `pairing_session_is_verified()` for the check above.
   - `http_handlers.h` `scrub`/`rate`: a query without `=` dereferenced `NULL + 1`.

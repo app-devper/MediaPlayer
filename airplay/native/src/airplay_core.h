@@ -64,6 +64,7 @@ typedef struct ap_config {
     int width, height, fps;     /* display the client should target (0 = 1920x1080@30) */
     bool require_pin;           /* first connection from a client needs the on-screen PIN */
     bool video;                 /* accept AirPlay video (HLS / URLs) besides mirroring and audio */
+    int log_level;              /* UxPlay logger level passed to the log callback (0 = default: info) */
 } ap_config_t;
 
 /* Starts advertising and accepting clients. Returns 0 on success. Only one receiver per process. */

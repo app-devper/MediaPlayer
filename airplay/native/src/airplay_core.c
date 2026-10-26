@@ -316,7 +316,7 @@ int ap_start(const ap_config_t *config, const ap_callbacks_t *callbacks) {
         return -2;
     }
     raop_set_log_callback(raop, on_log, NULL);
-    raop_set_log_level(raop, LOGGER_INFO);
+    raop_set_log_level(raop, config->log_level > 0 ? config->log_level : LOGGER_INFO);
 
     char device_id[18];
     ap_format_device_id(config->hw_addr, device_id);

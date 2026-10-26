@@ -141,9 +141,22 @@ conn_is_loopback(raop_conn_t *conn) {
     return false;
 }
 
+/* MediaPlayer: requests a client uses to authenticate, allowed before it is verified. */
+static bool
+is_pairing_url(const char *url) {
+    static const char *const urls[] = {
+        "/pair-setup", "/pair-verify", "/pair-setup-pin", "/pair-pin-start", "/fp-setup", "/info", "/server-info",
+    };
+    for (size_t i = 0; i < sizeof(urls) / sizeof(urls[0]); i++) {
+        if (!strcmp(url, urls[i])) return true;
+    }
+    return false;
+}
+
 /* MediaPlayer: AirPlay video requests (/play, /scrub, /reverse...) are only taken from a client
- * that completed pair-verify on a RAOP connection from the same address. Upstream accepts them
- * from anyone on the network, bypassing PIN pairing. */
+ * that completed pair-verify, on this connection (iOS pairs on the AirPlay connection itself for
+ * YouTube) or on a RAOP connection from the same address. Upstream accepts them from anyone on
+ * the network, bypassing PIN pairing. */
 static bool
 conn_has_verified_raop_peer(raop_t *raop, raop_conn_t *conn) {
     for (int i = 1; ; i++) {
@@ -300,8 +313,8 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
 
     /* MediaPlayer: see conn_is_loopback / conn_has_verified_raop_peer */
     if ((hls_request && !conn_is_loopback(conn)) ||
-        (client_session_id && !cseq && conn->connection_type != CONNECTION_TYPE_AIRPLAY &&
-         !conn_has_verified_raop_peer(raop, conn))) {
+        (client_session_id && !cseq && !is_pairing_url(url) &&
+         !pairing_session_is_verified(conn->session) && !conn_has_verified_raop_peer(raop, conn))) {
         logger_log(raop->logger, LOGGER_WARNING, "rejecting AirPlay video/HLS request from an unverified client");
         *response = http_response_create();
         http_response_init(*response, protocol, 403, "Forbidden");

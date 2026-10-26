@@ -243,7 +243,8 @@ static bool lookup_methods(JNIEnv *env, jobject obj) {
 JNIEXPORT jint JNICALL
 Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject thiz, jstring name, jbyteArray hw_addr,
                                                            jstring keyfile, jint width, jint height, jint fps,
-                                                           jboolean require_pin, jboolean video, jobject callbacks) {
+                                                           jboolean require_pin, jboolean video, jint log_level,
+                                                           jobject callbacks) {
     (void) thiz;
     ap_stop();
     if (listener) {
@@ -269,6 +270,7 @@ Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject 
     config.fps = fps;
     config.require_pin = require_pin;
     config.video = video;
+    config.log_level = log_level;
 
     ap_callbacks_t cb = {
         .log = cb_log, .connections = cb_connections, .admit = cb_admit, .show_pin = cb_show_pin,
