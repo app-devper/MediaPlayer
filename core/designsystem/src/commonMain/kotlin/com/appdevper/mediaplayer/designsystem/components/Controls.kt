@@ -48,12 +48,15 @@ fun ThinSlider(
     onValueChangeFinished: (() -> Unit)? = null,
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     enabled: Boolean = true,
+    /** Thumb and played part; e.g. white over video. */
+    activeColor: Color = AppTheme.colors.primary,
+    inactiveColor: Color = AppTheme.colors.trackInactive,
 ) {
     val c = AppTheme.colors
     val colors = SliderDefaults.colors(
-        thumbColor = c.primary,
-        activeTrackColor = c.primary,
-        inactiveTrackColor = c.trackInactive,
+        thumbColor = activeColor,
+        activeTrackColor = activeColor,
+        inactiveTrackColor = inactiveColor,
         disabledActiveTrackColor = c.textTertiary,
         disabledInactiveTrackColor = c.selected,
     )
@@ -67,7 +70,7 @@ fun ThinSlider(
         onValueChangeFinished = onValueChangeFinished,
         interactionSource = source,
         thumb = {
-            Box(Modifier.size(14.dp).clip(CircleShape).background(if (enabled) c.primary else c.textTertiary))
+            Box(Modifier.size(14.dp).clip(CircleShape).background(if (enabled) activeColor else c.textTertiary))
         },
         track = { state ->
             SliderDefaults.Track(
