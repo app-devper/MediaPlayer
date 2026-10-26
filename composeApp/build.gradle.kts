@@ -21,6 +21,7 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":domain"))
             implementation(project(":data"))
+            implementation(project(":core:designsystem"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)

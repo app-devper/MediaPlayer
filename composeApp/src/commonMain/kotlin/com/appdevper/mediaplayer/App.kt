@@ -7,9 +7,9 @@ import coil3.annotation.ExperimentalCoilApi
 import coil3.compose.setSingletonImageLoaderFactory
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import coil3.request.crossfade
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.usecase.AppStartupUseCase
 import com.appdevper.mediaplayer.ui.shell.AppShell
-import com.appdevper.mediaplayer.ui.theme.AppTheme
 import io.ktor.client.HttpClient
 import org.koin.compose.koinInject
 

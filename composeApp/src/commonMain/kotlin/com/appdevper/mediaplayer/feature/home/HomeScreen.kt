@@ -1,10 +1,10 @@
 package com.appdevper.mediaplayer.feature.home
 
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,25 +27,25 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.appdevper.mediaplayer.designsystem.components.CenteredColumn
+import com.appdevper.mediaplayer.designsystem.components.IconTile
+import com.appdevper.mediaplayer.designsystem.components.OutlineCard
+import com.appdevper.mediaplayer.designsystem.components.PillButton
+import com.appdevper.mediaplayer.designsystem.components.PillStyle
+import com.appdevper.mediaplayer.designsystem.components.SectionLabel
+import com.appdevper.mediaplayer.designsystem.components.StatusDot
+import com.appdevper.mediaplayer.designsystem.components.Thumbnail
+import com.appdevper.mediaplayer.designsystem.components.interactive
+import com.appdevper.mediaplayer.designsystem.icons.AppIcons
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.feature.shell.ShellUiState
 import com.appdevper.mediaplayer.platform.deviceLabel
-import com.appdevper.mediaplayer.ui.components.CenteredColumn
-import com.appdevper.mediaplayer.ui.components.OutlineCard
-import com.appdevper.mediaplayer.ui.components.PillButton
-import com.appdevper.mediaplayer.ui.components.PillStyle
-import com.appdevper.mediaplayer.ui.components.SectionLabel
-import com.appdevper.mediaplayer.ui.components.StatusDot
-import com.appdevper.mediaplayer.ui.components.Thumbnail
-import com.appdevper.mediaplayer.ui.components.IconTile
-import com.appdevper.mediaplayer.ui.components.icon
-import com.appdevper.mediaplayer.ui.components.interactive
-import com.appdevper.mediaplayer.ui.components.subtitle
-import com.appdevper.mediaplayer.ui.icons.AppIcons
-import com.appdevper.mediaplayer.ui.theme.AppTheme
-import com.appdevper.mediaplayer.ui.theme.Radius
+import com.appdevper.mediaplayer.ui.icon
+import com.appdevper.mediaplayer.ui.subtitle
 
 /** Landing page: greeting, servers as suggestion cards, "Play on" chips, share card. */
 @OptIn(ExperimentalLayoutApi::class)

@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.ui.components
+package com.appdevper.mediaplayer.designsystem.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -16,8 +16,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
-import com.appdevper.mediaplayer.ui.theme.AppTheme
-import com.appdevper.mediaplayer.ui.theme.Radius
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import com.appdevper.mediaplayer.designsystem.theme.Radius
 
 @Composable
 fun IconTile(icon: ImageVector, modifier: Modifier = Modifier, size: Dp = 40.dp, shape: Shape = Radius.medium, tint: Color = AppTheme.colors.textPrimary) {

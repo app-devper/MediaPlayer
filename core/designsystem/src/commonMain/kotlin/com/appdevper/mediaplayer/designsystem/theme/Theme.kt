@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.ui.theme
+package com.appdevper.mediaplayer.designsystem.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape

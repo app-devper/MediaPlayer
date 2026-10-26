@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.ui.components
+package com.appdevper.mediaplayer.designsystem.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.appdevper.mediaplayer.ui.theme.AppTheme
-import com.appdevper.mediaplayer.ui.theme.Radius
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import com.appdevper.mediaplayer.designsystem.theme.Radius
 
 @Composable
 fun EmptyState(

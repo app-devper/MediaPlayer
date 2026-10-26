@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.ui.components
+package com.appdevper.mediaplayer.designsystem.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.appdevper.mediaplayer.ui.theme.AppTheme
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 
 @Composable
 fun AppSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {

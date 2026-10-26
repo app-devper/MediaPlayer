@@ -1,9 +1,9 @@
-package com.appdevper.mediaplayer.ui.components
+package com.appdevper.mediaplayer.ui
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.appdevper.mediaplayer.ui.icons.AppIcons
 
 fun MediaKind.icon(): ImageVector = when (this) {
     MediaKind.FOLDER -> AppIcons.Folder

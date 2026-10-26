@@ -17,15 +17,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.appdevper.mediaplayer.designsystem.components.GhostIconButton
+import com.appdevper.mediaplayer.designsystem.components.Thumbnail
+import com.appdevper.mediaplayer.designsystem.components.interactive
+import com.appdevper.mediaplayer.designsystem.icons.AppIcons
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.feature.shell.ShellUiState
-import com.appdevper.mediaplayer.ui.components.GhostIconButton
-import com.appdevper.mediaplayer.ui.components.Thumbnail
-import com.appdevper.mediaplayer.ui.components.icon
-import com.appdevper.mediaplayer.ui.components.interactive
-import com.appdevper.mediaplayer.ui.icons.AppIcons
-import com.appdevper.mediaplayer.ui.theme.AppTheme
-import com.appdevper.mediaplayer.ui.theme.Radius
+import com.appdevper.mediaplayer.ui.icon
 
 @Composable
 internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: () -> Unit) {

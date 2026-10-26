@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.ui.components
+package com.appdevper.mediaplayer.designsystem.components
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column

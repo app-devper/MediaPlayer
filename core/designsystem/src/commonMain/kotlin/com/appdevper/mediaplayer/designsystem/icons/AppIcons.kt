@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.ui.icons
+package com.appdevper.mediaplayer.designsystem.icons
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor

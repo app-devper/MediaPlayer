@@ -6,16 +6,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.only
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,19 +31,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import com.appdevper.mediaplayer.designsystem.components.GhostIconButton
+import com.appdevper.mediaplayer.designsystem.components.IconTile
+import com.appdevper.mediaplayer.designsystem.components.ListRow
+import com.appdevper.mediaplayer.designsystem.components.interactive
+import com.appdevper.mediaplayer.designsystem.icons.AppIcons
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.feature.shell.ShellUiState
 import com.appdevper.mediaplayer.platform.AirPlayButton
 import com.appdevper.mediaplayer.platform.deviceLabel
 import com.appdevper.mediaplayer.platform.supportsAirPlay
-import com.appdevper.mediaplayer.ui.components.GhostIconButton
-import com.appdevper.mediaplayer.ui.components.IconTile
-import com.appdevper.mediaplayer.ui.components.ListRow
-import com.appdevper.mediaplayer.ui.components.interactive
-import com.appdevper.mediaplayer.ui.components.subtitle
-import com.appdevper.mediaplayer.ui.icons.AppIcons
-import com.appdevper.mediaplayer.ui.theme.AppTheme
-import com.appdevper.mediaplayer.ui.theme.Radius
+import com.appdevper.mediaplayer.ui.subtitle
 
 @Composable
 internal fun TopBar(
