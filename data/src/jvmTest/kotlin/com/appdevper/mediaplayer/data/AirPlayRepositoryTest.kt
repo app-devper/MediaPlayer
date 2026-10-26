@@ -157,6 +157,13 @@ class AirPlayRepositoryTest {
         video.stop()
         assertEquals(CastCommand.Stop, commands.last())
         assertNull(video.info())
+
+        // YouTube's "next": /stop, then /rate 1 before the new /play. That rate must not resume the
+        // stopped video (the old song played until the new one loaded).
+        val before = commands.size
+        video.setRate(1f)
+        video.seek(10f)
+        assertEquals(before, commands.size)
         collecting.cancel()
     }
 

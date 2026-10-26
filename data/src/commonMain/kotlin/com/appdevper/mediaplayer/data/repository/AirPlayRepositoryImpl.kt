@@ -86,11 +86,15 @@ class AirPlayRepositoryImpl(
             if (startSeconds > 0f) _commands.tryEmit(CastCommand.Seek((startSeconds * 1000).toLong()))
         }
 
+        // Only while a video is current: after /stop, YouTube sends /rate 1 before the next /play,
+        // which would otherwise resume the stopped one.
         override fun seek(seconds: Float) {
+            if (videoId == null) return
             _commands.tryEmit(CastCommand.Seek((seconds * 1000).toLong()))
         }
 
         override fun setRate(rate: Float) {
+            if (videoId == null) return
             _commands.tryEmit(if (rate > 0f) CastCommand.Play else CastCommand.Pause)
         }
 

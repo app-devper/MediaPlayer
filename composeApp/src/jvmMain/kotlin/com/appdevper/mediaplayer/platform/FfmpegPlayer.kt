@@ -176,10 +176,12 @@ class FfmpegPlayer(
         this.gain = gain.coerceIn(0f, 1f)
     }
 
+    /**
+     * Silences at once and returns; the player's threads finish and free FFmpeg's resources on
+     * their own (a network read is interrupted via [interrupt]). Never blocks the UI thread.
+     */
     fun release() {
         closing = true
-        listOf(videoQueue, audioQueue).forEach { q -> q.forEach { it.pkt?.let(::freePacket) }; q.clear() }
-        demuxThread.join(2_000)
         output.close()
     }
 
@@ -283,6 +285,7 @@ class FfmpegPlayer(
             closing = true
             videoThread?.join(1_000)
             audioThread?.join(1_000)
+            listOf(videoQueue, audioQueue).forEach { q -> q.forEach { it.pkt?.let(::freePacket) }; q.clear() }
             avformat_close_input(fmt)
         }
     }
@@ -513,7 +516,7 @@ class SoundCardOutput : PcmOutput {
 
     override fun write(pcm: ByteArray) {
         val l = line ?: run { Thread.sleep((pcm.size / maxOf(bytesPerMs, 1.0)).toLong()); return } // no device: keep time
-        l.write(pcm, 0, pcm.size)
+        if (l.isOpen) runCatching { l.write(pcm, 0, pcm.size) } // closed by release() meanwhile: drop
     }
 
     override fun bufferedMs(): Long {
@@ -524,5 +527,7 @@ class SoundCardOutput : PcmOutput {
     override fun pause() { line?.stop() }
     override fun resume() { line?.start() }
     override fun flush() { line?.flush() }
-    override fun close() { line?.close() }
+    override fun close() {
+        line?.let { it.stop(); it.flush(); it.close() }
+    }
 }
