@@ -138,9 +138,10 @@ class AirPlayRepositoryTest {
         video.setRate(1f)
         assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(60_000), CastCommand.Play), commands.drop(1))
 
-        // Played to the end: the sender is told it's over.
-        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 300_000, 300_000)))
-        assertEquals(-1.0, video.info()?.durationSeconds)
+        // Played to the end: reported like an Apple TV does (at the end, paused), so the sender decides
+        // what's next. Duration -1 made UxPlay drop the connection and YouTube showed "Something went wrong".
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 299_400, 300_000)))
+        assertEquals(AirPlayVideoInfo(300.0, 300.0, playing = false), video.info())
 
         // The user played something else here: also over.
         repo.publish(ReceiverPlayback(load.entry.copy(id = "nas-movie", streamUrl = "http://nas/movie.mp4"), RendererStatus(TransportState.PLAYING, 0, 0)))

@@ -129,10 +129,12 @@ class AirPlayRepositoryImpl(
                 return if (videoLoaded) AirPlayVideoInfo(-1.0, 0.0, playing = false) else null
             }
             val status = p.status ?: return null
+            // At the end: report the end, paused, as an Apple TV does; the sender then plays the next
+            // video or stops. (Duration -1, UxPlay's "finished", drops the sender's connection.)
             val finished = status.state == TransportState.STOPPED && status.durationMs > 0 && status.positionMs >= status.durationMs - 1_000
             return AirPlayVideoInfo(
-                durationSeconds = if (finished) -1.0 else status.durationMs / 1000.0,
-                positionSeconds = status.positionMs / 1000.0,
+                durationSeconds = status.durationMs / 1000.0,
+                positionSeconds = (if (finished) status.durationMs else status.positionMs) / 1000.0,
                 playing = status.state == TransportState.PLAYING || status.state == TransportState.TRANSITIONING,
             )
         }
