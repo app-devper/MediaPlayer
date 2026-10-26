@@ -37,6 +37,8 @@ actual fun NativeMediaPlayer(
     volume: Float,
     commands: Flow<LocalPlayerCommand>,
     onStatus: (RendererStatus) -> Unit,
+    fullscreen: Boolean,
+    onToggleFullscreen: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     val ended by rememberUpdatedState(onEnded)
@@ -107,11 +109,13 @@ actual fun NativeMediaPlayer(
         }
     }
     LaunchedEffect(player, volume) { player.volume = volume.coerceIn(0f, 1f) }
+    val toggle by rememberUpdatedState(onToggleFullscreen)
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
                 this.player = player
                 useController = true
+                if (onToggleFullscreen != null) setFullscreenButtonClickListener { toggle?.invoke() }
                 if (isAudio) {
                     controllerShowTimeoutMs = 0
                     controllerHideOnTouch = false
@@ -119,6 +123,7 @@ actual fun NativeMediaPlayer(
                 }
             }
         },
+        update = { view -> if (onToggleFullscreen != null) view.setFullscreenButtonState(fullscreen) },
         modifier = modifier,
     )
 }

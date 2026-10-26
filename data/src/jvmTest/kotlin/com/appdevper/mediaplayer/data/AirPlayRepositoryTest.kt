@@ -141,8 +141,18 @@ class AirPlayRepositoryTest {
         assertEquals(-1.0, video.info()?.durationSeconds)
 
         // The user played something else here: also over.
-        repo.publish(ReceiverPlayback(load.entry.copy(streamUrl = "http://nas/movie.mp4"), RendererStatus(TransportState.PLAYING, 0, 0)))
+        repo.publish(ReceiverPlayback(load.entry.copy(id = "nas-movie", streamUrl = "http://nas/movie.mp4"), RendererStatus(TransportState.PLAYING, 0, 0)))
         assertEquals(-1.0, video.info()?.durationSeconds)
+
+        // YouTube's "next video": same local URL again, must still be a new item.
+        video.play(url, startSeconds = 0f)
+        val next = assertIs<CastCommand.Load>(commands.last())
+        assertEquals(url, next.entry.streamUrl)
+        assertTrue(next.entry.id != load.entry.id, "a new item, so the player loads the new video")
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.PLAYING, 50_000, 300_000)))
+        assertNull(video.info()) // the old video's progress isn't reported as the new one's
+        repo.publish(ReceiverPlayback(next.entry, RendererStatus(TransportState.PLAYING, 1_000, 200_000)))
+        assertEquals(AirPlayVideoInfo(200.0, 1.0, playing = true), video.info())
 
         video.stop()
         assertEquals(CastCommand.Stop, commands.last())

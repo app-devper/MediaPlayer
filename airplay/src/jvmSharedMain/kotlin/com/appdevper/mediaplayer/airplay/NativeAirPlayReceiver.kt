@@ -55,17 +55,24 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
         override fun onAudio(data: ByteArray, ptsNs: Long) { sink?.onAudio(data, ptsNs) }
         override fun onAudioFlush() { sink?.onAudioFlush() }
         override fun onVolume(db: Float) = emit(AirPlayEvent.Volume(db))
-        override fun onVideoPlay(url: String, startSeconds: Float) { video?.play(url, startSeconds) }
-        override fun onVideoScrub(seconds: Float) { video?.seek(seconds) }
-        override fun onVideoRate(rate: Float) { video?.setRate(rate) }
-        override fun onVideoPlaybackStop() { video?.stop() }
-        override fun videoInfo(): DoubleArray? = video?.info()?.let {
+        override fun onVideoPlay(url: String, startSeconds: Float) {
+            debug("video play $url from ${startSeconds}s")
+            video?.play(url, startSeconds)
+        }
+        override fun onVideoScrub(seconds: Float) { debug("video seek ${seconds}s"); video?.seek(seconds) }
+        override fun onVideoRate(rate: Float) { debug("video rate $rate"); video?.setRate(rate) }
+        override fun onVideoPlaybackStop() { debug("video stop"); video?.stop() }
+        override fun videoInfo(): DoubleArray? = video?.info().also { debug("video info -> $it") }?.let {
             doubleArrayOf(it.durationSeconds, it.positionSeconds, if (it.playing) 1.0 else 0.0)
         }
         override fun onReset(reason: Int) {
             emit(AirPlayEvent.ConnectionLost(reason))
             control.execute { config?.let { runCatching { startNative(it) } } }
         }
+    }
+
+    private fun debug(message: String) {
+        if (logLevel >= 6) System.err.println("[airplay] app: $message")
     }
 
     private fun emit(event: AirPlayEvent) {

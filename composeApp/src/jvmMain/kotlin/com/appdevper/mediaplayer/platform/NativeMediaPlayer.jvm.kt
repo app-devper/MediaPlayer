@@ -1,6 +1,7 @@
 package com.appdevper.mediaplayer.platform
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -56,6 +58,8 @@ actual fun NativeMediaPlayer(
     volume: Float,
     commands: Flow<LocalPlayerCommand>,
     onStatus: (RendererStatus) -> Unit,
+    fullscreen: Boolean,
+    onToggleFullscreen: (() -> Unit)?,
 ) {
     val player = remember(url) { FfmpegPlayer(url, autoPlay) }
     val status by player.status.collectAsStateWithLifecycle()
@@ -124,7 +128,11 @@ actual fun NativeMediaPlayer(
         inactiveTrackColor = Color.White.copy(alpha = 0.25f),
     )
     Column(modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.weight(1f).fillMaxWidth()
+                .then(if (onToggleFullscreen != null) Modifier.pointerInput(onToggleFullscreen) { detectTapGestures(onDoubleTap = { onToggleFullscreen() }) } else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
             val f = frame
             if (!isAudio && f != null) {
                 val bitmap = remember(f) {
@@ -176,6 +184,11 @@ actual fun NativeMediaPlayer(
                 modifier = Modifier.padding(start = 4.dp).width(120.dp),
                 colors = onVideoSlider,
             )
+            if (onToggleFullscreen != null) {
+                IconButton(onClick = onToggleFullscreen) {
+                    Icon(if (fullscreen) AppIcons.Minimize else AppIcons.Maximize, if (fullscreen) "Exit full screen" else "Full screen", tint = Color.White)
+                }
+            }
         }
     }
 }

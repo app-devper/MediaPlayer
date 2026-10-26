@@ -1,6 +1,7 @@
 package com.appdevper.mediaplayer.feature.mirror
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,15 +19,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.appdevper.mediaplayer.designsystem.components.GhostIconButton
 import com.appdevper.mediaplayer.designsystem.components.IconTile
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.platform.AirPlayMirrorView
+import com.appdevper.mediaplayer.ui.LocalFullscreen
 import org.koin.compose.viewmodel.koinViewModel
 
 /** The mirrored screen of an iPhone/iPad/Mac, or what's playing from it. */
@@ -35,12 +39,24 @@ fun MirrorScreen() {
     val vm = koinViewModel<MirrorViewModel>()
     val state by vm.uiState.collectAsStateWithLifecycle()
     val activity = state.activity
-    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+    val fullscreen = LocalFullscreen.current
+    Box(
+        Modifier.fillMaxSize().background(Color.Black)
+            .pointerInput(fullscreen) { detectTapGestures(onDoubleTap = { if (activity.mirroring) fullscreen.toggle() }) },
+        contentAlignment = Alignment.Center,
+    ) {
         val size = state.videoSize
         if (activity.mirroring) {
             val ratio = size?.let { it.width.toFloat() / it.height }?.takeIf { it > 0f } ?: (16f / 9f)
             AirPlayMirrorView(vm.player, Modifier.aspectRatio(ratio, matchHeightConstraintsFirst = ratio < 1f))
-            activity.client?.let { SenderChip("Mirroring $it", Modifier.align(Alignment.TopStart).padding(12.dp)) }
+            if (!fullscreen.isFullscreen) activity.client?.let { SenderChip("Mirroring $it", Modifier.align(Alignment.TopStart).padding(12.dp)) }
+            GhostIconButton(
+                if (fullscreen.isFullscreen) AppIcons.Minimize else AppIcons.Maximize,
+                if (fullscreen.isFullscreen) "Exit full screen" else "Full screen",
+                fullscreen::toggle,
+                modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                tint = Color.White,
+            )
         } else {
             Message(
                 icon = if (activity.audioOnly) AppIcons.Music else AppIcons.Cast,

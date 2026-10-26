@@ -29,7 +29,10 @@ import org.bytedeco.ffmpeg.global.avformat.avformat_close_input
 import org.bytedeco.ffmpeg.global.avformat.avformat_find_stream_info
 import org.bytedeco.ffmpeg.global.avformat.avformat_open_input
 import org.bytedeco.ffmpeg.global.avformat.avformat_seek_file
+import org.bytedeco.ffmpeg.global.avcodec.AVDISCARD_ALL
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO
+import org.bytedeco.ffmpeg.global.avutil.AV_LOG_WARNING
+import org.bytedeco.ffmpeg.global.avutil.av_log_set_level
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_VIDEO
 import org.bytedeco.ffmpeg.global.avutil.AV_NOPTS_VALUE
 import org.bytedeco.ffmpeg.global.avutil.AV_PIX_FMT_BGRA
@@ -133,6 +136,11 @@ class FfmpegPlayer(
     }
 
     private val demuxThread = Thread(::demux, "ffmpeg-demux").apply { isDaemon = true }
+    private val openedAtNs = System.nanoTime()
+
+    private fun debug(message: String) {
+        if (DEBUG) System.err.println("[player] $message (+${(System.nanoTime() - openedAtNs) / 1_000_000} ms)")
+    }
 
     init {
         demuxThread.start()
@@ -189,11 +197,20 @@ class FfmpegPlayer(
         val options = AVDictionary(null)
         // Only network protocols: a playlist from a sender must not reach local files.
         av_dict_set(options, "protocol_whitelist", "http,https,tcp,tls,crypto", 0)
+        // YouTube's HLS segment URLs have no file extension; FFmpeg's HLS demuxer refuses those by
+        // default. That check guards against playlists pointing at local files, which the
+        // protocol whitelist above already rules out.
+        av_dict_set(options, "extension_picky", "0", 0)
         av_dict_set(options, "rw_timeout", "15000000", 0)
         av_dict_set(options, "reconnect", "1", 0)
+        // Probe little: HLS from YouTube lists many variants, and probing them all takes seconds.
+        fmt.probesize(1_000_000)
+        fmt.max_analyze_duration(1_000_000)
+        debug("open $url")
         val opened = avformat_open_input(fmt, url, null, options)
         av_dict_free(options)
         if (opened < 0) {
+            debug("open failed: $opened")
             fail("Can't open this media (error $opened)")
             return
         }
@@ -204,12 +221,18 @@ class FfmpegPlayer(
                 fail("Can't read this media")
                 return
             }
+            debug("stream info: ${fmt.nb_streams()} streams, duration ${fmt.duration()} us")
             val durationUs = fmt.duration()
             _status.update { it.copy(durationMs = if (durationUs == AV_NOPTS_VALUE || durationUs <= 0) 0 else durationUs / 1000) }
 
             val videoIndex = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, null as PointerPointer<*>?, 0)
             val audioIndex = av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, videoIndex, null as PointerPointer<*>?, 0)
             hasAudio = audioIndex >= 0
+            // Don't fetch what we won't play (HLS stops downloading other variants' segments).
+            for (i in 0 until fmt.nb_streams()) {
+                if (i != videoIndex && i != audioIndex) fmt.streams(i).discard(AVDISCARD_ALL)
+            }
+            debug("playing video stream $videoIndex, audio stream $audioIndex")
             if (videoIndex >= 0) videoThread = Thread({ videoLoop(fmt, videoIndex) }, "ffmpeg-video").apply { isDaemon = true; start() }
             else videoEnded = true
             if (audioIndex >= 0) audioThread = Thread({ audioLoop(fmt, audioIndex) }, "ffmpeg-audio").apply { isDaemon = true; start() }
@@ -275,6 +298,7 @@ class FfmpegPlayer(
     private fun freePacket(pkt: AVPacket) = av_packet_free(pkt)
 
     private fun fail(message: String) {
+        debug("error: $message")
         _status.update { it.copy(error = message, playing = false, buffering = false) }
     }
 
@@ -332,6 +356,7 @@ class FfmpegPlayer(
                     }
                     val s = sws ?: sws_alloc_context()?.also { sws = it }
                     if (s != null && sws_scale_frame(s, bgra, frame) >= 0) {
+                        if (_frames.value == null) debug("first picture ${w}x$h at $pts ms")
                         _frames.value = BgraFrame(w, h, packedRows(bgra, w, h))
                     }
                     if (!hasAudio) _status.update { it.copy(positionMs = maxOf(pts, 0), buffering = false) }
@@ -460,6 +485,13 @@ class FfmpegPlayer(
     private companion object {
         const val MAX_QUEUED = 256
         const val LATE_DROP_MS = 150
+
+        /** AIRPLAY_LOG=info|debug also logs the player (and FFmpeg's own warnings). */
+        val DEBUG = System.getenv("AIRPLAY_LOG") != null
+
+        init {
+            if (DEBUG) av_log_set_level(AV_LOG_WARNING)
+        }
     }
 }
 

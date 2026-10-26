@@ -34,6 +34,9 @@ expect fun NativeMediaPlayer(
     volume: Float = 1f,
     commands: Flow<LocalPlayerCommand> = emptyFlow(),
     onStatus: (RendererStatus) -> Unit = {},
+    /** Shows a full-screen button (desktop also: double-click) when set; iOS uses AVKit's own. */
+    fullscreen: Boolean = false,
+    onToggleFullscreen: (() -> Unit)? = null,
 )
 
 /** True where the OS offers AirPlay routing (iOS). */
@@ -46,6 +49,13 @@ expect fun AirPlayButton(modifier: Modifier = Modifier)
 /** Draws AirPlay screen mirroring from [player] (Android: a SurfaceView; desktop: decoded frames). */
 @Composable
 expect fun AirPlayMirrorView(player: AirPlayPlayer, modifier: Modifier = Modifier)
+
+/**
+ * Puts the platform in or out of full screen (desktop: the window; Android: system bars and
+ * landscape). Calls [onExit] when the user leaves it the platform's way (Esc, Back).
+ */
+@Composable
+expect fun SystemFullscreenEffect(fullscreen: Boolean, onExit: () -> Unit)
 
 /** "Android" / "iOS" / OS name — shown for the local playback target. */
 expect val deviceLabel: String

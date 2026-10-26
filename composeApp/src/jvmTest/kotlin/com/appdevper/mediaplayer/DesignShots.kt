@@ -9,6 +9,8 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -17,17 +19,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.di.domainModule
 import com.appdevper.mediaplayer.di.presentationModule
+import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
-import com.appdevper.mediaplayer.airplay.AirPlayPlayer
-import com.appdevper.mediaplayer.domain.model.AirPlayActivity
-import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
@@ -38,8 +40,8 @@ import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import com.appdevper.mediaplayer.ui.shell.AppShell
 import com.appdevper.mediaplayer.ui.shell.BrowseRoute
 import com.appdevper.mediaplayer.ui.shell.HomeRoute
-import com.appdevper.mediaplayer.ui.shell.PlayerRoute
 import com.appdevper.mediaplayer.ui.shell.MirrorRoute
+import com.appdevper.mediaplayer.ui.shell.PlayerRoute
 import com.appdevper.mediaplayer.ui.shell.ServerRoute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,11 +60,14 @@ import kotlin.test.Test
 class DesignShots {
     private val out = System.getenv("SHOT_DIR")
 
+    /** Renders the app to SHOT_DIR; with [always] it also runs without SHOT_DIR (for [act]'s checks). */
     private fun shot(
         name: String, w: Int, h: Int, dark: Boolean, setup: (PlaybackSession) -> Unit = {}, start: Any = HomeRoute,
         airPlay: FakeAirPlay = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook")),
+        always: Boolean = false,
+        act: ComposeUiTest.() -> Unit = {},
     ) {
-        if (out == null) return
+        if (out == null && !always) return
         val server = FakeServer().also { runBlocking { it.start(FakeSettings().serverSettings.value) } }
         val koin = startKoin {
             modules(
@@ -89,8 +94,12 @@ class DesignShots {
                     }
                 }
                 waitForIdle()
-                val bmp = onRoot().captureToImage().asSkiaBitmap()
-                File(out, "$name.png").writeBytes(Image.makeFromBitmap(bmp).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+                act()
+                waitForIdle()
+                if (out != null) {
+                    val bmp = onRoot().captureToImage().asSkiaBitmap()
+                    File(out, "$name.png").writeBytes(Image.makeFromBitmap(bmp).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+                }
             }
         } finally {
             stopKoin()
@@ -109,6 +118,24 @@ class DesignShots {
     }, start = PlayerRoute)
     @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1100, dark = true, start = ServerRoute)
     @Test fun mirrorWaitingDesktopDark() = shot("6-mirror-waiting-desktop-dark", 1280, 800, dark = true, start = MirrorRoute)
+    @Test fun mirrorFullscreenDesktopDark() = shot(
+        "8-mirror-fullscreen-desktop-dark", 1280, 800, dark = true, start = MirrorRoute, always = true,
+        airPlay = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook")).apply {
+            activity.value = AirPlayActivity(client = "Worawit's iPhone", mirroring = true)
+        },
+    ) {
+        onNodeWithText("Home").assertExists() // sidebar
+        onNodeWithContentDescription("Full screen").performClick()
+        waitForIdle()
+        onNodeWithText("Home").assertDoesNotExist() // app chrome hidden
+        onNodeWithText("Mirroring Worawit's iPhone").assertDoesNotExist()
+        onNodeWithContentDescription("Exit full screen").assertExists()
+        onNodeWithContentDescription("Exit full screen").performClick()
+        waitForIdle()
+        onNodeWithText("Home").assertExists()
+        onNodeWithContentDescription("Full screen").performClick() // leave it full screen for the picture
+    }
+
     @Test fun airPlayPinPhoneLight() = shot(
         "7-airplay-pin-phone-light", 400, 860, dark = false,
         airPlay = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook")).apply {

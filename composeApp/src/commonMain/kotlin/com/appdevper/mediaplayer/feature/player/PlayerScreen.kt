@@ -67,6 +67,7 @@ import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.platform.NativeMediaPlayer
+import com.appdevper.mediaplayer.ui.LocalFullscreen
 import com.appdevper.mediaplayer.ui.formatClock
 import com.appdevper.mediaplayer.ui.icon
 import org.koin.compose.viewmodel.koinViewModel
@@ -89,49 +90,58 @@ fun PlayerScreen() {
 private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel) {
     val c = AppTheme.colors
     val isAudio = item.kind == MediaKind.AUDIO
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        LazyColumn(Modifier.widthIn(max = 900.dp).fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-            item {
-                Box(
-                    Modifier.fillMaxWidth()
-                        .then(if (isAudio) Modifier.height(280.dp) else Modifier.aspectRatio(16f / 9f))
-                        .clip(Radius.large)
-                        .background(if (isAudio) c.surfaceSecondary else Color.Black),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (isAudio) {
-                        Thumbnail(item.thumbnailUrl, AppIcons.Music, size = 160.dp, shape = Radius.large, modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp))
-                    }
-                    key(item.id, item.streamUrl) {
-                        NativeMediaPlayer(
-                            url = item.streamUrl.orEmpty(),
-                            title = item.title,
-                            isAudio = isAudio,
-                            onEnded = { vm.onLocalEnded() },
-                            modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
-                            autoPlay = state.autoPlay,
-                            volume = if (state.localMuted) 0f else state.localVolume / 100f,
-                            commands = vm.localCommands,
-                            onStatus = vm::reportLocalStatus,
-                        )
+    val fullscreenState = LocalFullscreen.current
+    val fullscreen = fullscreenState.isFullscreen && !isAudio
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // The player stays at this position in both layouts, so going full screen doesn't reload it.
+        Box(
+            if (fullscreen) {
+                Modifier.fillMaxSize().background(Color.Black)
+            } else {
+                Modifier.widthIn(max = 900.dp).fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp)
+                    .then(if (isAudio) Modifier.height(280.dp) else Modifier.aspectRatio(16f / 9f))
+                    .clip(Radius.large)
+                    .background(if (isAudio) c.surfaceSecondary else Color.Black)
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (isAudio) {
+                Thumbnail(item.thumbnailUrl, AppIcons.Music, size = 160.dp, shape = Radius.large, modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp))
+            }
+            key(item.id, item.streamUrl) {
+                NativeMediaPlayer(
+                    url = item.streamUrl.orEmpty(),
+                    title = item.title,
+                    isAudio = isAudio,
+                    onEnded = { vm.onLocalEnded() },
+                    modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
+                    autoPlay = state.autoPlay,
+                    volume = if (state.localMuted) 0f else state.localVolume / 100f,
+                    commands = vm.localCommands,
+                    onStatus = vm::reportLocalStatus,
+                    fullscreen = fullscreen,
+                    onToggleFullscreen = if (isAudio) null else fullscreenState::toggle,
+                )
+            }
+        }
+        if (!fullscreen) {
+            LazyColumn(Modifier.widthIn(max = 900.dp).fillMaxWidth().weight(1f), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                item {
+                    Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.title, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
+                        }
+                        GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, enabled = state.hasPrevious, tint = c.textPrimary)
+                        GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, tint = c.textPrimary)
                     }
                 }
-            }
-            item {
-                Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(item.title, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
-                    }
-                    GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, enabled = state.hasPrevious, tint = c.textPrimary)
-                    GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, tint = c.textPrimary)
+                if (state.queue.size > 1) {
+                    item { SectionLabel("Up next") }
+                    itemsIndexed(state.queue, key = { _, e -> e.id }) { i, e -> QueueRow(e, i == state.index) { vm.playAt(i) } }
                 }
+                item { Spacer(Modifier.height(24.dp)) }
             }
-            if (state.queue.size > 1) {
-                item { SectionLabel("Up next") }
-                itemsIndexed(state.queue, key = { _, e -> e.id }) { i, e -> QueueRow(e, i == state.index) { vm.playAt(i) } }
-            }
-            item { Spacer(Modifier.height(24.dp)) }
         }
     }
 }

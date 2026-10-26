@@ -40,6 +40,8 @@ object AppIcons {
     val ChevronDown = outline("chevron_down", "m6 9 6 6 6-6")
     val ChevronRight = outline("chevron_right", "m9 18 6-6-6-6")
     val Close = outline("close", "M18 6 6 18", "m6 6 12 12")
+    val Maximize = outline("maximize", "M8 3H5a2 2 0 0 0-2 2v3", "M21 8V5a2 2 0 0 0-2-2h-3", "M3 16v3a2 2 0 0 0 2 2h3", "M16 21h3a2 2 0 0 0 2-2v-3")
+    val Minimize = outline("minimize", "M8 3v3a2 2 0 0 1-2 2H3", "M21 8h-3a2 2 0 0 1-2-2V3", "M3 16h3a2 2 0 0 1 2 2v3", "M16 21v-3a2 2 0 0 1 2-2h3")
     val Sidebar = outline("sidebar", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M9 3v18")
     val Menu = outline("menu", "M4 7h16", "M4 12h16", "M4 17h10")
     val Refresh = outline(

@@ -57,22 +57,25 @@ class AirPlayRepositoryImpl(
 
     // Read from native threads (AirPlayVideoControl.info), written from the app scope.
     @Volatile private var playback = ReceiverPlayback()
-    @Volatile private var videoUrl: String? = null
+    /** Entry id of the current AirPlay video; null when none. */
+    @Volatile private var videoId: String? = null
     @Volatile private var videoLoaded = false
+    private var videoSequence = 0
 
     override fun publish(playback: ReceiverPlayback) {
         this.playback = playback
-        val url = playback.entry?.streamUrl
-        if (url != null && url == videoUrl) videoLoaded = true
+        if (playback.entry?.id != null && playback.entry?.id == videoId) videoLoaded = true
     }
 
     /** AirPlay video (YouTube, Safari…) → the same local player as DLNA casts. */
     private val video = object : AirPlayVideoControl {
         override fun play(url: String, startSeconds: Float) {
-            videoUrl = url
+            // YouTube's next video comes at the same local URL: a new id makes the player load it.
+            val id = "airplay-${++videoSequence}"
+            videoId = id
             videoLoaded = false
             val entry = MediaEntry(
-                id = url,
+                id = id,
                 parentId = "-1",
                 title = _activity.value.client?.let { "AirPlay from $it" } ?: "AirPlay video",
                 kind = MediaKind.VIDEO,
@@ -92,15 +95,15 @@ class AirPlayRepositoryImpl(
         }
 
         override fun stop() {
-            if (videoUrl == null) return
-            videoUrl = null
+            if (videoId == null) return
+            videoId = null
             _commands.tryEmit(CastCommand.Stop)
         }
 
         override fun info(): AirPlayVideoInfo? {
-            val url = videoUrl ?: return null
+            val id = videoId ?: return null
             val p = playback
-            if (p.entry?.streamUrl != url) {
+            if (p.entry?.id != id) {
                 // Something else plays here now: tell the sender its video is over.
                 return if (videoLoaded) AirPlayVideoInfo(-1.0, 0.0, playing = false) else null
             }
