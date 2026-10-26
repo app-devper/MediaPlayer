@@ -89,6 +89,9 @@ compose.desktop {
         mainClass = "com.appdevper.mediaplayer.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            // jdeps' suggestion plus what is loaded at runtime: Ktor's Java client (java.net.http)
+            // and TLS with EC certificates.
+            modules("java.instrument", "java.management", "java.prefs", "jdk.unsupported", "java.net.http", "jdk.crypto.ec")
             packageName = "Media Player"
             packageVersion = libs.versions.app.version.get()
             description = "DLNA / UPnP media player and media server"

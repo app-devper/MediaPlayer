@@ -125,12 +125,30 @@ class FfmpegPlayerTest {
     }
 
     /** A VOD HLS stream (1 s segments) of red 320x240 video and a 440 Hz tone. */
-    private fun writeHls(seconds: Int) {
+    @Test
+    fun seeksInAMultiVariantStream() = runBlocking<Unit> {
+        // Like YouTube: a master playlist listing several variants; only one is played.
+        writeHls(seconds = 6, sub = "lo")
+        writeHls(seconds = 6, sub = "hi")
+        File(dir, "master.m3u8").writeText(
+            "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=400000,RESOLUTION=320x240\nlo/index.m3u8\n" +
+                "#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=320x240\nhi/index.m3u8\n",
+        )
+        val p = FfmpegPlayer("http://127.0.0.1:${server.address.port}/master.m3u8", autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 300 } }
+        p.seek(4_000)
+        val afterSeek = withTimeout(10_000) { p.status.first { it.positionMs >= 4_000 && !it.buffering } }
+        assertTrue(afterSeek.positionMs < 5_500, "seeked to ${afterSeek.positionMs}")
+        assertTrue(afterSeek.error == null, "error ${afterSeek.error}")
+    }
+
+    private fun writeHls(seconds: Int, sub: String = "") {
+        val target = File(dir, sub).apply { mkdirs() }
         val h264 = avcodec_find_encoder(AV_CODEC_ID_H264)
         val aac = avcodec_find_encoder(AV_CODEC_ID_AAC)
         assumeNotNull(h264, aac)
         val out = AVFormatContext(null)
-        check(avformat_alloc_output_context2(out, null, "hls", File(dir, "index.m3u8").absolutePath) >= 0)
+        check(avformat_alloc_output_context2(out, null, "hls", File(target, "index.m3u8").absolutePath) >= 0)
 
         val v: AVCodecContext = avcodec_alloc_context3(h264)
         v.width(320); v.height(240); v.pix_fmt(AV_PIX_FMT_YUV420P)
@@ -199,6 +217,6 @@ class FfmpegPlayerTest {
         avcodec_send_frame(a, null); drain(a, 1, aStream.time_base())
         av_write_trailer(out)
         avformat_free_context(out)
-        check(File(dir, "index.m3u8").readText().contains("#EXT-X-ENDLIST"))
+        check(File(target, "index.m3u8").readText().contains("#EXT-X-ENDLIST"))
     }
 }
