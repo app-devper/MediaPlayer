@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer
 
+import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
@@ -11,6 +13,7 @@ import com.appdevper.mediaplayer.domain.model.ServerCapabilities
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.repository.LibraryRepository
@@ -71,6 +74,13 @@ class FakeServer : MediaServerRepository {
         status.value = ServerStatus.Running(settings.name, "http://192.168.1.160:8191", mapOf(MediaKind.VIDEO to 12, MediaKind.AUDIO to 340))
     }
     override suspend fun stop() { status.value = ServerStatus.Stopped }
+}
+
+class FakeAirPlay(status: AirPlayStatus = AirPlayStatus.Stopped) : AirPlayRepository {
+    override val status = MutableStateFlow(status)
+    override val activity = MutableStateFlow(AirPlayActivity())
+    override suspend fun start(name: String, requirePin: Boolean) { status.value = AirPlayStatus.Running(name) }
+    override suspend fun stop() { status.value = AirPlayStatus.Stopped }
 }
 
 class FakeReceiver : CastReceiverRepository {

@@ -8,6 +8,7 @@ import androidx.navigation.toRoute
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.feature.browse.BrowseScreen
 import com.appdevper.mediaplayer.feature.home.HomeScreen
+import com.appdevper.mediaplayer.feature.mirror.MirrorScreen
 import com.appdevper.mediaplayer.feature.player.PlayerScreen
 import com.appdevper.mediaplayer.feature.server.ServerScreen
 import com.appdevper.mediaplayer.feature.shell.ShellUiState
@@ -42,5 +43,6 @@ internal fun AppNavHost(
         }
         composable<PlayerRoute> { PlayerScreen() }
         composable<ServerRoute> { ServerScreen() }
+        composable<MirrorRoute> { MirrorScreen() }
     }
 }

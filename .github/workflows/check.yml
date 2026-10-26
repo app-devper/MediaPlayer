@@ -31,10 +31,15 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 
       # iOS targets are skipped on Linux (kotlin.native.ignoreDisabledTargets=true).
-      - name: Tests (domain, data, presentation) + Android build
+      # :airplay builds its native library (CMake + Ninja, BoringSSL fetched at a pinned hash).
+      - name: Install Ninja
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+
+      - name: Tests (domain, airplay, data, presentation) + Android build
         run: |
           ./gradlew --parallel \
             :domain:jvmTest \
+            :airplay:jvmTest \
             :data:jvmTest \
             :composeApp:jvmTest \
             :composeApp:assembleDebug \

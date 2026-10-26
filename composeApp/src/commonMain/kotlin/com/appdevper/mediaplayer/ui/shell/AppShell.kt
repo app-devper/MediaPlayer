@@ -48,6 +48,7 @@ internal sealed interface Selection {
     data class Device(val id: String) : Selection
     data object NowPlaying : Selection
     data object MyServer : Selection
+    data object Mirror : Selection
 }
 
 /** [startDestination] is a route object (defaults to [HomeRoute]); previews/tests can open another screen. */
@@ -62,6 +63,7 @@ fun AppShell(startDestination: Any = HomeRoute) {
         dest?.hasRoute<BrowseRoute>() == true -> Selection.Device(entry!!.toRoute<BrowseRoute>().deviceId)
         dest?.hasRoute<PlayerRoute>() == true -> Selection.NowPlaying
         dest?.hasRoute<ServerRoute>() == true -> Selection.MyServer
+        dest?.hasRoute<MirrorRoute>() == true -> Selection.Mirror
         else -> Selection.Home
     }
     LaunchedEffect(vm, nav) {
@@ -70,7 +72,12 @@ fun AppShell(startDestination: Any = HomeRoute) {
             if (nav.currentDestination?.hasRoute<PlayerRoute>() != true) nav.navigate(PlayerRoute) { launchSingleTop = true }
         }
     }
-    val onPlayer = selection == Selection.NowPlaying
+    LaunchedEffect(vm, nav) {
+        vm.openMirror.collect {
+            if (nav.currentDestination?.hasRoute<MirrorRoute>() != true) nav.navigate(MirrorRoute) { launchSingleTop = true }
+        }
+    }
+    val onPlayer = selection == Selection.NowPlaying || selection == Selection.Mirror
     val canGoBack = selection != Selection.Home && nav.previousBackStackEntry != null
 
     BoxWithConstraints(Modifier.fillMaxSize().background(AppTheme.colors.background)) {
@@ -98,6 +105,7 @@ fun AppShell(startDestination: Any = HomeRoute) {
                 },
                 onNowPlaying = { nav.navigate(PlayerRoute) { launchSingleTop = true }; closeDrawer() },
                 onMyServer = { nav.navigate(ServerRoute) { popUpTo<HomeRoute>(); launchSingleTop = true }; closeDrawer() },
+                onAirPlay = { nav.navigate(MirrorRoute) { launchSingleTop = true }; closeDrawer() },
                 onCollapse = { if (wide) sidebarOpen = false else closeDrawer() },
             )
         }
@@ -148,5 +156,6 @@ fun AppShell(startDestination: Any = HomeRoute) {
                 },
             ) { main() }
         }
+        state.airPlay.pin?.let { pin -> PinOverlay(pin, state.airPlay.client) }
     }
 }

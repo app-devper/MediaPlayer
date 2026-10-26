@@ -9,6 +9,7 @@ import com.russhwolf.settings.Settings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.random.Random
 
 /** Persisted preferences (replaces the old `ServerSettings` / SharedPreferences). */
 class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRepository {
@@ -26,6 +27,20 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
     val rendererUdn: String
         get() = s.getStringOrNull(KEY_RENDERER_UDN) ?: "uuid:${MediaServer.randomUuid()}".also { s.putString(KEY_RENDERER_UDN, it) }
 
+    /** Stable AirPlay device id (6 bytes, locally administered MAC-like): senders remember receivers by it. */
+    val airPlayDeviceId: ByteArray
+        get() = s.getStringOrNull(KEY_AIRPLAY_ID)?.chunked(2)?.map { it.toInt(16).toByte() }?.toByteArray()
+            ?: Random.nextBytes(6).also { it[0] = ((it[0].toInt() and 0xfe) or 0x02).toByte() }
+                .also { id -> s.putString(KEY_AIRPLAY_ID, id.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }) }
+
+    /** Public keys of AirPlay senders that paired with the PIN (they skip it next time). */
+    val airPlayPairedKeys: Set<String>
+        get() = s.getStringOrNull(KEY_AIRPLAY_PAIRED)?.split('\n')?.filter { it.isNotBlank() }?.toSet().orEmpty()
+
+    fun addAirPlayPairedKey(publicKey: String) {
+        s.putString(KEY_AIRPLAY_PAIRED, (airPlayPairedKeys + publicKey).joinToString("\n"))
+    }
+
     override fun update(transform: (ServerSettings) -> ServerSettings) {
         val next = transform(_serverSettings.value).let { it.copy(name = it.name.trim().ifEmpty { defaultName }) }
         s.putString(KEY_NAME, next.name)
@@ -35,6 +50,8 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         s.putBoolean(KEY_IMAGE, next.shareImage)
         s.putString(KEY_FOLDERS, next.folders.joinToString("\n"))
         s.putBoolean(KEY_RECEIVER, next.receiverEnabled)
+        s.putBoolean(KEY_AIRPLAY, next.airPlayEnabled)
+        s.putBoolean(KEY_AIRPLAY_PIN, next.airPlayRequirePin)
         _serverSettings.value = next
     }
 
@@ -46,6 +63,8 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         shareImage = s.getBoolean(KEY_IMAGE, true),
         folders = s.getStringOrNull(KEY_FOLDERS)?.split('\n')?.filter { it.isNotBlank() } ?: defaultSharedFolders(),
         receiverEnabled = s.getBoolean(KEY_RECEIVER, false),
+        airPlayEnabled = s.getBoolean(KEY_AIRPLAY, false),
+        airPlayRequirePin = s.getBoolean(KEY_AIRPLAY_PIN, true),
     )
 
     private companion object {
@@ -58,5 +77,9 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         const val KEY_UDN = "server_udn"
         const val KEY_RENDERER_UDN = "renderer_udn"
         const val KEY_RECEIVER = "receiver_enabled"
+        const val KEY_AIRPLAY = "airplay_enabled"
+        const val KEY_AIRPLAY_PIN = "airplay_require_pin"
+        const val KEY_AIRPLAY_ID = "airplay_device_id"
+        const val KEY_AIRPLAY_PAIRED = "airplay_paired_keys"
     }
 }

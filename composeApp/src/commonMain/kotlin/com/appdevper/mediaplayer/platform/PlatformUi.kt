@@ -2,6 +2,7 @@ package com.appdevper.mediaplayer.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
@@ -41,6 +42,10 @@ expect val supportsAirPlay: Boolean
 /** System AirPlay route picker button (AVRoutePickerView on iOS; nothing elsewhere). */
 @Composable
 expect fun AirPlayButton(modifier: Modifier = Modifier)
+
+/** Draws AirPlay screen mirroring from [player] (Android: a SurfaceView; desktop: decoded frames). */
+@Composable
+expect fun AirPlayMirrorView(player: AirPlayPlayer, modifier: Modifier = Modifier)
 
 /** "Android" / "iOS" / OS name — shown for the local playback target. */
 expect val deviceLabel: String

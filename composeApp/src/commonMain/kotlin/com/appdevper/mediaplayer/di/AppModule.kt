@@ -3,6 +3,7 @@ package com.appdevper.mediaplayer.di
 import com.appdevper.mediaplayer.data.di.AppScope
 import com.appdevper.mediaplayer.data.di.dataModule
 import com.appdevper.mediaplayer.data.di.platformDataModule
+import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.AppStartupUseCase
@@ -18,6 +19,7 @@ import com.appdevper.mediaplayer.domain.usecase.StartMediaServerUseCase
 import com.appdevper.mediaplayer.domain.usecase.StopMediaServerUseCase
 import com.appdevper.mediaplayer.domain.usecase.UpdateServerSettingsUseCase
 import com.appdevper.mediaplayer.feature.browse.BrowseViewModel
+import com.appdevper.mediaplayer.feature.mirror.MirrorViewModel
 import com.appdevper.mediaplayer.feature.player.PlayerViewModel
 import com.appdevper.mediaplayer.feature.server.ServerViewModel
 import com.appdevper.mediaplayer.feature.shell.ShellViewModel
@@ -34,6 +36,7 @@ import org.koin.mp.KoinPlatform
 val domainModule = module {
     single { PlaybackSession(get(), get(AppScope)) }
     single { CastReceiverSession(get(), get(), get(), get(AppScope)) }
+    single { AirPlayReceiverSession(get(), get(), get(), get(AppScope)) }
     factoryOf(::ObserveDevicesUseCase)
     factoryOf(::RefreshDevicesUseCase)
     factoryOf(::GetDeviceUseCase)
@@ -53,6 +56,7 @@ val presentationModule = module {
     viewModelOf(::ShellViewModel)
     viewModelOf(::PlayerViewModel)
     viewModelOf(::ServerViewModel)
+    viewModelOf(::MirrorViewModel)
     viewModel { (deviceId: String, folderId: String, title: String) ->
         BrowseViewModel(deviceId, folderId, title, get(), get(), get(), get())
     }

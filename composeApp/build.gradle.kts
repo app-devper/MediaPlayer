@@ -22,6 +22,7 @@ kotlin {
             implementation(project(":domain"))
             implementation(project(":data"))
             implementation(project(":core:designsystem"))
+            implementation(project(":airplay"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)

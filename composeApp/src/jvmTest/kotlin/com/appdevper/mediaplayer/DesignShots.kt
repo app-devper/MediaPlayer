@@ -25,6 +25,10 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.airplay.AirPlayPlayer
+import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.model.AirPlayStatus
+import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.repository.LibraryRepository
@@ -35,6 +39,7 @@ import com.appdevper.mediaplayer.ui.shell.AppShell
 import com.appdevper.mediaplayer.ui.shell.BrowseRoute
 import com.appdevper.mediaplayer.ui.shell.HomeRoute
 import com.appdevper.mediaplayer.ui.shell.PlayerRoute
+import com.appdevper.mediaplayer.ui.shell.MirrorRoute
 import com.appdevper.mediaplayer.ui.shell.ServerRoute
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +58,10 @@ import kotlin.test.Test
 class DesignShots {
     private val out = System.getenv("SHOT_DIR")
 
-    private fun shot(name: String, w: Int, h: Int, dark: Boolean, setup: (PlaybackSession) -> Unit = {}, start: Any = HomeRoute) {
+    private fun shot(
+        name: String, w: Int, h: Int, dark: Boolean, setup: (PlaybackSession) -> Unit = {}, start: Any = HomeRoute,
+        airPlay: FakeAirPlay = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook")),
+    ) {
         if (out == null) return
         val server = FakeServer().also { runBlocking { it.start(FakeSettings().serverSettings.value) } }
         val koin = startKoin {
@@ -63,9 +71,11 @@ class DesignShots {
                     single<DeviceRepository> { FakeDevices() }
                     single<LibraryRepository> { FakeLibrary() }
                     single<RendererRepository> { FakeRenderer() }
-                    single<SettingsRepository> { FakeSettings().apply { update { it.copy(receiverEnabled = true) } } }
+                    single<SettingsRepository> { FakeSettings().apply { update { it.copy(receiverEnabled = true, airPlayEnabled = true) } } }
                     single<MediaServerRepository> { server }
                     single<CastReceiverRepository> { FakeReceiver().apply { status.value = ReceiverStatus.Running("Worawit's MacBook") } }
+                    single<AirPlayRepository> { airPlay }
+                    single { AirPlayPlayer() }
                 },
                 domainModule, presentationModule,
             )
@@ -97,5 +107,12 @@ class DesignShots {
         s.setTarget(PlaybackTarget.Renderer(fakeTv))
         s.play(song, listOf(song, song2))
     }, start = PlayerRoute)
-    @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1000, dark = true, start = ServerRoute)
+    @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1100, dark = true, start = ServerRoute)
+    @Test fun mirrorWaitingDesktopDark() = shot("6-mirror-waiting-desktop-dark", 1280, 800, dark = true, start = MirrorRoute)
+    @Test fun airPlayPinPhoneLight() = shot(
+        "7-airplay-pin-phone-light", 400, 860, dark = false,
+        airPlay = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook")).apply {
+            activity.value = AirPlayActivity(client = "Worawit's iPhone", pin = "4821")
+        },
+    )
 }

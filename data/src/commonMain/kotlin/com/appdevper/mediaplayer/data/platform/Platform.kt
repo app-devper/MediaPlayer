@@ -80,3 +80,9 @@ interface MediaLibraryFactory {
 }
 
 expect fun defaultSharedFolders(): List<String>
+
+/** Private app storage (e.g. the AirPlay identity key). */
+interface AppStorage {
+    /** Absolute path of an existing directory. */
+    val dir: String
+}

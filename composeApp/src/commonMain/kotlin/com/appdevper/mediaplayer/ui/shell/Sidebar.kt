@@ -50,6 +50,7 @@ internal fun Sidebar(
     onSelectRenderer: (MediaDevice) -> Unit,
     onNowPlaying: () -> Unit,
     onMyServer: () -> Unit,
+    onAirPlay: () -> Unit,
     onCollapse: () -> Unit,
 ) {
     val c = AppTheme.colors
@@ -106,6 +107,16 @@ internal fun Sidebar(
                 selected = selection == Selection.NowPlaying,
                 onClick = onNowPlaying,
                 leading = { SidebarIcon(AppIcons.ListMusic) },
+            )
+        }
+        state.airPlay.client?.takeIf { state.airPlay.mirroring || state.airPlay.audioOnly }?.let { client ->
+            ListRow(
+                "AirPlay",
+                subtitle = if (state.airPlay.mirroring) "Mirroring $client" else "Audio from $client",
+                selected = selection == Selection.Mirror,
+                onClick = onAirPlay,
+                leading = { SidebarIcon(AppIcons.Cast) },
+                trailing = { StatusDot(true) },
             )
         }
         HorizontalDivider(Modifier.padding(vertical = 6.dp), color = c.border)

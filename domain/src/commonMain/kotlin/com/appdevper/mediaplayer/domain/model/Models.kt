@@ -79,6 +79,10 @@ data class ServerSettings(
     val folders: List<String>,
     /** Lets other devices play on this one (DLNA renderer). Off by default: anyone on the LAN could cast. */
     val receiverEnabled: Boolean = false,
+    /** AirPlay receiver (screen mirroring + audio from iPhone/iPad/Mac). Off by default, like DLNA. */
+    val airPlayEnabled: Boolean = false,
+    /** A sender's first AirPlay connection needs the code shown on this screen. */
+    val airPlayRequirePin: Boolean = true,
 ) {
     val sharedKinds: Set<MediaKind>
         get() = buildSet {
@@ -134,3 +138,22 @@ sealed interface ReceiverStatus {
     data class Running(val name: String) : ReceiverStatus
     data class Failed(val message: String) : ReceiverStatus
 }
+
+sealed interface AirPlayStatus {
+    /** This platform can't receive AirPlay (iOS). */
+    data object Unsupported : AirPlayStatus
+    data object Stopped : AirPlayStatus
+    data class Running(val name: String) : AirPlayStatus
+    data class Failed(val message: String) : AirPlayStatus
+}
+
+/** What an AirPlay sender is doing right now. */
+data class AirPlayActivity(
+    /** Sender's name while one is connected. */
+    val client: String? = null,
+    val mirroring: Boolean = false,
+    /** Audio is playing without a mirrored screen (music, podcasts). */
+    val audioOnly: Boolean = false,
+    /** Code to show while a new sender pairs. */
+    val pin: String? = null,
+)

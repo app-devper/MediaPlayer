@@ -87,7 +87,7 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
 
 ```bash
 # CI gate "Linux (JVM + Android)" (.github/workflows/check.yml)
-./gradlew --parallel :domain:jvmTest :data:jvmTest :composeApp:jvmTest :composeApp:assembleDebug
+./gradlew --parallel :domain:jvmTest :airplay:jvmTest :data:jvmTest :composeApp:jvmTest :composeApp:assembleDebug
 
 # iOS: CI runs on Linux and never compiles it; check it before every PR that touches shared code
 ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
