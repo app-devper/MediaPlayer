@@ -17,6 +17,10 @@ fun MediaDevice.icon(): ImageVector = if (isServer) AppIcons.Server else AppIcon
 
 fun MediaDevice.subtitle(): String = listOf(manufacturer, host).filter { it.isNotBlank() }.joinToString(" · ")
 
+/** "a · b · c" from the parts that aren't blank (DLNA servers send empty artist/album tags), or null. */
+fun joinDetails(vararg parts: String?): String? =
+    parts.filterNot { it.isNullOrBlank() }.joinToString(" · ").takeIf { it.isNotEmpty() }
+
 /** `M:SS` / `H:MM:SS` for UI. */
 fun formatClock(ms: Long): String {
     val total = (ms / 1000).coerceAtLeast(0)

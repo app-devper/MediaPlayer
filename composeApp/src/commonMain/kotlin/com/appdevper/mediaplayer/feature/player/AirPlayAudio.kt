@@ -42,6 +42,7 @@ import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayNowPlaying
 import com.appdevper.mediaplayer.ui.formatClock
+import com.appdevper.mediaplayer.ui.joinDetails
 import kotlinx.coroutines.delay
 
 /** What an iPhone/iPad/Mac plays through AirPlay audio (Music, YouTube Music, Spotify…): shown like our own songs. */
@@ -64,7 +65,7 @@ internal fun AirPlayAudio(activity: AirPlayActivity) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        listOfNotNull(song.artist, song.album).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
+        joinDetails(song.artist, song.album)?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, textAlign = TextAlign.Center, maxLines = 2)
         }
         Row(

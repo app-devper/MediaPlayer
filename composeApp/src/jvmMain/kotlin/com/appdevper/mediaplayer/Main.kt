@@ -1,6 +1,8 @@
 package com.appdevper.mediaplayer
 
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Dp
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -29,7 +31,11 @@ fun main() {
             icon = remember { appIcon() },
             state = windowState,
         ) {
-            CompositionLocalProvider(LocalWindowState provides windowState) { App() }
+            // Mouse pointer: no 48dp touch-target padding around small buttons (it's for touch screens).
+            CompositionLocalProvider(
+                LocalWindowState provides windowState,
+                LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
+            ) { App() }
         }
     }
 }

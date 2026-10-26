@@ -19,8 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 
-@Composable
 /** [onCheckedChange] null when the surrounding row handles the toggle (and its semantics). */
+@Composable
 fun AppSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, enabled: Boolean = true) {
     val c = AppTheme.colors
     Switch(

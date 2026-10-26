@@ -70,6 +70,7 @@ import com.appdevper.mediaplayer.platform.NativeMediaPlayer
 import com.appdevper.mediaplayer.ui.LocalFullscreen
 import com.appdevper.mediaplayer.ui.formatClock
 import com.appdevper.mediaplayer.ui.icon
+import com.appdevper.mediaplayer.ui.joinDetails
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Now playing (replaces `FullScreenPlayerActivity`, `ImageActivity` and the remote controls). */
@@ -226,7 +227,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
         )
         Spacer(Modifier.height(4.dp))
         Text(item.title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, textAlign = TextAlign.Center, maxLines = 2)
-        listOfNotNull(item.artist, item.album).joinToString(" · ").takeIf { it.isNotEmpty() }?.let {
+        joinDetails(item.artist, item.album)?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, textAlign = TextAlign.Center, maxLines = 2)
         }
         Row(
@@ -305,5 +306,4 @@ private fun TransportState.label(): String? = when (this) {
     TransportState.UNKNOWN -> null
 }
 
-private fun MediaEntry.subtitleLine(): String? =
-    listOfNotNull(artist, album, durationMs?.let(::formatClock)).joinToString(" · ").takeIf { it.isNotEmpty() }
+private fun MediaEntry.subtitleLine(): String? = joinDetails(artist, album, durationMs?.let(::formatClock))

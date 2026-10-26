@@ -2,7 +2,10 @@ package com.appdevper.mediaplayer.feature.server
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
@@ -228,11 +233,14 @@ private fun Divider() = HorizontalDivider(color = AppTheme.colors.border)
 private fun SettingRow(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    modifier: Modifier = Modifier,
+    /** Indented under the row above, as one of its options. */
+    indent: Boolean = false,
     control: @Composable () -> Unit,
 ) {
     val c = AppTheme.colors
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(vertical = 6.dp),
+        modifier.fillMaxWidth().heightIn(min = 52.dp).padding(start = if (indent) 30.dp else 0.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -242,7 +250,10 @@ private fun SettingRow(
     }
 }
 
-/** A setting with a switch: the whole row toggles it, and screen readers read the label with its state. */
+/**
+ * A setting with a switch: the whole row toggles it, screen readers read the label with its state, and
+ * it's highlighted on hover and keyboard focus (the switch itself no longer handles input).
+ */
 @Composable
 private fun SwitchRow(
     label: String,
@@ -252,17 +263,18 @@ private fun SwitchRow(
     indent: Boolean = false,
 ) {
     val c = AppTheme.colors
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp)
-            .toggleable(checked, remember { MutableInteractionSource() }, indication = null, role = Role.Switch, onValueChange = onChange)
-            .padding(start = if (indent) 30.dp else 0.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = c.textSecondary)
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, modifier = Modifier.weight(1f))
-        AppSwitch(checked, onCheckedChange = null)
-    }
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val focused by source.collectIsFocusedAsState()
+    SettingRow(
+        label,
+        icon,
+        indent = indent,
+        modifier = Modifier.clip(Radius.small)
+            .background(if (hovered || focused) c.hover else Color.Transparent)
+            .hoverable(source)
+            .toggleable(checked, source, indication = null, role = Role.Switch, onValueChange = onChange),
+    ) { AppSwitch(checked, onCheckedChange = null) }
 }
 
 /** Inline text field that saves on Enter or via the check button. */

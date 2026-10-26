@@ -55,8 +55,8 @@ val LightAppColors = AppColors(
     trackInactive = Color(0xFFE3E3E3),
     textPrimary = Color(0xFF0D0D0D),
     textSecondary = Color(0xFF5D5D5D),
-    // ≥ 4.5:1 on background and surfaceSecondary (was #8F8F8F, 3.2:1).
-    textTertiary = Color(0xFF6E6E6E),
+    // ≥ 4.5:1 on every surface incl. hover and selected rows (was #8F8F8F, 3.2:1 on white).
+    textTertiary = Color(0xFF676767),
     primary = Color(0xFF0D0D0D),
     onPrimary = Color(0xFFFFFFFF),
     success = Color(0xFF10A37F),
@@ -77,7 +77,7 @@ val DarkAppColors = AppColors(
     trackInactive = Color(0xFF4A4A4A),
     textPrimary = Color(0xFFECECEC),
     textSecondary = Color(0xFFB4B4B4),
-    // ≥ 4.5:1 on background and surface (was #8E8E8E, 4.1:1 on surface).
+    // ≥ 4.5:1 on every surface incl. hover and selected rows (was #8E8E8E, 4.1:1 on surface).
     textTertiary = Color(0xFF999999),
     primary = Color(0xFFFFFFFF),
     onPrimary = Color(0xFF0D0D0D),

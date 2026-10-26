@@ -8,6 +8,8 @@ import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasText
@@ -126,7 +128,11 @@ class DesignShots {
     @Test fun remoteDesktopLight() = shot("4-remote-desktop-light", 1280, 860, dark = false, setup = { s ->
         s.setTarget(PlaybackTarget.Renderer(fakeTv))
         s.play(song, listOf(song, song2))
-    }, start = PlayerRoute)
+    }, start = PlayerRoute, always = true) {
+        // First song: "Previous" is one node with its name, announced as a disabled button.
+        onNodeWithContentDescription("Previous").assertIsNotEnabled()
+        onNodeWithContentDescription("Next").assertIsEnabled()
+    }
     @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1100, dark = true, start = ServerRoute, always = true) {
         // A switch row is one toggle that carries its label and state, and activating it (as a screen
         // reader does; the row is below this test window, so no pointer click) toggles the setting.
