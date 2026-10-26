@@ -1,6 +1,6 @@
 ---
 name: pr
-description: Land the current branch's open pull request in app-devper/MediaPlayer: squash-merge (auto-merge if the required check is still running), delete the branch, sync the base branch, and back-merge main into develop when the PR targeted main. Use when the user says "pr land", "merge it", "/pr", or otherwise asks to land the current PR.
+description: Land the current branch's open pull request in app-devper/MediaPlayer: check the landing gates (CI green, review findings answered, approval covers the head commit), wait for the required check, squash-merge, delete the branch, sync the base branch, and back-merge main into develop when the PR targeted main. Use when the user says "pr land", "land", "merge it", "/pr", or otherwise asks to land the current PR.
 ---
 
 # pr: land the current branch's PR
@@ -27,19 +27,27 @@ This repo follows **git flow** (see the `git-flow` skill): feature PRs target
 3. **Check mergeability.** `CONFLICTING` → stop and report; do **not**
    force. `UNKNOWN` → re-run step 1 once before proceeding.
 
-4. **Squash-merge**
-   ```bash
-   gh pr checks <number>
-   ```
-   - Required check passed → `gh pr merge <number> --squash --delete-branch`
-   - Still running → `gh pr merge <number> --squash --auto --delete-branch`
-     then watch until it lands:
-     ```bash
-     gh pr view <number> --json state -q .state   # poll / Monitor until MERGED
-     ```
-   - Check failed → stop, show the failure, do not merge.
+4. **Landing gates** (`dev-flow` stages 6–7). Stop and report if any fails:
+   - **Review answered:** every finding from `/code-review` (and
+     `/security-review` for High tier) is fixed or closed with a reason. An
+     open Important finding blocks.
+   - **Approval covers the head commit:** commits pushed after the user
+     approved (review fixes, rebases) are listed to the user
+     (`git log <approved-sha>..HEAD --oneline`) and confirmed. "land" right
+     after seeing them counts.
+   - **Revert path:** the PR body says how to revert.
 
-5. **Sync the base branch and clean up**
+5. **Wait for CI, then squash-merge.** Auto-merge is disabled on this repo,
+   so wait for the required check and merge yourself:
+   ```bash
+   gh pr checks <number> --watch --interval 30   # run in the background; you're notified when it ends
+   gh pr checks <number>                         # all pass?
+   gh pr merge <number> --squash --delete-branch
+   ```
+   - Check failed → stop, show the failing step (`gh run view <id> --log-failed`),
+     do not merge.
+
+6. **Sync the base branch and clean up**
    ```bash
    git checkout <baseRefName>
    git pull --ff-only origin <baseRefName>
@@ -47,7 +55,7 @@ This repo follows **git flow** (see the `git-flow` skill): feature PRs target
    git remote prune origin
    ```
 
-6. **If the PR targeted `main`: back-merge into `develop`** (mandatory;
+7. **If the PR targeted `main`: back-merge into `develop`** (mandatory;
    see the `git-flow` skill)
    ```bash
    git checkout develop && git pull --ff-only origin develop
@@ -59,7 +67,7 @@ This repo follows **git flow** (see the `git-flow` skill): feature PRs target
    Nothing is tagged or published automatically. Remind the user to tag
    `v<app-version>` and build the release (`dev-flow` stage 8, steps 6–8).
 
-7. **Report**: merged PR number + URL, the squash commit SHA on the base
+8. **Report**: merged PR number + URL, the squash commit SHA on the base
    branch (`git log --oneline -1`), the branch deleted locally and on the
    remote, and for `main` landings the back-merge result.
 
