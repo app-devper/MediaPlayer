@@ -24,14 +24,17 @@ import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
+import com.appdevper.mediaplayer.feature.player.AirPlayArtwork
 import com.appdevper.mediaplayer.feature.shell.ShellUiState
 import com.appdevper.mediaplayer.ui.icon
 
 @Composable
 internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: () -> Unit) {
-    val item = state.nowPlaying ?: return
     val c = AppTheme.colors
-    val remote = state.target as? PlaybackTarget.Renderer
+    val airPlay = state.airPlay.takeIf { it.audioOnly }
+    val item = state.nowPlaying
+    if (airPlay == null && item == null) return
+    val remote = (state.target as? PlaybackTarget.Renderer).takeIf { airPlay == null }
     Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), contentAlignment = Alignment.Center) {
         Row(
             Modifier.widthIn(max = 560.dp).fillMaxWidth()
@@ -42,13 +45,27 @@ internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Thumbnail(item.thumbnailUrl, item.kind.icon(), size = 40.dp, shape = Radius.medium)
+            if (airPlay != null) {
+                AirPlayArtwork(airPlay.nowPlaying?.artwork, size = 40.dp, shape = Radius.medium)
+            } else if (item != null) {
+                Thumbnail(item.thumbnailUrl, item.kind.icon(), size = 40.dp, shape = Radius.medium)
+            }
             Column(Modifier.weight(1f)) {
-                Text(item.title, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    remote?.let { "Playing on ${it.device.name}" } ?: "Tap to open the player",
+                    airPlay?.let { it.nowPlaying?.title ?: "AirPlay audio" } ?: item?.title.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = c.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    when {
+                        airPlay != null -> listOfNotNull(airPlay.nowPlaying?.artist, "from ${airPlay.client ?: "AirPlay"}").joinToString(" · ")
+                        remote != null -> "Playing on ${remote.device.name}"
+                        else -> "Tap to open the player"
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (remote != null) c.success else c.textTertiary,
+                    color = if (remote != null || airPlay != null) c.success else c.textTertiary,
                     maxLines = 1,
                 )
             }

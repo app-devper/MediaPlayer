@@ -22,6 +22,7 @@ kotlin {
             implementation(project(":domain"))
             implementation(project(":data"))
             implementation(project(":core:designsystem"))
+            implementation(project(":airplay"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)
@@ -50,12 +51,12 @@ kotlin {
             implementation(libs.koin.android)
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.ui)
+            implementation(libs.media3.exoplayer.hls) // AirPlay video (YouTube) is HLS
         }
 
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
-            implementation(libs.vlcj)
         }
 
         jvmTest.dependencies {
@@ -88,6 +89,9 @@ compose.desktop {
         mainClass = "com.appdevper.mediaplayer.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            // jdeps' suggestion plus what is loaded at runtime: Ktor's Java client (java.net.http)
+            // and TLS with EC certificates.
+            modules("java.instrument", "java.management", "java.prefs", "jdk.unsupported", "java.net.http", "jdk.crypto.ec")
             packageName = "Media Player"
             packageVersion = libs.versions.app.version.get()
             description = "DLNA / UPnP media player and media server"

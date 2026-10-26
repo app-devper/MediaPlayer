@@ -10,6 +10,12 @@ import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
+import kotlin.test.assertFalse
+import kotlinx.coroutines.flow.first
+import com.appdevper.mediaplayer.feature.mirror.MirrorViewModel
+import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.model.AirPlayStatus
+import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
@@ -62,6 +68,7 @@ class PresentationTest {
         assertNotNull(koin.get<ShellViewModel>())
         assertNotNull(koin.get<PlayerViewModel>())
         assertNotNull(koin.get<ServerViewModel>())
+        assertNotNull(koin.get<MirrorViewModel>())
         assertNotNull(koin.get<BrowseViewModel> { parametersOf("uuid:x", "0", "Root") })
     }
 
@@ -70,6 +77,9 @@ class PresentationTest {
 
     private fun receiverSession(settings: FakeSettings = FakeSettings(), receiver: FakeReceiver = FakeReceiver()) =
         CastReceiverSession(receiver, settings, session, appScope)
+
+    private fun airPlaySession(settings: FakeSettings = FakeSettings(), airPlay: FakeAirPlay = FakeAirPlay()) =
+        AirPlayReceiverSession(airPlay, settings, session, appScope)
 
     @Test
     fun browseLoadsFiltersAndPlays() = runTest {
@@ -106,6 +116,7 @@ class PresentationTest {
             ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
             StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
             receiverSession(settings),
+            airPlaySession(settings),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
 
@@ -134,6 +145,7 @@ class PresentationTest {
             ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
             StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
             receiving,
+            airPlaySession(settings),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         assertEquals(ReceiverStatus.Stopped, vm.uiState.value.receiver) // off by default
@@ -148,6 +160,51 @@ class PresentationTest {
     }
 
     @Test
+    fun airPlayToggleAndPinSetting() = runTest {
+        val server = FakeServer()
+        val settings = FakeSettings()
+        val airPlay = FakeAirPlay()
+        airPlaySession(settings, airPlay).start()
+        val vm = ServerViewModel(
+            ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
+            StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
+            receiverSession(settings), airPlaySession(settings, airPlay),
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        assertEquals(AirPlayStatus.Stopped, vm.uiState.value.airPlay) // off by default
+        assertTrue(settings.serverSettings.value.airPlayRequirePin) // code required by default
+
+        vm.setAirPlayEnabled(true)
+        assertEquals(AirPlayStatus.Running("Worawit's MacBook"), vm.uiState.value.airPlay)
+        vm.setAirPlayRequirePin(false)
+        assertFalse(settings.serverSettings.value.airPlayRequirePin)
+        assertEquals(0, server.starts.size) // the DLNA server is unaffected
+    }
+
+    @Test
+    fun shellOpensMirroringAndShowsThePin() = runTest {
+        val airPlay = FakeAirPlay(AirPlayStatus.Running("TV"))
+        val vm = ShellViewModel(
+            com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
+            ObserveServerStatusUseCase(FakeServer()),
+            com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
+            session,
+            receiverSession(),
+            airPlaySession(airPlay = airPlay).also { it.start() },
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        val opened = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.openMirror.first() }
+
+        airPlay.activity.value = AirPlayActivity(client = "Worawit's iPhone", pin = "4821")
+        assertEquals("4821", vm.uiState.value.airPlay.pin)
+        assertFalse(opened.isCompleted)
+
+        airPlay.activity.value = AirPlayActivity(client = "Worawit's iPhone", mirroring = true)
+        assertTrue(opened.isCompleted)
+        assertEquals(null, vm.uiState.value.airPlay.pin)
+    }
+
+    @Test
     fun shellCombinesDevicesAndTarget() = runTest {
         val vm = ShellViewModel(
             com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
@@ -155,6 +212,7 @@ class PresentationTest {
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
             session,
             receiverSession(),
+            airPlaySession(),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         assertEquals(listOf("Living Room NAS"), vm.uiState.value.servers.map { it.name })

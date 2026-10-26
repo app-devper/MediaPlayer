@@ -87,7 +87,7 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
 
 ```bash
 # CI gate "Linux (JVM + Android)" (.github/workflows/check.yml)
-./gradlew --parallel :domain:jvmTest :data:jvmTest :composeApp:jvmTest :composeApp:assembleDebug
+./gradlew --parallel :domain:jvmTest :airplay:jvmTest :data:jvmTest :composeApp:jvmTest :composeApp:assembleDebug
 
 # iOS: CI runs on Linux and never compiles it; check it before every PR that touches shared code
 ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
@@ -95,6 +95,9 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
   ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO -derivedDataPath build/dd build)
 ```
 
+- AirPlay native or MediaCodec changes (`:airplay`): run the on-device tests too, on an
+  emulator or phone: `./gradlew :airplay:connectedDebugAndroidTest`. Real mirroring needs an
+  iPhone/iPad/Mac on the same Wi‑Fi (My Server › Receive › AirPlay).
 - UI changes: render the screens (light/dark, phone/desktop, fake data),
   then open the PNGs and look at them:
   `SHOT_DIR=<dir> ./gradlew :composeApp:jvmTest --tests '*DesignShots*'`

@@ -1,6 +1,9 @@
 package com.appdevper.mediaplayer.data.di
 
+import com.appdevper.mediaplayer.airplay.AirPlayPlayer
+import com.appdevper.mediaplayer.airplay.createAirPlayReceiver
 import com.appdevper.mediaplayer.data.renderer.MediaRenderer
+import com.appdevper.mediaplayer.data.repository.AirPlayRepositoryImpl
 import com.appdevper.mediaplayer.data.repository.CastReceiverRepositoryImpl
 import com.appdevper.mediaplayer.data.repository.DeviceRepositoryImpl
 import com.appdevper.mediaplayer.data.repository.LibraryRepositoryImpl
@@ -13,6 +16,7 @@ import com.appdevper.mediaplayer.data.upnp.ControlPoint
 import com.appdevper.mediaplayer.data.upnp.SoapClient
 import com.appdevper.mediaplayer.data.upnp.SsdpEngine
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
+import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.repository.LibraryRepository
@@ -32,7 +36,10 @@ import org.koin.dsl.module
 /** Qualifier for the app-lifetime coroutine scope. */
 val AppScope = named("appScope")
 
-/** Platform bindings: MulticastLock + MediaLibraryFactory. */
+/** Qualifier for the AirPlay receiver's own multicast lock (separate from SSDP's). */
+val AirPlayMulticast = named("airPlayMulticast")
+
+/** Platform bindings: MulticastLocks, MediaLibraryFactory, AppStorage. */
 expect val platformDataModule: Module
 
 val dataModule = module {
@@ -67,4 +74,10 @@ val dataModule = module {
     single<RendererRepository> { RendererRepositoryImpl(get(), get()) }
     single<MediaServerRepository> { MediaServerRepositoryImpl(get(), get(), get(), get(), get(AppScope)) }
     single<CastReceiverRepository> { CastReceiverRepositoryImpl(get(), get()) }
+
+    // AirPlay receiver (null on iOS); the player is also what the UI draws mirroring with.
+    single { AirPlayPlayer() }
+    single<AirPlayRepository> {
+        AirPlayRepositoryImpl(createAirPlayReceiver(), get(), get(), get(), get(AirPlayMulticast), get(AppScope))
+    }
 }

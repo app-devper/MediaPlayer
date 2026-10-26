@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.domain.model
 
+import kotlin.time.TimeSource
+
 enum class MediaKind { FOLDER, VIDEO, AUDIO, IMAGE, OTHER }
 
 /** A device found on the local network (DLNA media server and/or renderer). */
@@ -60,6 +62,8 @@ data class PlaybackState(
     val remote: RemotePlayback = RemotePlayback(),
     /** Whether the local player starts as soon as the current item loads. */
     val autoPlay: Boolean = true,
+    /** Where the local player starts the current item. */
+    val startPositionMs: Long = 0,
     /** Last state reported by the local player, null until it reports. */
     val local: RendererStatus? = null,
     val localVolume: Int = 100,
@@ -79,6 +83,10 @@ data class ServerSettings(
     val folders: List<String>,
     /** Lets other devices play on this one (DLNA renderer). Off by default: anyone on the LAN could cast. */
     val receiverEnabled: Boolean = false,
+    /** AirPlay receiver (screen mirroring + audio from iPhone/iPad/Mac). Off by default, like DLNA. */
+    val airPlayEnabled: Boolean = false,
+    /** A sender's first AirPlay connection needs the code shown on this screen. */
+    val airPlayRequirePin: Boolean = true,
 ) {
     val sharedKinds: Set<MediaKind>
         get() = buildSet {
@@ -112,7 +120,8 @@ sealed interface LocalPlayerCommand {
 
 /** What another device asks this one to do while it acts as a receiver. */
 sealed interface CastCommand {
-    data class Load(val entry: MediaEntry, val autoPlay: Boolean) : CastCommand
+    /** [startPositionMs] is part of the load: a separate seek could reach the previous item's player. */
+    data class Load(val entry: MediaEntry, val autoPlay: Boolean, val startPositionMs: Long = 0) : CastCommand
     data object Play : CastCommand
     data object Pause : CastCommand
     data object Stop : CastCommand
@@ -133,4 +142,48 @@ sealed interface ReceiverStatus {
     data object Stopped : ReceiverStatus
     data class Running(val name: String) : ReceiverStatus
     data class Failed(val message: String) : ReceiverStatus
+}
+
+sealed interface AirPlayStatus {
+    /** This platform can't receive AirPlay (iOS). */
+    data object Unsupported : AirPlayStatus
+    data object Stopped : AirPlayStatus
+    data class Running(val name: String) : AirPlayStatus
+    data class Failed(val message: String) : AirPlayStatus
+}
+
+/** What an AirPlay sender is doing right now. */
+data class AirPlayActivity(
+    /** Sender's name while one is connected. */
+    val client: String? = null,
+    val mirroring: Boolean = false,
+    /** Audio is playing without a mirrored screen (music, podcasts). */
+    val audioOnly: Boolean = false,
+    /** Code to show while a new sender pairs. */
+    val pin: String? = null,
+    /** The song an audio-only sender is playing (music apps), once it says. */
+    val nowPlaying: AirPlayNowPlaying? = null,
+)
+
+/** Song details, cover art and progress an AirPlay audio sender reports. */
+data class AirPlayNowPlaying(
+    val title: String? = null,
+    val artist: String? = null,
+    val album: String? = null,
+    /** JPEG/PNG cover art. */
+    val artwork: ByteArray? = null,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    /** When [positionMs] was reported; the position advances from here while playing. */
+    val reportedAt: TimeSource.Monotonic.ValueTimeMark? = null,
+) {
+    fun positionNow(): Long =
+        (positionMs + (reportedAt?.elapsedNow()?.inWholeMilliseconds ?: 0)).let { if (durationMs > 0) it.coerceAtMost(durationMs) else it }
+
+    // ByteArray: compare the cover art by content, so an identical report isn't "new".
+    override fun equals(other: Any?): Boolean = other is AirPlayNowPlaying && title == other.title && artist == other.artist &&
+        album == other.album && artwork.contentEquals(other.artwork) && positionMs == other.positionMs &&
+        durationMs == other.durationMs && reportedAt == other.reportedAt
+
+    override fun hashCode(): Int = listOf(title, artist, album, artwork?.contentHashCode(), positionMs, durationMs).hashCode()
 }

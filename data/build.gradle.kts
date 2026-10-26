@@ -20,6 +20,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":domain"))
+            api(project(":airplay"))
             implementation(libs.kotlinx.io.core)
             implementation(libs.ktor.client.core)
             implementation(libs.ktor.server.core)
@@ -36,6 +37,9 @@ kotlin {
         }
         jvmMain.dependencies {
             implementation(libs.ktor.client.java)
+        }
+        commonTest.dependencies {
+            implementation(libs.multiplatform.settings.test)
         }
     }
 }

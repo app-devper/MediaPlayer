@@ -2,10 +2,12 @@ package com.appdevper.mediaplayer.feature.server
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerCapabilities
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.ServerStatus
+import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
 import com.appdevper.mediaplayer.domain.usecase.GetServerCapabilitiesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerSettingsUseCase
@@ -26,6 +28,7 @@ data class ServerUiState(
     val capabilities: ServerCapabilities,
     val permissionDenied: Boolean = false,
     val receiver: ReceiverStatus = ReceiverStatus.Stopped,
+    val airPlay: AirPlayStatus = AirPlayStatus.Stopped,
 ) {
     val isOn: Boolean get() = status is ServerStatus.Running || status is ServerStatus.Starting
 }
@@ -39,19 +42,20 @@ class ServerViewModel(
     private val stopServer: StopMediaServerUseCase,
     getCapabilities: GetServerCapabilitiesUseCase,
     receiver: CastReceiverSession,
+    airPlay: AirPlayReceiverSession,
 ) : ViewModel() {
 
     private val permissionDenied = MutableStateFlow(false)
     private val capabilities = getCapabilities()
 
     val uiState: StateFlow<ServerUiState> = combine(
-        observeStatus(), observeSettings(), permissionDenied, receiver.status,
-    ) { status, settings, denied, receiving ->
-        ServerUiState(status, settings, capabilities, denied, receiving)
+        observeStatus(), observeSettings(), permissionDenied, receiver.status, airPlay.status,
+    ) { status, settings, denied, receiving, airPlaying ->
+        ServerUiState(status, settings, capabilities, denied, receiving, airPlaying)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        ServerUiState(observeStatus().value, observeSettings().value, capabilities, receiver = receiver.status.value),
+        ServerUiState(observeStatus().value, observeSettings().value, capabilities, receiver = receiver.status.value, airPlay = airPlay.status.value),
     )
 
     /** Called after the platform permission prompt. */
@@ -69,6 +73,10 @@ class ServerViewModel(
 
     /** The receiver follows this setting by itself (see CastReceiverSession). */
     fun setReceiverEnabled(on: Boolean) = update { it.copy(receiverEnabled = on) }
+
+    /** The AirPlay receiver follows these by itself (see AirPlayReceiverSession). */
+    fun setAirPlayEnabled(on: Boolean) = update { it.copy(airPlayEnabled = on) }
+    fun setAirPlayRequirePin(on: Boolean) = update { it.copy(airPlayRequirePin = on) }
     fun setShareVideo(on: Boolean) = update { it.copy(shareVideo = on) }
     fun setShareAudio(on: Boolean) = update { it.copy(shareAudio = on) }
     fun setShareImage(on: Boolean) = update { it.copy(shareImage = on) }

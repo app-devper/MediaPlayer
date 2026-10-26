@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -42,7 +43,9 @@ fun GhostIconButton(
     tint: Color = AppTheme.colors.textSecondary,
 ) {
     Box(
-        modifier.size(size).interactive(if (enabled) onClick else null, shape = Radius.small),
+        // Touch target ≥ 48dp (44pt) on touch screens even when the button looks smaller.
+        modifier.minimumInteractiveComponentSize().size(size)
+            .interactive(onClick, shape = Radius.small, enabled = enabled),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription, Modifier.size(iconSize), tint = if (enabled) tint else tint.copy(alpha = 0.35f))

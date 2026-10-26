@@ -8,13 +8,14 @@ actual val platformName: String = "Android"
 
 actual fun defaultSharedFolders(): List<String> = emptyList()
 
-class AndroidMulticastLock(private val context: Context) : MulticastLock {
+/** Each instance is its own WifiManager lock, so separate users (SSDP, AirPlay) don't release each other's. */
+class AndroidMulticastLock(private val context: Context, private val tag: String = "MediaPlayer-SSDP") : MulticastLock {
     private var lock: WifiManager.MulticastLock? = null
 
     override fun acquire() {
         if (lock?.isHeld == true) return
         val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
-        lock = wifi.createMulticastLock("MediaPlayer-SSDP").apply {
+        lock = wifi.createMulticastLock(tag).apply {
             setReferenceCounted(false)
             acquire()
         }

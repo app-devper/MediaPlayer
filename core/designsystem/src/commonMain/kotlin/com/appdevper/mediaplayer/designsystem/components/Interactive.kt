@@ -23,18 +23,20 @@ fun Modifier.interactive(
     selected: Boolean = false,
     shape: Shape = Radius.medium,
     role: Role = Role.Button,
+    /** false: shown and announced as disabled (with [onClick] set), and not clickable. */
+    enabled: Boolean = true,
 ): Modifier {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val c = AppTheme.colors
     val bg = when {
         selected -> c.selected
-        hovered && onClick != null -> c.hover
+        hovered && onClick != null && enabled -> c.hover
         else -> Color.Transparent
     }
     return this
         .clip(shape)
         .background(bg)
         .hoverable(source)
-        .then(if (onClick != null) Modifier.clickable(source, indication = null, role = role, onClick = onClick) else Modifier)
+        .then(if (onClick != null) Modifier.clickable(source, indication = null, enabled = enabled, role = role, onClick = onClick) else Modifier)
 }

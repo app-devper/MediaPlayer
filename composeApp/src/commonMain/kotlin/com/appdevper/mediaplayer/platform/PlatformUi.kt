@@ -2,6 +2,7 @@ package com.appdevper.mediaplayer.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
@@ -29,10 +30,15 @@ expect fun NativeMediaPlayer(
     onEnded: () -> Unit,
     modifier: Modifier = Modifier,
     autoPlay: Boolean = true,
+    /** Where playback starts (e.g. an AirPlay sender resuming a video). */
+    startPositionMs: Long = 0,
     /** 0..1; 0 when muted. */
     volume: Float = 1f,
     commands: Flow<LocalPlayerCommand> = emptyFlow(),
     onStatus: (RendererStatus) -> Unit = {},
+    /** Shows a full-screen button (desktop also: double-click) when set; iOS uses AVKit's own. */
+    fullscreen: Boolean = false,
+    onToggleFullscreen: (() -> Unit)? = null,
 )
 
 /** True where the OS offers AirPlay routing (iOS). */
@@ -41,6 +47,17 @@ expect val supportsAirPlay: Boolean
 /** System AirPlay route picker button (AVRoutePickerView on iOS; nothing elsewhere). */
 @Composable
 expect fun AirPlayButton(modifier: Modifier = Modifier)
+
+/** Draws AirPlay screen mirroring from [player] (Android: a SurfaceView; desktop: decoded frames). */
+@Composable
+expect fun AirPlayMirrorView(player: AirPlayPlayer, modifier: Modifier = Modifier)
+
+/**
+ * Puts the platform in or out of full screen (desktop: the window; Android: system bars and
+ * landscape). Calls [onExit] when the user leaves it the platform's way (Esc, Back).
+ */
+@Composable
+expect fun SystemFullscreenEffect(fullscreen: Boolean, onExit: () -> Unit)
 
 /** "Android" / "iOS" / OS name — shown for the local playback target. */
 expect val deviceLabel: String

@@ -13,3 +13,6 @@ object PlayerRoute
 
 @Serializable
 object ServerRoute
+
+@Serializable
+object MirrorRoute
