@@ -68,6 +68,7 @@ actual fun NativeMediaPlayer(
         },
         positionMs = player.currentPosition.coerceAtLeast(0),
         durationMs = player.duration.takeIf { it > 0 } ?: 0,
+        ended = player.playbackState == Player.STATE_ENDED,
     )
     DisposableEffect(player) {
         val listener = object : Player.Listener {

@@ -1,6 +1,14 @@
 package com.appdevper.mediaplayer.platform
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -99,6 +107,7 @@ actual fun NativeMediaPlayer(
         },
         positionMs = status.positionMs,
         durationMs = status.durationMs,
+        ended = status.ended,
     )
 
     DisposableEffect(player) {
@@ -146,14 +155,18 @@ actual fun NativeMediaPlayer(
     val activity = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
     var controlsVisible by remember { mutableStateOf(true) }
     var overControls by remember { mutableStateOf(false) }
-    var controlsFocused by remember { mutableStateOf(false) }
-    val canHide = !isAudio && status.playing && !status.buffering && seeking == null && !overControls && !controlsFocused
+    // Keyboard: the video area takes focus; keys there (or on a control) show the bar again, and focus
+    // moves to the video area when the bar hides, so it isn't lost with the hidden controls.
+    var controlsHaveFocus by remember { mutableStateOf(false) }
+    val videoFocus = remember { FocusRequester() }
+    val canHide = !isAudio && status.playing && !status.buffering && seeking == null && !overControls
     LaunchedEffect(canHide) {
         controlsVisible = true
         if (!canHide) return@LaunchedEffect
         activity.onStart { emit(Unit) }.collectLatest {
             controlsVisible = true
             delay(CONTROLS_HIDE_MS)
+            if (controlsHaveFocus) videoFocus.requestFocus()
             controlsVisible = false
         }
     }
@@ -172,7 +185,7 @@ actual fun NativeMediaPlayer(
         // Stays up while the pointer is on it or one of its controls has keyboard focus.
         Column(
             Modifier.fillMaxWidth()
-                .onFocusChanged { controlsFocused = it.hasFocus }
+                .onFocusChanged { controlsHaveFocus = it.hasFocus }
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -257,9 +270,18 @@ actual fun NativeMediaPlayer(
                 }
             }
             .onPreviewKeyEvent { activity.tryEmit(Unit); false }
+            .focusRequester(videoFocus)
+            .focusable()
+            // Space on the video area: play/pause, like clicking it.
+            .onKeyEvent { e ->
+                if (e.type == KeyEventType.KeyUp && e.key == Key.Spacebar) { togglePlay(); true } else false
+            }
             .pointerInput(onToggleFullscreen) {
                 detectTapGestures(
-                    onTap = { togglePlay() },
+                    onTap = {
+                        videoFocus.requestFocus()
+                        togglePlay()
+                    },
                     onDoubleTap = onToggleFullscreen?.let { toggle -> { toggle() } },
                 )
             },

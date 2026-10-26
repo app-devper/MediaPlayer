@@ -47,6 +47,8 @@ data class RendererStatus(
     val state: TransportState,
     val positionMs: Long,
     val durationMs: Long,
+    /** Played to its end (not stopped by a controller, nor by leaving the player). Local players only. */
+    val ended: Boolean = false,
 )
 
 data class RemotePlayback(

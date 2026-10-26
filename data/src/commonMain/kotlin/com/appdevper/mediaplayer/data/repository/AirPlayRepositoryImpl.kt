@@ -83,27 +83,26 @@ class AirPlayRepositoryImpl(
     override fun publish(playback: ReceiverPlayback) {
         this.playback = playback
         val id = videoId
-        if (playback.entry?.id != null && playback.entry?.id == id) {
-            videoLoaded = true
-            // Played to the end: the sender normally stops or plays the next video. If it never does
-            // (phone locked, app killed), end the session here so a later /rate can't restart it.
-            if (playback.status.isFinished()) {
-                if (endJob == null) endJob = scope.launch {
-                    delay(abandonedEndMs)
-                    if (videoId == id) video.stop()
-                }
-            } else {
-                endJob?.cancel()
-                endJob = null
+        val current = id != null && playback.entry?.id == id
+        if (current) videoLoaded = true
+        // Played to the end: the sender normally stops or plays the next video. If it never does
+        // (phone locked, app killed), end the session here so a later /rate can't restart it.
+        // Anything else (still playing, seeked back, something else plays now) cancels that.
+        if (current && playback.status.isFinished()) {
+            if (endJob == null) endJob = scope.launch {
+                delay(abandonedEndMs)
+                if (videoId == id && this@AirPlayRepositoryImpl.playback.entry?.id == id) video.stop()
             }
+        } else {
+            endJob?.cancel()
+            endJob = null
         }
     }
 
     @Volatile private var endJob: Job? = null
 
-    /** Stopped by the player itself after playing (not "loaded, not started", which is at 0). */
-    private fun RendererStatus?.isFinished() =
-        this != null && state == TransportState.STOPPED && durationMs > 0 && positionMs > 0
+    /** The player reached the end; leaving the player or a controller's Stop isn't an end. */
+    private fun RendererStatus?.isFinished() = this != null && ended && durationMs > 0
 
     /** AirPlay video (YouTube, Safari…) → the same local player as DLNA casts. */
     private val video = object : AirPlayVideoControl {
