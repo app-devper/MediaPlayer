@@ -6,11 +6,15 @@ import com.appdevper.mediaplayer.data.platform.ServerHost
 import com.appdevper.mediaplayer.data.platform.platformName
 import com.appdevper.mediaplayer.data.upnp.Didl
 import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.appdevper.mediaplayer.data.upnp.Soap
 import com.appdevper.mediaplayer.data.upnp.SsdpEngine
-import com.appdevper.mediaplayer.data.upnp.SsdpMessage
 import com.appdevper.mediaplayer.data.upnp.UpnpTypes
 import com.appdevper.mediaplayer.data.upnp.Xml
+import com.appdevper.mediaplayer.data.upnp.host.SsdpAdvertiser
+import com.appdevper.mediaplayer.data.upnp.host.receiveSoap
+import com.appdevper.mediaplayer.data.upnp.host.respondSoap
+import com.appdevper.mediaplayer.data.upnp.host.respondSoapFault
+import com.appdevper.mediaplayer.data.upnp.host.respondXml
+import com.appdevper.mediaplayer.data.upnp.host.startHttpServer
 import io.ktor.http.ContentType
 import io.ktor.http.Headers
 import io.ktor.http.HttpHeaders
@@ -18,13 +22,9 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
-import io.ktor.http.withCharset
 import io.ktor.server.application.ApplicationCall
-import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
-import io.ktor.server.engine.embeddedServer
 import io.ktor.server.request.header
-import io.ktor.server.request.receiveText
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -32,20 +32,15 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.head
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import io.ktor.server.routing.routing
+import io.ktor.server.routing.Route
 import io.ktor.utils.io.ByteWriteChannel
-import io.ktor.utils.io.charsets.Charsets
 import io.ktor.utils.io.writeFully
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -80,11 +75,10 @@ class MediaServer(
 
     private val mutex = Mutex()
     private var server: EmbeddedServer<*, *>? = null
-    private var jobs = mutableListOf<Job>()
+    private var advertiser: SsdpAdvertiser? = null
     private var tree: ContentTree? = null
     private var library: MediaLibrary? = null
     private var config: ServerConfig? = null
-    private var location: String = ""
     private var systemUpdateId = 1
 
     suspend fun start(config: ServerConfig, library: MediaLibrary) = mutex.withLock {
@@ -94,23 +88,18 @@ class MediaServer(
             if (!ssdp.ensureStarted()) throw IllegalStateException("Not connected to a local network")
             val ip = ssdp.localIp ?: throw IllegalStateException("No LAN address")
             val media = library.scan(config.kinds)
-            val (engine, port) = startHttp()
+            val (engine, port) = startHttpServer(PORTS) { routes() }
             val baseUrl = "http://$ip:$port"
             this.server = engine
             this.library = library
             this.config = config
             this.tree = ContentTree(media, baseUrl)
-            this.location = "$baseUrl/description.xml"
             systemUpdateId++
-            jobs += scope.launch { ssdp.messages.collect { if (it.isSearch) answerSearch(it) } }
-            jobs += scope.launch {
-                // Announce a few times, then refresh well before max-age expires.
-                repeat(3) { announce(alive = true); delay(1_000) }
-                while (isActive) {
-                    delay(ANNOUNCE_INTERVAL_MS)
-                    announce(alive = true)
-                }
-            }
+            advertiser = SsdpAdvertiser(
+                ssdp, scope, config.udn,
+                listOf(UpnpTypes.MEDIA_SERVER, UpnpTypes.CONTENT_DIRECTORY, UpnpTypes.CONNECTION_MANAGER),
+                location = "$baseUrl/description.xml",
+            ).also { it.start() }
             host.onServerStarted(config.name)
             _state.value = ServerState.Running(config.name, baseUrl, tree!!.counts)
         } catch (e: Throwable) {
@@ -125,9 +114,8 @@ class MediaServer(
     }
 
     private suspend fun stopLocked(announce: Boolean) {
-        if (announce && config != null) runCatching { announce(alive = false) }
-        jobs.forEach { it.cancel() }
-        jobs.clear()
+        advertiser?.stop(byeBye = announce)
+        advertiser = null
         server?.let { s -> withContext(Dispatchers.IO) { runCatching { s.stop(200, 1_000) } } }
         if (server != null) host.onServerStopped()
         server = null
@@ -135,80 +123,9 @@ class MediaServer(
         config = null
     }
 
-    private suspend fun startHttp(): Pair<EmbeddedServer<*, *>, Int> {
-        var last: Throwable? = null
-        for (port in PORTS) {
-            try {
-                val s = embeddedServer(CIO, port = port, host = "0.0.0.0") { routing { routes() } }
-                s.startSuspend(wait = false)
-                val actual = s.engine.resolvedConnectors().firstOrNull()?.port ?: port
-                return s to actual
-            } catch (e: Throwable) {
-                last = e
-            }
-        }
-        throw last ?: IllegalStateException("No free port")
-    }
-
-    // region SSDP
-
-    private fun notificationTypes(cfg: ServerConfig): List<Pair<String, String>> = listOf(
-        "upnp:rootdevice" to "${cfg.udn}::upnp:rootdevice",
-        cfg.udn to cfg.udn,
-        UpnpTypes.MEDIA_SERVER to "${cfg.udn}::${UpnpTypes.MEDIA_SERVER}",
-        UpnpTypes.CONTENT_DIRECTORY to "${cfg.udn}::${UpnpTypes.CONTENT_DIRECTORY}",
-        UpnpTypes.CONNECTION_MANAGER to "${cfg.udn}::${UpnpTypes.CONNECTION_MANAGER}",
-    )
-
-    private suspend fun announce(alive: Boolean) {
-        val cfg = config ?: return
-        for ((nt, usn) in notificationTypes(cfg)) {
-            val headers = buildList {
-                add("HOST" to "${SsdpEngine.SSDP_ADDRESS}:${SsdpEngine.SSDP_PORT}")
-                if (alive) {
-                    add("CACHE-CONTROL" to "max-age=$MAX_AGE")
-                    add("LOCATION" to location)
-                    add("SERVER" to serverHeader)
-                }
-                add("NT" to nt)
-                add("NTS" to if (alive) "ssdp:alive" else "ssdp:byebye")
-                add("USN" to usn)
-            }
-            ssdp.sendMulticast(SsdpMessage.build("NOTIFY * HTTP/1.1", headers))
-        }
-    }
-
-    private suspend fun answerSearch(msg: SsdpMessage) {
-        val cfg = config ?: return
-        val st = msg.header("ST") ?: return
-        val matches = notificationTypes(cfg).filter { (nt, _) ->
-            st == "ssdp:all" || st == nt || (nt.startsWith("urn:") && UpnpTypes.sameType(st, nt))
-        }
-        if (matches.isEmpty()) return
-        val mx = msg.header("MX")?.toIntOrNull()?.coerceIn(1, 5) ?: 1
-        scope.launch {
-            delay(Random.nextLong(0, mx * 300L))
-            for ((nt, usn) in matches) {
-                val headers = listOf(
-                    "CACHE-CONTROL" to "max-age=$MAX_AGE",
-                    "EXT" to "",
-                    "LOCATION" to location,
-                    "SERVER" to serverHeader,
-                    "ST" to if (st == "ssdp:all") nt else st,
-                    "USN" to usn,
-                )
-                ssdp.sendTo(SsdpMessage.build("HTTP/1.1 200 OK", headers), msg.host, msg.port)
-            }
-        }
-    }
-
-    private val serverHeader get() = "$platformName UPnP/1.0 DLNADOC/1.50 MediaPlayerKmp/2.0"
-
-    // endregion
-
     // region HTTP
 
-    private fun io.ktor.server.routing.Route.routes() {
+    private fun Route.routes() {
         get("/") {
             val cfg = config
             call.respondText("<html><body><h3>${Xml.escape(cfg?.name.orEmpty())}</h3>DLNA media server is running.</body></html>", ContentType.Text.Html)
@@ -235,78 +152,53 @@ class MediaServer(
         head("/media/{file}") { serveMedia(call, headOnly = true) }
     }
 
-    private suspend fun ApplicationCall.respondXml(xml: String, status: HttpStatusCode = HttpStatusCode.OK) {
-        respondText(xml, ContentType.Text.Xml.withCharset(Charsets.UTF_8), status)
-    }
-
-    /** Action name from `SOAPACTION: "urn:...:ContentDirectory:1#Browse"`, falling back to the body. */
-    private fun soapAction(call: ApplicationCall, body: XmlBody): String =
-        call.request.header("SOAPACTION")?.trim('"', ' ')?.substringAfter('#')?.takeIf { it.isNotEmpty() }
-            ?: body.action
-
-    private class XmlBody(val action: String, val args: Map<String, String>)
-
-    private fun parseBody(text: String): XmlBody {
-        val action = Xml.parse(text).find("Body")?.children?.firstOrNull()
-        return XmlBody(action?.name.orEmpty(), action?.children?.associate { it.name to it.text.trim() }.orEmpty())
-    }
-
     private suspend fun handleContentDirectory(call: ApplicationCall) {
         val st = UpnpTypes.CONTENT_DIRECTORY
-        val body = runCatching { parseBody(call.receiveText()) }.getOrElse {
-            return call.respondXml(Soap.fault(402, "Invalid Args"), HttpStatusCode.InternalServerError)
-        }
-        val t = tree ?: return call.respondXml(Soap.fault(501, "Server stopped"), HttpStatusCode.InternalServerError)
-        when (val action = soapAction(call, body)) {
-            "GetSearchCapabilities" -> call.respondXml(Descriptions.soapResponse(st, action, listOf("SearchCaps" to "")))
-            "GetSortCapabilities" -> call.respondXml(Descriptions.soapResponse(st, action, listOf("SortCaps" to "")))
-            "GetSystemUpdateID" -> call.respondXml(Descriptions.soapResponse(st, action, listOf("Id" to systemUpdateId.toString())))
+        val body = call.receiveSoap() ?: return call.respondSoapFault(402, "Invalid Args")
+        val t = tree ?: return call.respondSoapFault(501, "Server stopped")
+        when (val action = body.action) {
+            "GetSearchCapabilities" -> call.respondSoap(st, action, listOf("SearchCaps" to ""))
+            "GetSortCapabilities" -> call.respondSoap(st, action, listOf("SortCaps" to ""))
+            "GetSystemUpdateID" -> call.respondSoap(st, action, listOf("Id" to systemUpdateId.toString()))
             "Browse" -> {
                 val id = body.args["ObjectID"].orEmpty().ifEmpty { ContentTree.ROOT_ID }
                 val start = body.args["StartingIndex"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
                 val count = body.args["RequestedCount"]?.toIntOrNull()?.takeIf { it > 0 } ?: Int.MAX_VALUE
                 val (objects, total) = if (body.args["BrowseFlag"] == "BrowseMetadata") {
-                    val o = t.metadata(id) ?: return call.respondXml(Soap.fault(701, "No such object"), HttpStatusCode.InternalServerError)
+                    val o = t.metadata(id) ?: return call.respondSoapFault(701, "No such object")
                     listOf(o) to 1
                 } else {
-                    val all = t.children(id) ?: return call.respondXml(Soap.fault(701, "No such object"), HttpStatusCode.InternalServerError)
+                    val all = t.children(id) ?: return call.respondSoapFault(701, "No such object")
                     all.drop(start).take(count) to all.size
                 }
-                call.respondXml(
-                    Descriptions.soapResponse(
-                        st, action,
-                        listOf(
-                            "Result" to Didl.generate(objects),
-                            "NumberReturned" to objects.size.toString(),
-                            "TotalMatches" to total.toString(),
-                            "UpdateID" to systemUpdateId.toString(),
-                        ),
+                call.respondSoap(
+                    st, action,
+                    listOf(
+                        "Result" to Didl.generate(objects),
+                        "NumberReturned" to objects.size.toString(),
+                        "TotalMatches" to total.toString(),
+                        "UpdateID" to systemUpdateId.toString(),
                     ),
                 )
             }
-            else -> call.respondXml(Soap.fault(401, "Invalid Action"), HttpStatusCode.InternalServerError)
+            else -> call.respondSoapFault(401, "Invalid Action")
         }
     }
 
     private suspend fun handleConnectionManager(call: ApplicationCall) {
         val st = UpnpTypes.CONNECTION_MANAGER
-        val body = runCatching { parseBody(call.receiveText()) }.getOrElse { XmlBody("", emptyMap()) }
-        when (val action = soapAction(call, body)) {
-            "GetProtocolInfo" -> call.respondXml(
-                Descriptions.soapResponse(st, action, listOf("Source" to SOURCE_PROTOCOLS, "Sink" to "")),
-            )
-            "GetCurrentConnectionIDs" -> call.respondXml(Descriptions.soapResponse(st, action, listOf("ConnectionIDs" to "0")))
-            "GetCurrentConnectionInfo" -> call.respondXml(
-                Descriptions.soapResponse(
-                    st, action,
-                    listOf(
-                        "RcsID" to "-1", "AVTransportID" to "-1", "ProtocolInfo" to "",
-                        "PeerConnectionManager" to "", "PeerConnectionID" to "-1",
-                        "Direction" to "Output", "Status" to "OK",
-                    ),
+        when (val action = call.receiveSoap()?.action) {
+            "GetProtocolInfo" -> call.respondSoap(st, action, listOf("Source" to SOURCE_PROTOCOLS, "Sink" to ""))
+            "GetCurrentConnectionIDs" -> call.respondSoap(st, action, listOf("ConnectionIDs" to "0"))
+            "GetCurrentConnectionInfo" -> call.respondSoap(
+                st, action,
+                listOf(
+                    "RcsID" to "-1", "AVTransportID" to "-1", "ProtocolInfo" to "",
+                    "PeerConnectionManager" to "", "PeerConnectionID" to "-1",
+                    "Direction" to "Output", "Status" to "OK",
                 ),
             )
-            else -> call.respondXml(Soap.fault(401, "Invalid Action"), HttpStatusCode.InternalServerError)
+            else -> call.respondSoapFault(401, "Invalid Action")
         }
     }
 
@@ -377,8 +269,6 @@ class MediaServer(
 
     companion object {
         private val PORTS = listOf(8191, 8192, 8193, 8194, 0)
-        private const val MAX_AGE = 1800
-        private const val ANNOUNCE_INTERVAL_MS = 600_000L
         private const val CHUNK = 64L * 1024
 
         private val SOURCE_PROTOCOLS = listOf(
