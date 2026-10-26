@@ -78,9 +78,9 @@ setting is still High).
 
 | Tier | Touches | Review (stage 6) | Approval (stage 7) |
 |---|---|---|---|
-| Low | docs, skills, copy, tests only, additive changes behind a setting that is off by default | `/code-review` | the user's "go" to open the PR covers it |
-| Medium | ordinary app changes (UI, player, domain, data) | `/code-review` | the user approves the PR before it lands |
-| High | anything listening on the LAN or parsing what arrives from it (`data/server`, `data/upnp`, `:airplay`, native C/C++), crypto/pairing, file access, `.github/workflows/*`, build/signing config, `release/*` and `hotfix/*` | `/code-review` + `/security-review`, both blocking | the user reviews the risky files themselves (point them to the exact paths) and approves |
+| Low | docs (README), copy, tests only, additive app changes behind a setting that is off by default | `/code-review` | the user's "go" to open the PR covers it |
+| Medium | ordinary app changes (UI, player, domain, data); the process itself (`.claude/skills/*`, `.github/pull_request_template.md`), since it decides how everything else is reviewed; `release/*` (its own diff is the version bump, its content was reviewed in its PRs) | `/code-review` | the user approves the PR before it lands |
+| High | anything listening on the LAN or parsing what arrives from it (`data/server`, `data/upnp`, `:airplay`, native C/C++), crypto/pairing, file access, `.github/workflows/*`, build/signing config, `hotfix/*` | `/code-review` + `/security-review`, both blocking | the user reviews the risky files themselves (point them to the exact paths) and approves |
 
 ## 4. Build
 
@@ -126,8 +126,11 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
   pass". Anything not run is said as such ("not checked on iOS device").
 - UI changes are also checked against the design rules: the tokens and
   components in stage 2, contrast ≥ 4.5:1 for text, touch targets ≥ 48dp /
-  44pt, labelled controls. For a wider UI pass, `ui-ux-pro-max` (vendored in
-  PortForMe; run `scripts/search.py … --stack jetpack-compose`).
+  44pt, labelled controls. For a wider UI pass, the `ui-ux-pro-max` data
+  lives in another repo on this machine:
+  `python3 /Users/admin/ProjectPos/PortForMe/.agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain ux`
+  (or `--stack jetpack-compose`). If that path doesn't exist, use the rules
+  above and say the skill wasn't available.
 
 **Exit:** everything above is green with its output shown, and the change
 was seen working, not just compiled.
@@ -138,10 +141,12 @@ A reviewer with fresh context reads the diff against the whole repo and the
 change's intent: does it solve the problem (for a bug: the root cause, not
 the symptom), does it fit the system, does it break something else.
 
-- Every tier: `/code-review` (it runs in a fresh subagent). Use `/simplify`
-  for cleanups if the diff grew.
-- High tier: also `/security-review`. Findings are verified by a second,
-  independent pass and only those that hold up are kept.
+- Every tier: `/code-review`. Fresh context matters: if it runs inline in
+  the session that wrote the code, run it again in a subagent (Agent tool)
+  for anything Medium or High. Use `/simplify` for cleanups if the diff grew.
+- High tier: also `/security-review`. Before acting on a finding, have a
+  separate subagent try to refute it (read the code path, decide real or
+  false positive with a confidence); keep only the ones that hold up.
 - Each finding is tagged **Important** (a real bug or risk), **Nit**, or
   **Pre-existing** (not introduced by this change: note it, don't block on
   it, open an issue or a follow-up).
@@ -175,8 +180,10 @@ revert**. Claude drafts it; the user is the author of record and signs off.
 - **Push and open the PR only after the user says so.** Claude's own review
   never counts as the approval; the user directing the work is the required
   reviewer (High tier: they look at the risky paths themselves).
-- An approval covers the commits it saw. Commits pushed after it (review
-  fixes, rebases) are summarised to the user and confirmed before landing.
+- An approval covers the commits it saw. When the user approves, record it
+  on the PR: `gh pr comment <n> --body "Approved by the author at $(git rev-parse --short HEAD)"`.
+  Commits after that SHA (review fixes, rebases) are summarised to the user
+  and confirmed before they're pushed and landed (`pr` skill, step 2).
 
 Land it with the `pr` skill (squash, delete the branch, sync `develop`).
 Never push to `develop` directly.
@@ -192,9 +199,13 @@ Never push to `develop` directly.
      `app-versionCode` (+1, Android)
    - `iosApp/iosApp/Info.plist`: `CFBundleShortVersionString` and `CFBundleVersion`
    - `ServerScreen.kt`: the "Version" row
-4. **PR:** `gh pr create --base main --title "release: vX.Y.Z" --body "<changelog: PR list since last tag>"`.
+4. **PR:** `gh pr create --base main --title "release: vX.Y.Z"` with the
+   template: the changelog (PR list since the last tag) under "What and why",
+   tier Medium, and under "How to revert": "ship the previous tag's
+   artifacts again; revert the release commit on `main` and back-merge".
    CI `Linux (JVM + Android)` must be green, and run the stage-5 iOS check
-   on the release branch.
+   on the release branch. Stages 6–7 apply: `/code-review` of the release
+   diff, and the user approves before it lands.
 5. **Land:** `pr` skill (squash into `main`; it also back-merges into `develop`).
 6. **Tag:** nothing tags automatically.
    ```bash
@@ -215,9 +226,11 @@ Never push to `develop` directly.
 
 ## 9. Hotfix: a shipped build is broken
 
-`git-flow` hotfix recipe: `hotfix/<slug>` from `main` → stages 4–6 (a test
-reproducing the bug first) → PR into `main` titled `fix(scope): …` → release
-steps 3 and 5–8 with a **patch** bump.
+`git-flow` hotfix recipe: `hotfix/<slug>` from `main` → stages 4–7 at
+**High** tier (a test reproducing the bug first; `/code-review` +
+`/security-review`; push and open the PR into `main`, titled `fix(scope): …`,
+only after the user says so and has looked at the fix) → release steps 3 and
+5–8 with a **patch** bump. Urgency shortens the wait, not the steps.
 
 ## When something breaks
 
@@ -235,8 +248,6 @@ the fix isn't quick: every PR says how.
 - Only `release/*` and `hotfix/*` PRs target `main`, and every merge into
   `main` is a release that gets tagged.
 - Never tag a commit that is not on `main`; never move or delete a pushed tag.
-- Changes to `.github/workflows/*`, signing or build config are always High
-  tier, whoever wrote them.
 - Never commit signing material (keystores, `*.jks`, `*.p12`,
   provisioning profiles), `local.properties` or API secrets. This repo's
   history had to be rewritten once to remove a leaked keystore.
