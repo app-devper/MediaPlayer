@@ -48,8 +48,11 @@ class AirPlayRepositoryImpl(
     private val storage: AppStorage,
     private val multicast: MulticastLock,
     private val scope: CoroutineScope,
-    /** A video that ended and that its sender never stopped or replaced is closed after this long. */
-    private val abandonedEndMs: Long = 15_000,
+    /**
+     * A video that ended and that its sender never stopped or replaced is closed after this long. Long:
+     * YouTube waits ~20 s on its end screen before the next video, and the user may seek back meanwhile.
+     */
+    private val abandonedEndMs: Long = 5 * 60_000,
 ) : AirPlayRepository {
 
     private val _status = MutableStateFlow(if (receiver == null) AirPlayStatus.Unsupported else AirPlayStatus.Stopped)
