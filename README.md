@@ -108,7 +108,7 @@ Turn on **My Server › Receive › AirPlay from iPhone, iPad and Mac**. The app
 Screen Mirroring (Control Center) and in AirPlay audio menus on Apple devices on the same Wi‑Fi:
 
 * screen mirroring (H.264) opens the Mirror screen; the sender's audio plays with it
-* **AirPlay video** (the AirPlay button in YouTube, Safari and other apps): the video itself plays in
+* **AirPlay video** (the AirPlay button in YouTube, YouTube Music, Safari and other apps): the video itself plays in
   the app's player (HLS on Android via ExoPlayer, on the desktop via FFmpeg), controlled from the sender,
   which also gets the progress
 * music/podcasts (ALAC or AAC) play without a screen

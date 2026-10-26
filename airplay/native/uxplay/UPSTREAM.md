@@ -20,5 +20,7 @@ Copied unchanged, except:
     Local HLS server requests are only answered from loopback (`conn_is_loopback`).
   - `pairing.c/.h`: `pairing_session_is_verified()` for the check above.
   - `http_handlers.h` `scrub`/`rate`: a query without `=` dereferenced `NULL + 1`.
+  - `http_handlers.h` `supported_hls_proc_names`: adds `YouTubeMusic` (same HLS format as YouTube;
+    upstream only logged it as unsupported, playback already worked).
 
 Any local change to these files must be listed here.

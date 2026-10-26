@@ -698,7 +698,8 @@ http_handler_play(raop_conn_t *conn, http_request_t *request, http_response_t *r
     plist_t req_root_node = NULL;
     float start_position_seconds = 0.0f;
     bool data_is_binary_plist = false;
-    char supported_hls_proc_names[] = "YouTube;";
+    /* MediaPlayer: YouTube Music sends the same HLS format (tested with the iOS app) */
+    char supported_hls_proc_names[] = "YouTube;YouTubeMusic;";
     airplay_video_t *airplay_video = NULL;
     
     logger_log(raop->logger, LOGGER_DEBUG, "http_handler_play");
