@@ -76,8 +76,9 @@ target_include_directories(plist
 # --- UxPlay protocol library ----------------------------------------------------------------
 set(UX ${CMAKE_CURRENT_SOURCE_DIR}/uxplay)
 file(GLOB UX_SRC ${UX}/*.c ${UX}/playfair/*.c ${UX}/llhttp/*.c ${UX}/mdnsd/*.c)
-add_library(uxplay STATIC ${UX_SRC})
-target_include_directories(uxplay PUBLIC ${UX} PRIVATE ${UX}/playfair ${UX}/llhttp ${UX}/mdnsd)
+# src/hls_master.c: our master-playlist trimming, called from uxplay/http_handlers.h
+add_library(uxplay STATIC ${UX_SRC} src/hls_master.c)
+target_include_directories(uxplay PUBLIC ${UX} PRIVATE ${UX}/playfair ${UX}/llhttp ${UX}/mdnsd src)
 # Same defines as upstream lib/CMakeLists.txt; libplist >= 2.3.
 target_compile_definitions(uxplay PRIVATE NOHOLD PLIST_210 PLIST_230 LIBPLIST_STATIC
     STANDALONE __STDC_CONSTANT_MACROS __STDC_LIMIT_MACROS TARGET_POSIX _REENTRANT)
@@ -130,4 +131,7 @@ if(AIRPLAY_BUILD_TESTS)
         alac/ALACEncoder.cpp alac/ag_enc.c alac/dp_enc.c alac/matrix_enc.c)
     target_compile_definitions(alac_roundtrip_test PRIVATE TARGET_RT_LITTLE_ENDIAN=1)
     target_link_libraries(alac_roundtrip_test PRIVATE alac)
+
+    add_executable(hls_master_test tests/hls_master_test.c src/hls_master.c)
+    target_include_directories(hls_master_test PRIVATE src)
 endif()

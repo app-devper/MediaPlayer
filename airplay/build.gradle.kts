@@ -117,11 +117,15 @@ val bundleNativeHost by tasks.registering(Copy::class) {
     into(hostResourcesDir.map { it.dir("native/$hostPlatform") })
 }
 
-// Native unit tests (ALAC round trip), run with the JVM tests.
+// Native unit tests (ALAC round trip, HLS master playlist trimming), run with the JVM tests.
 val nativeHostTest by tasks.registering(Exec::class) {
     dependsOn(configureNativeHost)
     val dir = hostBuildDir.get().asFile.absolutePath
-    commandLine("sh", "-c", "'${sdkTool("cmake")}' --build '$dir' --target alac_roundtrip_test && '$dir/alac_roundtrip_test'")
+    commandLine(
+        "sh", "-c",
+        "'${sdkTool("cmake")}' --build '$dir' --target alac_roundtrip_test hls_master_test && " +
+            "'$dir/alac_roundtrip_test' && '$dir/hls_master_test'",
+    )
 }
 tasks.named("jvmTest") { dependsOn(nativeHostTest) }
 

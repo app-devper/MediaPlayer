@@ -139,7 +139,7 @@ class FfmpegPlayer(
     private val openedAtNs = System.nanoTime()
 
     private fun debug(message: String) {
-        if (DEBUG) System.err.println("[player] $message (+${(System.nanoTime() - openedAtNs) / 1_000_000} ms)")
+        if (DEBUG) System.err.println("${"%tT.%<tL".format(System.currentTimeMillis())} [player] $message (+${(System.nanoTime() - openedAtNs) / 1_000_000} ms)")
     }
 
     init {

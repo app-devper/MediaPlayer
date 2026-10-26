@@ -27,5 +27,9 @@ Copied unchanged, except:
     `http_handler_play`). YouTube Music swaps items this way when switching between video and song;
     in tests with an iPhone it never answered the FCUP request that follows, so the switch still ends in /stop.
     At debug log level the action body is logged.
+  - `http_handlers.h` master playlist: trimmed to one variant (≤1080p), its audio rendition and no
+    subtitles by `hls_master_single_variant()` (`../src/hls_master.c`, compiled into the uxplay
+    library) before the media playlists are requested. Upstream fetched every variant from the
+    sender one by one (~2 s for YouTube) and the player then probed all of them.
 
 Any local change to these files must be listed here.

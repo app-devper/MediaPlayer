@@ -29,7 +29,7 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
 
     private val listener = object : NativeListener {
         override fun onLog(level: Int, message: String) {
-            if (level <= logLevel) System.err.println("[airplay] ${message.trimEnd()}")
+            if (level <= logLevel) System.err.println("${clock()} [airplay] ${message.trimEnd()}")
         }
         override fun onConnections(open: Int) = emit(AirPlayEvent.Connections(open))
         override fun admit(deviceId: String, model: String, name: String): Boolean =
@@ -79,7 +79,7 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
     }
 
     private fun debug(message: String) {
-        if (logLevel >= 6) System.err.println("[airplay] app: $message")
+        if (logLevel >= 6) System.err.println("${clock()} [airplay] app: $message")
     }
 
     private fun emit(event: AirPlayEvent) {
@@ -124,3 +124,6 @@ actual fun createAirPlayReceiver(): AirPlayReceiver? = instance
 
 // Native state is process-wide, so there is exactly one receiver.
 private val instance: AirPlayReceiver by lazy { NativeAirPlayReceiver() }
+
+/** Wall-clock time for AIRPLAY_LOG lines (HH:mm:ss.SSS), to see how long each step takes. */
+internal fun clock(): String = "%tT.%<tL".format(System.currentTimeMillis())

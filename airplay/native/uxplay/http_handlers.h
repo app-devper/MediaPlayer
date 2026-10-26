@@ -18,6 +18,7 @@
 
 #include "airplay_video.h"
 #include "fcup_request.h"
+#include "hls_master.h"
 
 static void
 *hls_get_current_video(raop_t *raop) {
@@ -678,6 +679,14 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
                 if (!filter_master_playlist(&playlist, custom_profile,  raop->logger)) {
                     logger_log(raop->logger, LOGGER_ERR, "failed to filter master playlist");
                 }
+            }
+
+            /* MediaPlayer: keep one variant, its audio and no subtitles (see src/hls_master.h):
+               fewer playlists to fetch from the sender and for the player to open */
+            char *single_variant = hls_master_single_variant(playlist, 1080);
+            if (single_variant) {
+                free(playlist);
+                playlist = single_variant;
             }
 
             const char *uri_prefix = get_uri_prefix(airplay_video);
