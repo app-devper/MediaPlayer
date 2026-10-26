@@ -166,15 +166,29 @@ static double audio_set_client_volume(void *cls) {
 }
 
 /*
- * The rest are things we don't use yet (now-playing metadata, cover art, DACP remote control,
- * HLS video). UxPlay calls several of these without a NULL check, so every callback must be set:
- * a NULL here is a remote crash triggered by an ordinary client request.
+ * The rest are things we don't use (DACP remote control, mirroring state). UxPlay calls several
+ * of these without a NULL check, so every callback must be set: a NULL here is a remote crash
+ * triggered by an ordinary client request.
  */
-static void audio_set_metadata(void *cls, const void *buffer, int len) { (void) cls; (void) buffer; (void) len; }
-static void audio_set_coverart(void *cls, const void *buffer, int len) { (void) cls; (void) buffer; (void) len; }
-static void audio_stop_coverart_rendering(void *cls) { (void) cls; }
+static void audio_set_metadata(void *cls, const void *buffer, int len) {
+    (void) cls;
+    CALL(audio_metadata, (const uint8_t *) buffer, len);
+}
+
+static void audio_set_coverart(void *cls, const void *buffer, int len) {
+    (void) cls;
+    CALL(audio_artwork, (const uint8_t *) buffer, len);
+}
+
+static void audio_stop_coverart_rendering(void *cls) {
+    (void) cls;
+    CALL(audio_artwork, NULL, 0);
+}
 static void audio_remote_control_id(void *cls, const char *dacp_id, const char *active_remote) { (void) cls; (void) dacp_id; (void) active_remote; }
-static void audio_set_progress(void *cls, uint32_t *start, uint32_t *curr, uint32_t *end) { (void) cls; (void) start; (void) curr; (void) end; }
+static void audio_set_progress(void *cls, uint32_t *start, uint32_t *curr, uint32_t *end) {
+    (void) cls;
+    CALL(audio_progress, *start, *curr, *end);
+}
 static void export_dacp(void *cls, const char *active_remote, const char *dacp_id) { (void) cls; (void) active_remote; (void) dacp_id; }
 static void mirror_video_running(void *cls, bool running) { (void) cls; (void) running; }
 

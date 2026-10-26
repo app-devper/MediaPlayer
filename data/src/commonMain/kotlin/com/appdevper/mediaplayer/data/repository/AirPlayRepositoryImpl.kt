@@ -11,6 +11,7 @@ import com.appdevper.mediaplayer.airplay.airPlayGain
 import com.appdevper.mediaplayer.data.platform.AppStorage
 import com.appdevper.mediaplayer.data.platform.MulticastLock
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.model.AirPlayNowPlaying
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaEntry
@@ -33,6 +34,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
+import kotlin.time.TimeSource
 
 /** [AirPlayRepository] over the :airplay receiver; [receiver] is null where AirPlay isn't available. */
 class AirPlayRepositoryImpl(
@@ -132,6 +134,9 @@ class AirPlayRepositoryImpl(
         }
     }
 
+    private fun updateNowPlaying(change: (AirPlayNowPlaying) -> AirPlayNowPlaying) =
+        _activity.update { it.copy(nowPlaying = change(it.nowPlaying ?: AirPlayNowPlaying())) }
+
     override suspend fun start(name: String, requirePin: Boolean) {
         val r = receiver ?: return
         mutex.withLock {
@@ -175,6 +180,11 @@ class AirPlayRepositoryImpl(
             AirPlayEvent.MirroringStopped -> _activity.update { it.copy(mirroring = false) }
             is AirPlayEvent.AudioStarted -> _activity.update { it.copy(audioOnly = !event.withScreen && !it.mirroring, pin = null) }
             is AirPlayEvent.Volume -> player.setVolume(airPlayGain(event.db))
+            is AirPlayEvent.Track -> updateNowPlaying { it.copy(title = event.info.title, artist = event.info.artist, album = event.info.album) }
+            is AirPlayEvent.Artwork -> updateNowPlaying { it.copy(artwork = event.image) }
+            is AirPlayEvent.Progress -> updateNowPlaying {
+                it.copy(positionMs = event.positionMs, durationMs = event.durationMs, reportedAt = TimeSource.Monotonic.markNow())
+            }
             is AirPlayEvent.ConnectionLost -> _activity.value = AirPlayActivity()
         }
     }

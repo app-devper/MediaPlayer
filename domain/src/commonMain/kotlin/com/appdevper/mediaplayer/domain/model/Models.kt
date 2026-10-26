@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.domain.model
 
+import kotlin.time.TimeSource
+
 enum class MediaKind { FOLDER, VIDEO, AUDIO, IMAGE, OTHER }
 
 /** A device found on the local network (DLNA media server and/or renderer). */
@@ -156,4 +158,29 @@ data class AirPlayActivity(
     val audioOnly: Boolean = false,
     /** Code to show while a new sender pairs. */
     val pin: String? = null,
+    /** The song an audio-only sender is playing (music apps), once it says. */
+    val nowPlaying: AirPlayNowPlaying? = null,
 )
+
+/** Song details, cover art and progress an AirPlay audio sender reports. */
+data class AirPlayNowPlaying(
+    val title: String? = null,
+    val artist: String? = null,
+    val album: String? = null,
+    /** JPEG/PNG cover art. */
+    val artwork: ByteArray? = null,
+    val positionMs: Long = 0,
+    val durationMs: Long = 0,
+    /** When [positionMs] was reported; the position advances from here while playing. */
+    val reportedAt: TimeSource.Monotonic.ValueTimeMark? = null,
+) {
+    fun positionNow(): Long =
+        (positionMs + (reportedAt?.elapsedNow()?.inWholeMilliseconds ?: 0)).let { if (durationMs > 0) it.coerceAtMost(durationMs) else it }
+
+    // ByteArray: compare the cover art by content, so an identical report isn't "new".
+    override fun equals(other: Any?): Boolean = other is AirPlayNowPlaying && title == other.title && artist == other.artist &&
+        album == other.album && artwork.contentEquals(other.artwork) && positionMs == other.positionMs &&
+        durationMs == other.durationMs && reportedAt == other.reportedAt
+
+    override fun hashCode(): Int = listOf(title, artist, album, artwork?.contentHashCode(), positionMs, durationMs).hashCode()
+}

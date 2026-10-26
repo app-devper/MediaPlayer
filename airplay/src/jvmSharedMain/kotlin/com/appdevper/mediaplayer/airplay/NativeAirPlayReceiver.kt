@@ -55,6 +55,12 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
         override fun onAudio(data: ByteArray, ptsNs: Long) { sink?.onAudio(data, ptsNs) }
         override fun onAudioFlush() { sink?.onAudioFlush() }
         override fun onVolume(db: Float) = emit(AirPlayEvent.Volume(db))
+        override fun onAudioMetadata(dmap: ByteArray) = emit(AirPlayEvent.Track(Dmap.track(dmap)))
+        override fun onAudioArtwork(image: ByteArray?) = emit(AirPlayEvent.Artwork(image))
+        override fun onAudioProgress(start: Long, current: Long, end: Long) {
+            val (position, duration) = Dmap.progress(start, current, end)
+            emit(AirPlayEvent.Progress(position, duration))
+        }
         override fun onVideoPlay(url: String, startSeconds: Float) {
             debug("video play $url from ${startSeconds}s")
             video?.play(url, startSeconds)

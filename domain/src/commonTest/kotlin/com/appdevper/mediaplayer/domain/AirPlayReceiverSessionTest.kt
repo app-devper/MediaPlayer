@@ -151,11 +151,15 @@ class AirPlayReceiverSessionTest {
     fun audioFromASenderAlsoPausesOurPlayer() = runTest {
         val airPlay = FakeAirPlay()
         val playback = PlaybackSession(SilentRenderer(), backgroundScope)
-        AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playback, backgroundScope).start()
+        val session = AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playback, backgroundScope)
+        session.start()
         val command = backgroundScope.launch { assertEquals(LocalPlayerCommand.Pause, playback.localCommands.first()) }
+        runCurrent()
+        val opened = backgroundScope.launch { session.openPlayer.first() }
         runCurrent()
         airPlay.activity.value = AirPlayActivity(client = "Mac", audioOnly = true)
         runCurrent()
         assertTrue(command.isCompleted)
+        assertTrue(opened.isCompleted, "music from a sender opens the player screen")
     }
 }

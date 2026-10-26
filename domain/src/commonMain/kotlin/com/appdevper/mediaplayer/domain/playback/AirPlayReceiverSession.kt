@@ -36,7 +36,7 @@ class AirPlayReceiverSession(
 
     private val _openPlayer = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
-    /** Emits when a sender plays a video here (AirPlay video), so the UI can bring up the player. */
+    /** Emits when a sender plays a video or music here, so the UI can bring up the player. */
     val openPlayer: SharedFlow<Unit> = _openPlayer.asSharedFlow()
 
     private var started = false
@@ -62,6 +62,8 @@ class AirPlayReceiverSession(
                 if (a.mirroring && !wasMirroring) _openMirror.tryEmit(Unit)
                 val playing = a.mirroring || a.audioOnly
                 if (playing && !wasPlaying) playback.sendLocal(LocalPlayerCommand.Pause) // don't play over the sender
+                // Music from a sender shows on the player screen, like everything else that plays.
+                if (a.audioOnly && !a.mirroring && !wasPlaying) _openPlayer.tryEmit(Unit)
                 wasMirroring = a.mirroring
                 wasPlaying = playing
             }

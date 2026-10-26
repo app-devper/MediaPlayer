@@ -77,8 +77,10 @@ import org.koin.compose.viewmodel.koinViewModel
 fun PlayerScreen() {
     val vm = koinViewModel<PlayerViewModel>()
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val airPlay by vm.airPlay.collectAsStateWithLifecycle()
     val item = state.current
     when {
+        airPlay.audioOnly -> AirPlayAudio(airPlay)
         item == null -> EmptyState(AppIcons.ListMusic, "Nothing playing", "Pick a video, song or photo from a media server.")
         state.target is PlaybackTarget.Renderer -> RemoteControls(state, item, vm)
         item.kind == MediaKind.IMAGE -> PhotoViewer(state, vm)

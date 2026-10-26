@@ -7,6 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +25,7 @@ import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.di.domainModule
 import com.appdevper.mediaplayer.di.presentationModule
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.model.AirPlayNowPlaying
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
@@ -49,6 +51,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.Paint
+import org.jetbrains.skia.Shader
+import org.jetbrains.skia.Surface
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.qualifier.named
@@ -134,6 +139,31 @@ class DesignShots {
         waitForIdle()
         onNodeWithText("Home").assertExists()
         onNodeWithContentDescription("Full screen").performClick() // leave it full screen for the picture
+    }
+
+    @Test fun airPlayMusicDesktopDark() = shot(
+        "9-airplay-music-desktop-dark", 1280, 800, dark = true, start = PlayerRoute, always = true,
+        airPlay = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook")).apply {
+            activity.value = AirPlayActivity(
+                client = "Worawit's iPhone", audioOnly = true,
+                nowPlaying = AirPlayNowPlaying("Khon Kaen Blues", "Bodyslam", "Kraam", cover(), positionMs = 83_000, durationMs = 245_000),
+            )
+        },
+    ) {
+        onAllNodesWithText("Khon Kaen Blues").assertCountEquals(2) // player + sidebar "Now playing"
+        onNodeWithText("Bodyslam · Kraam").assertExists()
+        onNodeWithText("Playing from Worawit's iPhone").assertExists()
+        onNodeWithText("4:05").assertExists()
+        onNodeWithText("Mirroring Worawit's iPhone").assertDoesNotExist()
+    }
+
+    /** A gradient JPEG standing in for cover art from the sender. */
+    private fun cover(): ByteArray {
+        val surface = Surface.makeRasterN32Premul(300, 300)
+        surface.canvas.drawPaint(Paint().apply {
+            shader = Shader.makeLinearGradient(0f, 0f, 300f, 300f, intArrayOf(0xffe8505b.toInt(), 0xff2d1b69.toInt()))
+        })
+        return surface.makeImageSnapshot().encodeToData(EncodedImageFormat.JPEG)!!.bytes
     }
 
     @Test fun airPlayPinPhoneLight() = shot(

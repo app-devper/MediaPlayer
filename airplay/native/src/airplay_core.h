@@ -41,6 +41,11 @@ typedef struct ap_callbacks {
     void (*audio_format)(void *ctx, int ct, int spf, bool using_screen);
     void (*audio)(void *ctx, const uint8_t *data, int len, uint64_t pts_ns);
     void (*audio_flush)(void *ctx);
+    /* AirPlay audio "now playing": DMAP metadata (title/artist/album), cover art (JPEG/PNG,
+     * len 0 = none) and progress as RTP timestamps (44.1 kHz): start, current, end. */
+    void (*audio_metadata)(void *ctx, const uint8_t *dmap, int len);
+    void (*audio_artwork)(void *ctx, const uint8_t *image, int len);
+    void (*audio_progress)(void *ctx, uint32_t start, uint32_t current, uint32_t end);
     /* AirPlay volume in dB: -30 (min) .. 0 (max), -144 = mute */
     void (*audio_volume)(void *ctx, float db);
     /* connection lost or the client went away uncleanly: the app should restart the receiver */

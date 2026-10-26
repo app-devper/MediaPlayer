@@ -20,6 +20,7 @@ static struct {
     jmethodID log, connections, admit, show_pin, register_client, is_registered;
     jmethodID video_format, video, video_stop, audio_format, audio, audio_flush, audio_volume, reset;
     jmethodID video_play, video_scrub, video_rate, video_playback_stop, video_info;
+    jmethodID audio_metadata, audio_artwork, audio_progress;
 } m;
 
 static void detach_thread(void *unused) {
@@ -194,6 +195,36 @@ static void cb_video_playback_stop(void *ctx) {
     WITH_ENV((*env)->CallVoidMethod(env, l, m.video_playback_stop));
 }
 
+static void cb_audio_metadata(void *ctx, const uint8_t *dmap, int len) {
+    (void) ctx;
+    WITH_ENV({
+        jbyteArray a = (*env)->NewByteArray(env, len);
+        if (!a) { clear_exception(env); break; }
+        (*env)->SetByteArrayRegion(env, a, 0, len, (const jbyte *) dmap);
+        (*env)->CallVoidMethod(env, l, m.audio_metadata, a);
+        (*env)->DeleteLocalRef(env, a);
+    });
+}
+
+static void cb_audio_artwork(void *ctx, const uint8_t *image, int len) {
+    (void) ctx;
+    WITH_ENV({
+        jbyteArray a = NULL;
+        if (image && len > 0) {
+            a = (*env)->NewByteArray(env, len);
+            if (!a) { clear_exception(env); break; }
+            (*env)->SetByteArrayRegion(env, a, 0, len, (const jbyte *) image);
+        }
+        (*env)->CallVoidMethod(env, l, m.audio_artwork, a);
+        if (a) (*env)->DeleteLocalRef(env, a);
+    });
+}
+
+static void cb_audio_progress(void *ctx, uint32_t start, uint32_t current, uint32_t end) {
+    (void) ctx;
+    WITH_ENV((*env)->CallVoidMethod(env, l, m.audio_progress, (jlong) start, (jlong) current, (jlong) end));
+}
+
 /* Kotlin returns [duration, position, rate] or null while nothing is loaded. */
 static bool cb_video_info(void *ctx, double *duration, double *position, float *rate) {
     (void) ctx;
@@ -235,6 +266,9 @@ static bool lookup_methods(JNIEnv *env, jobject obj) {
     M(video_rate, "onVideoRate", "(F)V")
     M(video_playback_stop, "onVideoPlaybackStop", "()V")
     M(video_info, "videoInfo", "()[D")
+    M(audio_metadata, "onAudioMetadata", "([B)V")
+    M(audio_artwork, "onAudioArtwork", "([B)V")
+    M(audio_progress, "onAudioProgress", "(JJJ)V")
 #undef M
     (*env)->DeleteLocalRef(env, c);
     return true;
@@ -280,6 +314,7 @@ Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject 
         .audio_volume = cb_audio_volume, .reset = cb_reset,
         .video_play = cb_video_play, .video_scrub = cb_video_scrub, .video_rate = cb_video_rate,
         .video_playback_stop = cb_video_playback_stop, .video_info = cb_video_info,
+        .audio_metadata = cb_audio_metadata, .audio_artwork = cb_audio_artwork, .audio_progress = cb_audio_progress,
     };
     int result = ap_start(&config, &cb);
     (*env)->ReleaseStringUTFChars(env, name, name_c);

@@ -136,7 +136,7 @@ fun AppShell(startDestination: Any = HomeRoute) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         AppNavHost(nav, startDestination, state, onSelectTarget = vm::selectTarget, onRefresh = { vm.refresh(clear = true) })
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = state.nowPlaying != null && !onPlayer,
+                            visible = state.hasNowPlaying && !onPlayer,
                             enter = slideInVertically { it } + fadeIn(),
                             exit = slideOutVertically { it } + fadeOut(),
                             modifier = Modifier.align(Alignment.BottomCenter),

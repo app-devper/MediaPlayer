@@ -31,7 +31,10 @@ data class ShellUiState(
     val nowPlaying: MediaEntry? = null,
     val remotePlaying: Boolean = false,
     val airPlay: AirPlayActivity = AirPlayActivity(),
-)
+) {
+    /** Something to show under "Now playing": our own item, or audio a sender plays here. */
+    val hasNowPlaying: Boolean get() = nowPlaying != null || airPlay.audioOnly
+}
 
 /** State for the app chrome: sidebar, "Play on" picker and the mini player. */
 class ShellViewModel(

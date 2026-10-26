@@ -8,6 +8,7 @@ import com.appdevper.mediaplayer.airplay.AirPlayException
 import com.appdevper.mediaplayer.airplay.AirPlayMediaSink
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.airplay.AirPlayReceiver
+import com.appdevper.mediaplayer.airplay.AirPlayTrackInfo
 import com.appdevper.mediaplayer.airplay.AirPlayVideoControl
 import com.appdevper.mediaplayer.airplay.AirPlayVideoInfo
 import com.appdevper.mediaplayer.data.platform.AppStorage
@@ -190,6 +191,21 @@ class AirPlayRepositoryTest {
         receiver.events.emit(AirPlayEvent.MirroringStopped)
         receiver.events.emit(AirPlayEvent.AudioStarted(AirPlayAudioCodec.PCM, 352, withScreen = false))
         assertEquals(AirPlayActivity(client = "Worawit's iPhone", audioOnly = true), repo.activity.value)
+
+        // Music app: song, cover art and progress for the player screen.
+        val cover = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 1, 2, 3)
+        receiver.events.emit(AirPlayEvent.Track(AirPlayTrackInfo("Khon Kaen Blues", "Bodyslam", "Kraam")))
+        receiver.events.emit(AirPlayEvent.Artwork(cover))
+        receiver.events.emit(AirPlayEvent.Progress(positionMs = 30_000, durationMs = 245_000))
+        val song = assertNotNull(repo.activity.value.nowPlaying)
+        assertEquals("Khon Kaen Blues", song.title)
+        assertEquals("Bodyslam", song.artist)
+        assertEquals("Kraam", song.album)
+        assertTrue(song.artwork.contentEquals(cover))
+        assertEquals(245_000, song.durationMs)
+        assertTrue(song.positionNow() in 30_000..31_000)
+        receiver.events.emit(AirPlayEvent.Artwork(null)) // sender cleared it
+        assertNull(repo.activity.value.nowPlaying?.artwork)
 
         receiver.events.emit(AirPlayEvent.Connections(0))
         assertEquals(AirPlayActivity(), repo.activity.value)
