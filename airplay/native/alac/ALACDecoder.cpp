@@ -200,6 +200,8 @@ int32_t ALACDecoder::Decode( BitBuffer * bits, uint8_t * sampleBuffer, uint32_t 
 	
 	RequireAction( (bits != nil) && (sampleBuffer != nil) && (outNumSamples != nil), return kALAC_ParamError; );
 	RequireAction( numChannels > 0, return kALAC_ParamError; );
+	// MediaPlayer: every buffer below holds mConfig.frameLength samples.
+	RequireAction( numSamples <= mConfig.frameLength, return kALAC_ParamError; );
 
 	mActiveElements = 0;
 	channelIndex	= 0;
@@ -251,6 +253,8 @@ int32_t ALACDecoder::Decode( BitBuffer * bits, uint8_t * sampleBuffer, uint32_t 
 				{
 					numSamples  = BitBufferRead( bits, 16 ) << 16;
 					numSamples |= BitBufferRead( bits, 16 );
+					// MediaPlayer: the count comes from the packet; never past the buffers.
+					RequireAction( numSamples <= mConfig.frameLength, status = kALAC_ParamError; goto Exit; );
 				}
 
 				if ( escapeFlag == 0 )
@@ -402,6 +406,8 @@ int32_t ALACDecoder::Decode( BitBuffer * bits, uint8_t * sampleBuffer, uint32_t 
 				{
 					numSamples  = BitBufferRead( bits, 16 ) << 16;
 					numSamples |= BitBufferRead( bits, 16 );
+					// MediaPlayer: the count comes from the packet; never past the buffers.
+					RequireAction( numSamples <= mConfig.frameLength, status = kALAC_ParamError; goto Exit; );
 				}
 
 				if ( escapeFlag == 0 )
