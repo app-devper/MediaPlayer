@@ -14,11 +14,14 @@ A single Compose Multiplatform app that merges
 | **AirPlay** (Apple TV, AirPlay speakers/TVs) | — | ✅ native | — |
 | Built-in DLNA media server (share this device) | MediaStore | Documents folder | chosen folders |
 | Receive casts: DLNA renderer (other apps "Play to" this device) ³ | ✅ | ✅ | ✅ |
+| **Receive AirPlay**: screen mirroring + audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ |
 
 ¹ Real devices need Apple's multicast entitlement (see below). The simulator works without it.
 ² Without VLC installed, the desktop app opens media in the system player.
 ³ Off by default (My Server › Receive), since anyone on the Wi‑Fi could then play media on the screen.
   Plays while the app is open; only http(s) media URLs are accepted.
+⁴ Off by default (My Server › Receive); a sender's first connection needs the code shown on screen
+  (can be turned off). iOS can't be an AirPlay receiver. Works while the app is open.
 
 ## Architecture (Clean Architecture + MVVM)
 
@@ -42,6 +45,10 @@ core:designsystem                  PlaybackSession
 * **`:composeApp`**: MVVM. One ViewModel per screen (`ShellViewModel`, `BrowseViewModel`,
   `PlayerViewModel`, `ServerViewModel`) exposes a `StateFlow` UI state and calls only use cases.
   Koin (`di/AppModule.kt`) is the composition root.
+* **`:airplay`**: the AirPlay receiver. UxPlay's protocol library (C, vendored in `native/uxplay`)
+  with BoringSSL and libplist, built by CMake for Android (NDK) and for the desktop build machine,
+  behind a small JNI API (`AirPlayReceiver`). `AirPlayPlayer` plays what it receives: MediaCodec on
+  Android, FFmpeg (bytedeco) on the desktop; ALAC is decoded natively with Apple's decoder.
 * **`:core:designsystem`**: Compose-only building blocks with no app or domain code: design
   tokens, the icon set and reusable components.
 
@@ -96,12 +103,24 @@ open iosApp/iosApp.xcodeproj                 # iOS: pick a simulator/device and 
 
 ## AirPlay
 
+### Receiving (Android, Desktop)
+
+Turn on **My Server › Receive › AirPlay from iPhone, iPad and Mac**. The app then shows up in
+Screen Mirroring (Control Center) and in AirPlay audio menus on Apple devices on the same Wi‑Fi:
+
+* screen mirroring (H.264) opens the Mirror screen; the sender's audio plays with it
+* music/podcasts (ALAC or AAC) play without a screen
+* the first connection from each sender asks for the code shown on screen (switchable); paired senders
+  are remembered
+* the sender's volume control works; our own player pauses while a sender plays
+
+### Sending
+
 * **iOS:** the AirPlay button is in the top bar and inside the video player. When you pick an Apple
   TV or AirPlay 2 TV, the video moves there (`allowsExternalPlayback`); music keeps playing in the
   background (`UIBackgroundModes: audio`).
-* **Android / Desktop:** these OSes have no AirPlay API, and current Apple TVs only accept senders
-  that complete Apple's pairing handshake, so AirPlay isn't supported there. Use DLNA renderers.
-  (Many TVs support both.)
+* **Android / Desktop:** sending to an Apple TV isn't supported (these OSes have no AirPlay sender
+  API). Use DLNA renderers; many TVs support both.
 
 ## iOS notes
 
@@ -119,3 +138,25 @@ open iosApp/iosApp.xcodeproj                 # iOS: pick a simulator/device and 
 * Media permissions (`READ_MEDIA_*`) are requested when you turn the server on.
 * While the server is running, a foreground service (type `connectedDevice`) shows a notification
   with a Stop button, and holds the Wi-Fi + multicast locks.
+
+## License
+
+MediaPlayer is free software under the **GNU General Public License v3.0** (see `LICENSE`), because
+it includes UxPlay's AirPlay library. If you distribute the app, its complete source must be
+available under the same license.
+
+AirPlay receiving relies on a reverse-engineered implementation of Apple's protocol (including
+FairPlay authentication, from UxPlay/playfair). It is not licensed or endorsed by Apple; app stores may
+reject or remove apps with it.
+
+Third-party code in this repository or fetched by the build:
+
+| Component | Where | License |
+|---|---|---|
+| UxPlay `lib/` (incl. playfair) | `airplay/native/uxplay` | GPL-3.0 |
+| llhttp | `airplay/native/uxplay/llhttp` | MIT |
+| Apple ALAC decoder | `airplay/native/alac` | Apache-2.0 |
+| BoringSSL | fetched by CMake (pinned) | OpenSSL / ISC |
+| libplist | fetched by CMake (pinned) | LGPL-2.1+ |
+| FFmpeg + JavaCPP (bytedeco) | desktop runtime dependency | LGPL-2.1+ / Apache-2.0 |
+

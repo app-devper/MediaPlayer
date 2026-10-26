@@ -95,6 +95,9 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
   ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO -derivedDataPath build/dd build)
 ```
 
+- AirPlay native or MediaCodec changes (`:airplay`): run the on-device tests too, on an
+  emulator or phone: `./gradlew :airplay:connectedDebugAndroidTest`. Real mirroring needs an
+  iPhone/iPad/Mac on the same Wi‑Fi (My Server › Receive › AirPlay).
 - UI changes: render the screens (light/dark, phone/desktop, fake data),
   then open the PNGs and look at them:
   `SHOT_DIR=<dir> ./gradlew :composeApp:jvmTest --tests '*DesignShots*'`

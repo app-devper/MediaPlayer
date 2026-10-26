@@ -42,6 +42,12 @@ kotlin {
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
         }
+        // On-device tests of the MediaCodec pipeline (./gradlew :airplay:connectedDebugAndroidTest).
+        androidInstrumentedTest.dependencies {
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.ext.junit)
+            implementation(libs.kotlin.test)
+        }
         jvmMain.dependencies {
             // FFmpeg decodes mirroring video and AAC on the desktop; natives only for the build machine.
             implementation(libs.bytedeco.ffmpeg)
@@ -56,6 +62,7 @@ android {
     namespace = "com.appdevper.mediaplayer.airplay"
     ndkVersion = libs.versions.android.ndk.get()
     defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         externalNativeBuild { cmake { arguments += listOf("-DAIRPLAY_BUILD_PROBE=OFF", "-DANDROID_STL=c++_static") } }
     }
