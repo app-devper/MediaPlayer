@@ -34,6 +34,7 @@ actual fun NativeMediaPlayer(
     onEnded: () -> Unit,
     modifier: Modifier,
     autoPlay: Boolean,
+    startPositionMs: Long,
     volume: Float,
     commands: Flow<LocalPlayerCommand>,
     onStatus: (RendererStatus) -> Unit,
@@ -53,6 +54,7 @@ actual fun NativeMediaPlayer(
                     .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
                     .build(),
             )
+            if (startPositionMs > 0) seekTo(startPositionMs)
             prepare()
             playWhenReady = autoPlay
         }

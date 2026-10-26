@@ -22,5 +22,10 @@ Copied unchanged, except:
   - `http_handlers.h` `scrub`/`rate`: a query without `=` dereferenced `NULL + 1`.
   - `http_handlers.h` `supported_hls_proc_names`: adds `YouTubeMusic` (same HLS format as YouTube;
     upstream only logged it as unsupported, playback already worked).
+  - `http_handlers.h` `POST /action` `playlistInsert` (upstream: "FIXME: not yet implemented"): with
+    no current item, the inserted item is played like a `POST /play` body (`play_item`, split out of
+    `http_handler_play`). YouTube Music swaps items this way when switching between video and song;
+    in tests with an iPhone it never answered the FCUP request that follows, so the switch still ends in /stop.
+    At debug log level the action body is logged.
 
 Any local change to these files must be listed here.

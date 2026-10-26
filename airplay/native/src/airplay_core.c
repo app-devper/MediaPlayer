@@ -180,9 +180,11 @@ static void audio_set_coverart(void *cls, const void *buffer, int len) {
     CALL(audio_artwork, (const uint8_t *) buffer, len);
 }
 
+/* only called when the sender tears down its audio stream */
 static void audio_stop_coverart_rendering(void *cls) {
     (void) cls;
     CALL(audio_artwork, NULL, 0);
+    CALL0(audio_stopped);
 }
 static void audio_remote_control_id(void *cls, const char *dacp_id, const char *active_remote) { (void) cls; (void) dacp_id; (void) active_remote; }
 static void audio_set_progress(void *cls, uint32_t *start, uint32_t *curr, uint32_t *end) {

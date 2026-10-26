@@ -20,7 +20,7 @@ static struct {
     jmethodID log, connections, admit, show_pin, register_client, is_registered;
     jmethodID video_format, video, video_stop, audio_format, audio, audio_flush, audio_volume, reset;
     jmethodID video_play, video_scrub, video_rate, video_playback_stop, video_info;
-    jmethodID audio_metadata, audio_artwork, audio_progress;
+    jmethodID audio_metadata, audio_artwork, audio_progress, audio_stopped;
 } m;
 
 static void detach_thread(void *unused) {
@@ -220,6 +220,11 @@ static void cb_audio_artwork(void *ctx, const uint8_t *image, int len) {
     });
 }
 
+static void cb_audio_stopped(void *ctx) {
+    (void) ctx;
+    WITH_ENV((*env)->CallVoidMethod(env, l, m.audio_stopped));
+}
+
 static void cb_audio_progress(void *ctx, uint32_t start, uint32_t current, uint32_t end) {
     (void) ctx;
     WITH_ENV((*env)->CallVoidMethod(env, l, m.audio_progress, (jlong) start, (jlong) current, (jlong) end));
@@ -269,6 +274,7 @@ static bool lookup_methods(JNIEnv *env, jobject obj) {
     M(audio_metadata, "onAudioMetadata", "([B)V")
     M(audio_artwork, "onAudioArtwork", "([B)V")
     M(audio_progress, "onAudioProgress", "(JJJ)V")
+    M(audio_stopped, "onAudioStopped", "()V")
 #undef M
     (*env)->DeleteLocalRef(env, c);
     return true;
@@ -315,6 +321,7 @@ Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject 
         .video_play = cb_video_play, .video_scrub = cb_video_scrub, .video_rate = cb_video_rate,
         .video_playback_stop = cb_video_playback_stop, .video_info = cb_video_info,
         .audio_metadata = cb_audio_metadata, .audio_artwork = cb_audio_artwork, .audio_progress = cb_audio_progress,
+        .audio_stopped = cb_audio_stopped,
     };
     int result = ap_start(&config, &cb);
     (*env)->ReleaseStringUTFChars(env, name, name_c);

@@ -145,6 +145,17 @@ class AirPlayReceiverSessionTest {
         playback.reportLocalStatus(RendererStatus(TransportState.PAUSED, 30_000, 300_000))
         runCurrent()
         assertEquals(ReceiverPlayback(video, RendererStatus(TransportState.PAUSED, 30_000, 300_000)), airPlay.published.last())
+
+        // Stopped by the sender: shown again later (after AirPlay audio), it must not start by itself.
+        airPlay.commands.emit(CastCommand.Stop)
+        runCurrent()
+        assertEquals(false, playback.state.value.autoPlay)
+
+        // A sender resuming at a position: the player starts there (no separate seek to race with the old player).
+        airPlay.commands.emit(CastCommand.Load(video.copy(id = "v2"), autoPlay = true, startPositionMs = 157_000))
+        runCurrent()
+        assertEquals(157_000, playback.state.value.startPositionMs)
+        assertEquals(true, playback.state.value.autoPlay)
     }
 
     @Test

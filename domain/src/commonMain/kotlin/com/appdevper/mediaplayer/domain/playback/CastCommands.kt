@@ -17,7 +17,7 @@ internal fun PlaybackSession.apply(command: CastCommand, openPlayer: () -> Unit)
     when (command) {
         is CastCommand.Load -> {
             setTarget(PlaybackTarget.Local)
-            play(command.entry, listOf(command.entry), autoPlay = command.autoPlay)
+            play(command.entry, listOf(command.entry), autoPlay = command.autoPlay, startPositionMs = command.startPositionMs)
             openPlayer()
         }
         CastCommand.Play -> {
@@ -25,7 +25,7 @@ internal fun PlaybackSession.apply(command: CastCommand, openPlayer: () -> Unit)
             openPlayer()
         }
         CastCommand.Pause -> sendLocal(LocalPlayerCommand.Pause)
-        CastCommand.Stop -> sendLocal(LocalPlayerCommand.Stop)
+        CastCommand.Stop -> stopLocal()
         is CastCommand.Seek -> sendLocal(LocalPlayerCommand.Seek(command.positionMs))
         is CastCommand.SetVolume -> setLocalVolume(command.volume)
         is CastCommand.SetMute -> setLocalMuted(command.muted)

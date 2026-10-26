@@ -30,6 +30,8 @@ expect fun NativeMediaPlayer(
     onEnded: () -> Unit,
     modifier: Modifier = Modifier,
     autoPlay: Boolean = true,
+    /** Where playback starts (e.g. an AirPlay sender resuming a video). */
+    startPositionMs: Long = 0,
     /** 0..1; 0 when muted. */
     volume: Float = 1f,
     commands: Flow<LocalPlayerCommand> = emptyFlow(),

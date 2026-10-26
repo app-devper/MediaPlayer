@@ -399,6 +399,46 @@ http_handler_reverse(raop_conn_t *conn, http_request_t *request, http_response_t
  listed in the Master Playlist.     The POST /action request contains the playlist requested by the Server in
  the preceding "FCUP Request".   The FCUP Request sequence  continues until all Media Playlists have been obtained by the Server */ 
 
+static void play_item(raop_conn_t *conn, http_response_t *response, const char *apple_session_id,
+                      plist_t req_root_node);
+
+/* MediaPlayer: YouTube Music swaps the item when switching between video and song: playlistRemove, then
+   playlistInsert with the new item (same form as a POST /play body). With nothing current, play it. */
+static bool
+action_insert_item(raop_conn_t *conn, http_request_t *request, http_response_t *response) {
+    raop_t *raop = conn->raop;
+    if (raop->current_video >= 0) {
+        return false;
+    }
+    const char *session_id = http_request_get_header(request, "X-Apple-Session-ID");
+    int len = 0;
+    const char *data = http_request_get_data(request, &len);
+    if (!session_id || len <= 0) {
+        return false;
+    }
+    plist_t root = NULL;
+    plist_from_bin(data, len, &root);
+    if (!root) {
+        return false;
+    }
+    bool handled = false;
+    plist_t type_node = plist_dict_get_item(root, "type");
+    plist_t params_node = plist_dict_get_item(root, "params");
+    plist_t item_node = PLIST_IS_DICT(params_node) ? plist_dict_get_item(params_node, "item") : NULL;
+    if (PLIST_IS_STRING(type_node) && PLIST_IS_DICT(item_node)) {
+        char *type = NULL;
+        plist_get_string_val(type_node, &type);
+        if (type && !strcmp(type, "playlistInsert")) {
+            logger_log(raop->logger, LOGGER_INFO, "action playlistInsert: playing the new item");
+            play_item(conn, response, session_id, plist_copy(item_node));
+            handled = true;
+        }
+        plist_mem_free(type);
+    }
+    plist_free(root);
+    return handled;
+}
+
 static void
 http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t *response,
                     char **response_data, int *response_datalen) {
@@ -413,6 +453,26 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
     char *fcup_response_url = NULL;
     char *type = NULL;
     bool logger_debug = (logger_get_level(raop->logger) >= LOGGER_DEBUG);
+
+    if (logger_debug) {
+        /* MediaPlayer: show what the sender asks for, also when no playlist is current */
+        int dump_len = 0;
+        const char *dump_data = http_request_get_data(request, &dump_len);
+        plist_t dump_node = NULL;
+        if (dump_len > 0) plist_from_bin(dump_data, dump_len, &dump_node);
+        if (dump_node) {
+            char *xml = NULL;
+            uint32_t xml_len = 0;
+            plist_to_xml(dump_node, &xml, &xml_len);
+            logger_log(raop->logger, LOGGER_DEBUG, "POST /action (current_video %d):\n%.4000s", raop->current_video, xml ? xml : "");
+            plist_mem_free(xml);
+            plist_free(dump_node);
+        }
+    }
+
+    if (action_insert_item(conn, request, response)) {
+        return;
+    }
 
     /* fetched only after the locals above are initialized: post_action_error releases them */
     airplay_video = (airplay_video_t *) hls_get_current_video(raop);
@@ -693,15 +753,9 @@ static void
 http_handler_play(raop_conn_t *conn, http_request_t *request, http_response_t *response,
                       char **response_data, int *response_datalen) {
     raop_t *raop = conn->raop;
-    char* playback_location = NULL;
-    char* client_proc_name = NULL;
     plist_t req_root_node = NULL;
-    float start_position_seconds = 0.0f;
     bool data_is_binary_plist = false;
-    /* MediaPlayer: YouTube Music sends the same HLS format (tested with the iOS app) */
-    char supported_hls_proc_names[] = "YouTube;YouTubeMusic;";
-    airplay_video_t *airplay_video = NULL;
-    
+
     logger_log(raop->logger, LOGGER_DEBUG, "http_handler_play");
 
     const char* apple_session_id = http_request_get_header(request, "X-Apple-Session-ID");
@@ -727,6 +781,27 @@ http_handler_play(raop_conn_t *conn, http_request_t *request, http_response_t *r
     }
 
     plist_from_bin(request_data, request_datalen, &req_root_node);
+    play_item(conn, response, apple_session_id, req_root_node);
+    return;
+
+ play_error:;
+    logger_log(raop->logger, LOGGER_ERR, "Could not find valid Plist Data for POST/play request, Unhandled");
+    http_response_init(response, "HTTP/1.1", 400, "Bad Request");
+    http_response_set_disconnect(response, 1);
+    raop->callbacks.conn_reset(raop->callbacks.cls, 2);
+}
+
+/* MediaPlayer: starts playing the item described by req_root_node (the body of POST /play, or the "item" of a
+   playlistInsert action); takes ownership of req_root_node */
+static void
+play_item(raop_conn_t *conn, http_response_t *response, const char *apple_session_id, plist_t req_root_node) {
+    raop_t *raop = conn->raop;
+    char* playback_location = NULL;
+    char* client_proc_name = NULL;
+    float start_position_seconds = 0.0f;
+    /* MediaPlayer: YouTube Music sends the same HLS format (tested with the iOS app) */
+    char supported_hls_proc_names[] = "YouTube;YouTubeMusic;";
+    airplay_video_t *airplay_video = NULL;
 
     plist_t req_uuid_node = plist_dict_get_item(req_root_node, "uuid");
     if (!req_uuid_node) {

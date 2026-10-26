@@ -110,6 +110,31 @@ class AirPlayVideoE2ETest {
     }
 
     @Test
+    fun aSenderCanSwapTheItem() {
+        // YouTube Music switching between video and song: playlistRemove, then playlistInsert with the new item.
+        val port = start()
+        fun action(type: String, item: List<Pair<String, Any>>) =
+            bplist(listOf("type" to type, "params" to listOf("item" to item)))
+        AirPlayTestClient("127.0.0.1", port).use { video ->
+            assertTrue(video.pairVerify(sessionId = AirPlayTestClient.SESSION))
+            assertEquals(200, video.http("POST", "/play", playBody, "application/x-apple-binary-plist").status)
+            info = AirPlayVideoInfo(durationSeconds = 300.0, positionSeconds = 13.0, playing = true)
+            val remove = action("playlistRemove", listOf("uuid" to "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"))
+            assertEquals(200, video.http("POST", "/action", remove, "application/x-apple-binary-plist").status)
+            val insert = action(
+                "playlistInsert",
+                listOf("uuid" to "11111111-2222-3333-4444-555555555555", "Content-Location" to "http://192.168.1.50:8080/song.m4a"),
+            )
+            assertEquals(200, video.http("POST", "/action", insert, "application/x-apple-binary-plist").status)
+            assertEquals(200, video.http("POST", "/scrub?position=13.0").status)
+        }
+        assertEquals(
+            listOf("play http://192.168.1.50:8080/clip.mp4 @12.5", "play http://192.168.1.50:8080/song.m4a @0.0", "seek 13.0"),
+            calls.toList(),
+        )
+    }
+
+    @Test
     fun theLocalHlsServerOnlyAnswersThisDevice() {
         val port = start()
         val lan = assertNotNull(lanAddress())

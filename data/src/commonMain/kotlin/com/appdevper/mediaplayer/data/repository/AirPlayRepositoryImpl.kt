@@ -75,6 +75,8 @@ class AirPlayRepositoryImpl(
             // YouTube's next video comes at the same local URL: a new id makes the player load it.
             val id = "airplay-${++videoSequence}"
             videoId = id
+            // The sender moved from AirPlay audio to video (YouTube Music does when switching song → video).
+            _activity.update { it.copy(audioOnly = false, nowPlaying = null) }
             videoLoaded = false
             val entry = MediaEntry(
                 id = id,
@@ -84,8 +86,7 @@ class AirPlayRepositoryImpl(
                 streamUrl = url,
                 mimeType = if (".m3u8" in url) "application/x-mpegURL" else null,
             )
-            _commands.tryEmit(CastCommand.Load(entry, autoPlay = true))
-            if (startSeconds > 0f) _commands.tryEmit(CastCommand.Seek((startSeconds * 1000).toLong()))
+            _commands.tryEmit(CastCommand.Load(entry, autoPlay = true, startPositionMs = (startSeconds * 1000).toLong().coerceAtLeast(0)))
         }
 
         // Only while a video is current: after /stop, YouTube sends /rate 1 before the next /play,
@@ -179,6 +180,7 @@ class AirPlayRepositoryImpl(
             is AirPlayEvent.MirroringStarted -> _activity.update { it.copy(mirroring = true, audioOnly = false, pin = null) }
             AirPlayEvent.MirroringStopped -> _activity.update { it.copy(mirroring = false) }
             is AirPlayEvent.AudioStarted -> _activity.update { it.copy(audioOnly = !event.withScreen && !it.mirroring, pin = null) }
+            AirPlayEvent.AudioStopped -> _activity.update { it.copy(audioOnly = false, nowPlaying = null) }
             is AirPlayEvent.Volume -> player.setVolume(airPlayGain(event.db))
             is AirPlayEvent.Track -> updateNowPlaying { it.copy(title = event.info.title, artist = event.info.artist, album = event.info.album) }
             is AirPlayEvent.Artwork -> updateNowPlaying { it.copy(artwork = event.image) }

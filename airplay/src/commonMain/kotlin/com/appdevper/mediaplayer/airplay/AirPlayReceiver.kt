@@ -39,6 +39,9 @@ sealed interface AirPlayEvent {
     data class MirroringStarted(val h265: Boolean, val width: Int, val height: Int) : AirPlayEvent
     data object MirroringStopped : AirPlayEvent
     data class AudioStarted(val codec: AirPlayAudioCodec?, val samplesPerFrame: Int, val withScreen: Boolean) : AirPlayEvent
+
+    /** The sender ended its audio stream (it may stay connected, e.g. to play video next). */
+    data object AudioStopped : AirPlayEvent
     /** AirPlay audio "now playing": what the sender says is playing. */
     data class Track(val info: AirPlayTrackInfo) : AirPlayEvent
     /** Cover art (JPEG/PNG) for the current song; null = none. */

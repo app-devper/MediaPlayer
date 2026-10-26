@@ -150,7 +150,7 @@ internal class AirPlayTestClient(host: String, port: Int) : AutoCloseable {
             return KeyFactory.getInstance("Ed25519").generatePublic(EdECPublicKeySpec(NamedParameterSpec.ED25519, EdECPoint(xOdd, y)))
         }
 
-        /** A flat binary plist dictionary of strings and doubles (what POST /play carries). */
+        /** A binary plist dictionary of strings, doubles and nested dictionaries (a List of pairs), as POST /play and /action carry. */
         fun bplist(entries: List<Pair<String, Any>>): ByteArray {
             fun string(s: String): ByteArray {
                 val b = s.toByteArray(Charsets.US_ASCII)
@@ -158,11 +158,26 @@ internal class AirPlayTestClient(host: String, port: Int) : AutoCloseable {
                 return if (b.size < 15) byteArrayOf((0x50 or b.size).toByte()) + b else byteArrayOf(0x5f, 0x10, b.size.toByte()) + b
             }
             fun real(d: Double) = byteArrayOf(0x23) + ByteBuffer.allocate(8).putDouble(d).array()
-            val n = entries.size
             val objects = mutableListOf<ByteArray>()
-            objects += byteArrayOf((0xd0 or n).toByte()) + (1..n).map { it.toByte() } + (n + 1..2 * n).map { it.toByte() }
-            entries.forEach { objects += string(it.first) }
-            entries.forEach { (_, v) -> objects += if (v is Double) real(v) else string(v.toString()) }
+            fun add(value: Any): Int {
+                val index = objects.size
+                objects += ByteArray(0) // placeholder, so a dictionary comes before its keys and values
+                objects[index] = when (value) {
+                    is Double -> real(value)
+                    is List<*> -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val dict = value as List<Pair<String, Any>>
+                        require(dict.size < 15)
+                        val keys = dict.map { add(it.first) }
+                        val values = dict.map { add(it.second) }
+                        byteArrayOf((0xd0 or dict.size).toByte()) + (keys + values).map { it.toByte() }
+                    }
+                    else -> string(value.toString())
+                }
+                return index
+            }
+            add(entries)
+            require(objects.size < 256)
             val out = ByteArrayOutputStream().apply { write("bplist00".toByteArray()) }
             val offsets = objects.map { o -> out.size().also { out.write(o) } }
             val tableOffset = out.size()

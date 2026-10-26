@@ -55,13 +55,14 @@ actual fun NativeMediaPlayer(
     onEnded: () -> Unit,
     modifier: Modifier,
     autoPlay: Boolean,
+    startPositionMs: Long,
     volume: Float,
     commands: Flow<LocalPlayerCommand>,
     onStatus: (RendererStatus) -> Unit,
     fullscreen: Boolean,
     onToggleFullscreen: (() -> Unit)?,
 ) {
-    val player = remember(url) { FfmpegPlayer(url, autoPlay) }
+    val player = remember(url) { FfmpegPlayer(url, autoPlay).apply { if (startPositionMs > 0) seek(startPositionMs) } }
     val status by player.status.collectAsStateWithLifecycle()
     val frame by player.frames.collectAsStateWithLifecycle()
     val ended by rememberUpdatedState(onEnded)

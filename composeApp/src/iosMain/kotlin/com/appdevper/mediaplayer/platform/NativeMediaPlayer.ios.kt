@@ -63,6 +63,7 @@ actual fun NativeMediaPlayer(
     onEnded: () -> Unit,
     modifier: Modifier,
     autoPlay: Boolean,
+    startPositionMs: Long,
     volume: Float,
     commands: Flow<LocalPlayerCommand>,
     onStatus: (RendererStatus) -> Unit,
@@ -88,6 +89,7 @@ actual fun NativeMediaPlayer(
             stopped = true
             ended()
         }
+        if (startPositionMs > 0) player.seekToMs(startPositionMs)
         if (autoPlay) player.play()
         onDispose {
             report(player.status(stopped = true))

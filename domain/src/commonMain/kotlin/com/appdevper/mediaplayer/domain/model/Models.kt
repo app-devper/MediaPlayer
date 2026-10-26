@@ -62,6 +62,8 @@ data class PlaybackState(
     val remote: RemotePlayback = RemotePlayback(),
     /** Whether the local player starts as soon as the current item loads. */
     val autoPlay: Boolean = true,
+    /** Where the local player starts the current item. */
+    val startPositionMs: Long = 0,
     /** Last state reported by the local player, null until it reports. */
     val local: RendererStatus? = null,
     val localVolume: Int = 100,
@@ -118,7 +120,8 @@ sealed interface LocalPlayerCommand {
 
 /** What another device asks this one to do while it acts as a receiver. */
 sealed interface CastCommand {
-    data class Load(val entry: MediaEntry, val autoPlay: Boolean) : CastCommand
+    /** [startPositionMs] is part of the load: a separate seek could reach the previous item's player. */
+    data class Load(val entry: MediaEntry, val autoPlay: Boolean, val startPositionMs: Long = 0) : CastCommand
     data object Play : CastCommand
     data object Pause : CastCommand
     data object Stop : CastCommand

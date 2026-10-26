@@ -63,19 +63,19 @@ class PlaybackSession(
      * (photos with photos, audio/video with audio/video) — same as the old QueueHelper.
      * With [autoPlay] false the local player loads paused and waits for [LocalPlayerCommand.Play].
      */
-    fun play(entry: MediaEntry, siblings: List<MediaEntry>, autoPlay: Boolean = true) {
+    fun play(entry: MediaEntry, siblings: List<MediaEntry>, autoPlay: Boolean = true, startPositionMs: Long = 0) {
         val photos = entry.kind == MediaKind.IMAGE
         val queue = siblings.filter { it == entry || (it.isPlayable && (it.kind == MediaKind.IMAGE) == photos) }
             .ifEmpty { listOf(entry) }
         dropLocalCommands()
-        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, local = null) }
+        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, startPositionMs = startPositionMs, local = null) }
         if (remoteDevice != null) loadCurrent()
     }
 
     fun playAt(index: Int) {
         if (index !in _state.value.queue.indices) return
         dropLocalCommands()
-        _state.update { it.copy(index = index, autoPlay = true, local = null) }
+        _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0, local = null) }
         if (remoteDevice != null) loadCurrent()
     }
 
@@ -103,6 +103,15 @@ class PlaybackSession(
 
     fun sendLocal(command: LocalPlayerCommand) {
         localCommandChannel.trySend(command)
+    }
+
+    /**
+     * Stops the local player and keeps it stopped: if the player comes back on screen (e.g. after
+     * AirPlay audio was shown) it loads paused instead of playing the stopped item again.
+     */
+    fun stopLocal() {
+        sendLocal(LocalPlayerCommand.Stop)
+        _state.update { it.copy(autoPlay = false) }
     }
 
     fun reportLocalStatus(status: RendererStatus?) = _state.update { it.copy(local = status) }

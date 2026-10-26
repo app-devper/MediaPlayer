@@ -52,6 +52,7 @@ internal interface NativeListener {
     fun onAudioMetadata(dmap: ByteArray)
     fun onAudioArtwork(image: ByteArray?)
     fun onAudioProgress(start: Long, current: Long, end: Long)
+    fun onAudioStopped()
     /** [duration s, position s, rate], or null while nothing is loaded; duration < 0 = finished. */
     fun videoInfo(): DoubleArray?
 }

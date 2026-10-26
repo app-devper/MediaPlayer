@@ -32,6 +32,7 @@ import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -126,7 +127,7 @@ class AirPlayRepositoryTest {
         assertEquals(url, load.entry.streamUrl)
         assertEquals("AirPlay from Worawit's iPhone", load.entry.title)
         assertEquals("application/x-mpegURL", load.entry.mimeType)
-        assertEquals(CastCommand.Seek(12_500), commands[1])
+        assertEquals(12_500, load.startPositionMs) // part of the load, not a separate seek
         assertNull(video.info()) // player hasn't reported yet
 
         repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.PLAYING, 13_000, 300_000)))
@@ -135,7 +136,7 @@ class AirPlayRepositoryTest {
         video.setRate(0f)
         video.seek(60f)
         video.setRate(1f)
-        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(60_000), CastCommand.Play), commands.drop(2))
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(60_000), CastCommand.Play), commands.drop(1))
 
         // Played to the end: the sender is told it's over.
         repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 300_000, 300_000)))
@@ -206,6 +207,19 @@ class AirPlayRepositoryTest {
         assertTrue(song.positionNow() in 30_000..31_000)
         receiver.events.emit(AirPlayEvent.Artwork(null)) // sender cleared it
         assertNull(repo.activity.value.nowPlaying?.artwork)
+
+        // The sender ends its audio stream but stays connected: no longer "playing audio here".
+        receiver.events.emit(AirPlayEvent.AudioStopped)
+        assertFalse(repo.activity.value.audioOnly)
+        assertNull(repo.activity.value.nowPlaying)
+
+        // YouTube Music going from song (AirPlay audio) to video: the video takes over the player.
+        receiver.events.emit(AirPlayEvent.AudioStarted(AirPlayAudioCodec.AAC_ELD, 480, withScreen = false))
+        receiver.events.emit(AirPlayEvent.Track(AirPlayTrackInfo("Khon Kaen Blues", "Bodyslam", "Kraam")))
+        assertTrue(repo.activity.value.audioOnly)
+        assertNotNull(receiver.video).play("http://localhost:7000/master.m3u8", startSeconds = 25f)
+        assertFalse(repo.activity.value.audioOnly)
+        assertNull(repo.activity.value.nowPlaying)
 
         receiver.events.emit(AirPlayEvent.Connections(0))
         assertEquals(AirPlayActivity(), repo.activity.value)
