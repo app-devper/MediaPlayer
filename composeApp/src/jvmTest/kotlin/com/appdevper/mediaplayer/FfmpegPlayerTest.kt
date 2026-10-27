@@ -137,9 +137,12 @@ class FfmpegPlayerTest {
                 p.seek(random.nextInt(5_500).toLong())
                 Thread.sleep(random.nextInt(4).toLong())
             }
-            val settled = withTimeout(10_000) { p.status.first { !it.buffering && it.error == null } }
-            assertTrue(settled.error == null)
+            // Then a last seek, which must really land (not a stale frame from before it).
+            p.seek(3_000)
+            val settled = withTimeout(10_000) { p.status.first { !it.buffering && it.positionMs in 3_000..4_500 } }
+            assertTrue(settled.error == null, "error ${settled.error}")
             p.release()
+            assertTrue(p.awaitStopped(5_000), "player threads still running after release")
             player = null
         }
     }
