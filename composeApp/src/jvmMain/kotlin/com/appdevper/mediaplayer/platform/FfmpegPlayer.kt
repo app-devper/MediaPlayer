@@ -114,6 +114,11 @@ class FfmpegPlayer(
     @Volatile private var paused = !autoPlay
     @Volatile private var gain = 1f
     @Volatile private var seekTarget = -1L
+    // Where the last seek went, until a frame from there is played: the position to report meanwhile
+    // (also while paused, when the decoders don't run). -1 = none pending.
+    @Volatile private var seekedTo = -1L
+    // Bumped by every seek(): a decoder that read the position before a seek can't clear the new one.
+    private val seekGen = AtomicInteger(0)
     // Bumped on every seek; queued packets/frames from before it are dropped.
     private val serial = AtomicInteger(0)
 
@@ -167,6 +172,8 @@ class FfmpegPlayer(
         // Until audio after the seek is heard, the wall clock runs from the target.
         wallBaseMs = positionMs.coerceAtLeast(0)
         wallStartNs = System.nanoTime()
+        seekGen.incrementAndGet()
+        seekedTo = positionMs.coerceAtLeast(0)
         seekTarget = positionMs.coerceAtLeast(0)
         _status.update { it.copy(positionMs = positionMs.coerceAtLeast(0), ended = false, buffering = true) }
     }
@@ -185,7 +192,17 @@ class FfmpegPlayer(
         output.close()
     }
 
-    private fun clockMs(): Long = when {
+    /** For tests: whether the player's threads have finished within [timeoutMs] after [release]. */
+    internal fun awaitStopped(timeoutMs: Long): Boolean {
+        demuxThread.join(timeoutMs)
+        return !demuxThread.isAlive
+    }
+
+    /** The position to show: the seek target until a frame from there plays. */
+    private fun clockMs(): Long = seekedTo.takeIf { it >= 0 } ?: playbackClockMs()
+
+    /** What frames are timed against: keeps running after a seek (from the target, via wallBaseMs). */
+    private fun playbackClockMs(): Long = when {
         hasAudio && audioWrittenEndMs >= 0 -> (audioWrittenEndMs - output.bufferedMs()).coerceAtLeast(0)
         paused -> wallBaseMs
         else -> wallBaseMs + (System.nanoTime() - wallStartNs) / 1_000_000
@@ -235,10 +252,22 @@ class FfmpegPlayer(
                 if (i != videoIndex && i != audioIndex) fmt.streams(i).discard(AVDISCARD_ALL)
             }
             debug("playing video stream $videoIndex, audio stream $audioIndex")
-            if (videoIndex >= 0) videoThread = Thread({ videoLoop(fmt, videoIndex) }, "ffmpeg-video").apply { isDaemon = true; start() }
-            else videoEnded = true
-            if (audioIndex >= 0) audioThread = Thread({ audioLoop(fmt, audioIndex) }, "ffmpeg-audio").apply { isDaemon = true; start() }
-            else audioEnded = true
+            // Decoders are opened here, on the demux thread: the HLS demuxer can reallocate fmt's streams
+            // while reading, so the decoder threads never touch fmt at all (only their own codec context).
+            if (videoIndex >= 0) {
+                val ctx = openDecoder(fmt, videoIndex)
+                val clock = clockOf(fmt, videoIndex)
+                videoThread = Thread({ videoLoop(ctx, clock) }, "ffmpeg-video").apply { isDaemon = true; start() }
+            } else {
+                videoEnded = true
+            }
+            if (audioIndex >= 0) {
+                val ctx = openDecoder(fmt, audioIndex)
+                val clock = clockOf(fmt, audioIndex)
+                audioThread = Thread({ audioLoop(ctx, clock) }, "ffmpeg-audio").apply { isDaemon = true; start() }
+            } else {
+                audioEnded = true
+            }
             if (videoIndex < 0 && audioIndex < 0) {
                 fail("No playable audio or video")
                 return
@@ -246,47 +275,54 @@ class FfmpegPlayer(
 
             val pkt = av_packet_alloc()
             var eof = false
-            while (!closing) {
-                val target = seekTarget
-                if (target >= 0) {
-                    seekTarget = -1
-                    avformat_seek_file(fmt, -1, Long.MIN_VALUE, target * 1000, Long.MAX_VALUE, 0)
-                    val s = serial.incrementAndGet()
-                    listOf(videoQueue, audioQueue).forEach { q -> q.forEach { it.pkt?.let(::freePacket) }; q.clear() }
-                    if (videoIndex >= 0) put(videoQueue, Packet(null, s, flushTo = target))
-                    if (audioIndex >= 0) put(audioQueue, Packet(null, s, flushTo = target))
-                    audioEnded = audioIndex < 0
-                    videoEnded = videoIndex < 0
-                    eof = false
-                }
-                if (eof) {
-                    if (audioEnded && videoEnded && (!hasAudio || output.bufferedMs() <= 0)) {
-                        // A seek landing meanwhile wins: it cleared `ended`, and the next pass applies it.
-                        _status.update { if (seekTarget >= 0) it else it.copy(ended = true, playing = false, buffering = false) }
-                        if (seekTarget < 0) paused = true
+            try {
+                while (!closing) {
+                    val target = seekTarget
+                    if (target >= 0) {
+                        // Serial first: frames from before the seek stop counting from now on.
+                        val s = serial.incrementAndGet()
+                        seekTarget = -1
+                        avformat_seek_file(fmt, -1, Long.MIN_VALUE, target * 1000, Long.MAX_VALUE, 0)
+                        listOf(videoQueue, audioQueue).forEach(::drainAndFree)
+                        if (videoIndex >= 0) put(videoQueue, Packet(null, s, flushTo = target))
+                        if (audioIndex >= 0) put(audioQueue, Packet(null, s, flushTo = target))
+                        audioEnded = audioIndex < 0
+                        videoEnded = videoIndex < 0
+                        eof = false
                     }
-                    Thread.sleep(20)
-                    continue
+                    if (eof) {
+                        if (audioEnded && videoEnded && (!hasAudio || output.bufferedMs() <= 0)) {
+                            // A seek landing meanwhile wins: it cleared `ended`, and the next pass applies it.
+                            _status.update { if (seekTarget >= 0) it else it.copy(ended = true, playing = false, buffering = false) }
+                            if (seekTarget < 0) paused = true
+                        }
+                        Thread.sleep(20)
+                        continue
+                    }
+                    val read = av_read_frame(fmt, pkt)
+                    if (read < 0) {
+                        eof = true
+                        if (videoIndex >= 0) put(videoQueue, Packet(null, serial.get()))
+                        if (audioIndex >= 0) put(audioQueue, Packet(null, serial.get()))
+                        continue
+                    }
+                    // A null clone (out of memory) is skipped: a null packet means end of stream to the decoders.
+                    when (pkt.stream_index()) {
+                        videoIndex -> av_packet_clone(pkt)?.let { put(videoQueue, Packet(it, serial.get())) }
+                        audioIndex -> av_packet_clone(pkt)?.let { put(audioQueue, Packet(it, serial.get())) }
+                    }
+                    av_packet_unref(pkt)
                 }
-                val read = av_read_frame(fmt, pkt)
-                if (read < 0) {
-                    eof = true
-                    if (videoIndex >= 0) put(videoQueue, Packet(null, serial.get()))
-                    if (audioIndex >= 0) put(audioQueue, Packet(null, serial.get()))
-                    continue
-                }
-                when (pkt.stream_index()) {
-                    videoIndex -> put(videoQueue, Packet(av_packet_clone(pkt), serial.get()))
-                    audioIndex -> put(audioQueue, Packet(av_packet_clone(pkt), serial.get()))
-                }
-                av_packet_unref(pkt)
+            } finally {
+                av_packet_free(pkt)
             }
-            av_packet_free(pkt)
         } finally {
             closing = true
+            // Decoders stop within ~50 ms (queue poll) of `closing`. They don't use fmt, so closing it
+            // while one is still stuck (e.g. in a sound-card write) is safe; they free their own state.
             videoThread?.join(1_000)
             audioThread?.join(1_000)
-            listOf(videoQueue, audioQueue).forEach { q -> q.forEach { it.pkt?.let(::freePacket) }; q.clear() }
+            listOf(videoQueue, audioQueue).forEach(::drainAndFree)
             avformat_close_input(fmt)
         }
     }
@@ -300,6 +336,17 @@ class FfmpegPlayer(
     }
 
     private fun freePacket(pkt: AVPacket) = av_packet_free(pkt)
+
+    /**
+     * Empties [queue] and frees what was in it. poll takes each packet out under the queue's lock, so a
+     * packet is either taken by a decoder (which frees it) or here, never both (a double free).
+     */
+    private fun drainAndFree(queue: LinkedBlockingQueue<Packet>) {
+        while (true) {
+            val p = queue.poll() ?: return
+            p.pkt?.let(::freePacket)
+        }
+    }
 
     private fun fail(message: String) {
         debug("error: $message")
@@ -321,15 +368,20 @@ class FfmpegPlayer(
         return ctx
     }
 
-    private fun ptsMs(fmt: AVFormatContext, index: Int, pts: Long): Long {
-        if (pts == AV_NOPTS_VALUE) return -1
-        val tb = fmt.streams(index).time_base()
-        val startUs = fmt.start_time().takeIf { it != AV_NOPTS_VALUE } ?: 0
-        return pts * 1000 * tb.num() / tb.den() - startUs / 1000
+    /** A stream's time base and the file's start, copied out of fmt for the decoder threads. */
+    private class Clock(private val num: Long, private val den: Long, private val startUs: Long) {
+        // In double: pts * 1000 * num overflows Long for large timestamps (long live streams).
+        fun ms(pts: Long): Long =
+            if (pts == AV_NOPTS_VALUE || den == 0L) -1 else (pts.toDouble() * 1000 * num / den).toLong() - startUs / 1000
     }
 
-    private fun videoLoop(fmt: AVFormatContext, index: Int) {
-        val ctx = openDecoder(fmt, index) ?: run { videoEnded = true; return }
+    private fun clockOf(fmt: AVFormatContext, index: Int): Clock {
+        val tb = fmt.streams(index).time_base()
+        return Clock(tb.num().toLong(), tb.den().toLong(), fmt.start_time().takeIf { it != AV_NOPTS_VALUE } ?: 0)
+    }
+
+    private fun videoLoop(decoder: AVCodecContext?, clock: Clock) {
+        val ctx = decoder ?: run { videoEnded = true; return }
         val frame = av_frame_alloc()
         val bgra = av_frame_alloc()
         var sws: SwsContext? = null
@@ -347,7 +399,7 @@ class FfmpegPlayer(
                 p.pkt?.let(::freePacket)
                 if (sent < 0 && p.pkt != null) continue
                 while (!closing && avcodec_receive_frame(ctx, frame) == 0) {
-                    val pts = ptsMs(fmt, index, frame.best_effort_timestamp())
+                    val pts = clock.ms(frame.best_effort_timestamp())
                     if (skipBefore >= 0 && pts in 0 until skipBefore) { av_frame_unref(frame); continue }
                     skipBefore = -1
                     if (!waitUntil(pts, p.serial)) { av_frame_unref(frame); continue }
@@ -363,7 +415,12 @@ class FfmpegPlayer(
                         if (_frames.value == null) debug("first picture ${w}x$h at $pts ms")
                         _frames.value = BgraFrame(w, h, packedRows(bgra, w, h))
                     }
-                    if (!hasAudio) _status.update { it.copy(positionMs = maxOf(pts, 0), buffering = false) }
+                    // A frame from before a seek must not report the old position as "settled".
+                    val gen = seekGen.get()
+                    if (!hasAudio && p.serial == serial.get() && seekTarget < 0 && seekGen.get() == gen) {
+                        seekedTo = -1
+                        _status.update { if (seekGen.get() != gen) it else it.copy(positionMs = maxOf(pts, 0), buffering = false) }
+                    }
                     av_frame_unref(frame)
                 }
                 if (p.pkt == null) videoEnded = true
@@ -386,7 +443,7 @@ class FfmpegPlayer(
                 Thread.sleep(10)
                 continue
             }
-            val ahead = ptsMs - clockMs()
+            val ahead = ptsMs - playbackClockMs()
             if (ahead <= 5) return ahead > -LATE_DROP_MS || _frames.value == null
             Thread.sleep(minOf(ahead, 10))
         }
@@ -407,24 +464,24 @@ class FfmpegPlayer(
         return out
     }
 
-    private fun audioLoop(fmt: AVFormatContext, index: Int) {
-        val ctx = openDecoder(fmt, index) ?: run { audioEnded = true; hasAudio = false; return }
+    private fun audioLoop(decoder: AVCodecContext?, clock: Clock) {
+        val ctx = decoder ?: run { audioEnded = true; hasAudio = false; return }
         val rate = ctx.sample_rate().takeIf { it > 0 } ?: 48_000
         val swr: SwrContext = swr_alloc()
-        av_opt_set_chlayout(swr, "in_chlayout", ctx.ch_layout(), 0)
-        av_opt_set_int(swr, "in_sample_rate", rate.toLong(), 0)
-        av_opt_set_sample_fmt(swr, "in_sample_fmt", ctx.sample_fmt(), 0)
-        val stereo = org.bytedeco.ffmpeg.avutil.AVChannelLayout().also { av_channel_layout_default(it, 2) }
-        av_opt_set_chlayout(swr, "out_chlayout", stereo, 0)
-        av_opt_set_int(swr, "out_sample_rate", rate.toLong(), 0)
-        av_opt_set_sample_fmt(swr, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0)
-        swr_init(swr)
-        output.open(rate)
-        if (paused) output.pause()
         val frame = av_frame_alloc()
         var outBuf = BytePointer(0L)
         var skipBefore = -1L
         try {
+            av_opt_set_chlayout(swr, "in_chlayout", ctx.ch_layout(), 0)
+            av_opt_set_int(swr, "in_sample_rate", rate.toLong(), 0)
+            av_opt_set_sample_fmt(swr, "in_sample_fmt", ctx.sample_fmt(), 0)
+            val stereo = org.bytedeco.ffmpeg.avutil.AVChannelLayout().also { av_channel_layout_default(it, 2) }
+            av_opt_set_chlayout(swr, "out_chlayout", stereo, 0)
+            av_opt_set_int(swr, "out_sample_rate", rate.toLong(), 0)
+            av_opt_set_sample_fmt(swr, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0)
+            swr_init(swr)
+            output.open(rate)
+            if (paused) output.pause()
             while (!closing) {
                 if (paused) { Thread.sleep(10); continue }
                 val p = audioQueue.poll(50, TimeUnit.MILLISECONDS) ?: continue
@@ -440,7 +497,7 @@ class FfmpegPlayer(
                 p.pkt?.let(::freePacket)
                 if (sent < 0 && p.pkt != null) continue
                 while (!closing && p.serial == serial.get() && avcodec_receive_frame(ctx, frame) == 0) {
-                    val pts = ptsMs(fmt, index, frame.best_effort_timestamp())
+                    val pts = clock.ms(frame.best_effort_timestamp())
                     val samples = frame.nb_samples()
                     val frameMs = samples * 1000L / rate
                     if (skipBefore >= 0 && pts >= 0 && pts + frameMs < skipBefore) { av_frame_unref(frame); continue }
@@ -459,13 +516,20 @@ class FfmpegPlayer(
                     val pcm = ByteArray(converted * 4).also { outBuf.position(0).get(it) }
                     applyGain(pcm)
                     output.write(pcm)
-                    if (p.serial != serial.get()) break
+                    // Old audio finishing while a seek is pending must not move the position back.
+                    val gen = seekGen.get()
+                    if (p.serial != serial.get() || seekTarget >= 0) break
                     audioWrittenEndMs = (if (pts >= 0) pts else maxOf(audioWrittenEndMs, 0)) + converted * 1000L / rate
-                    _status.update { it.copy(positionMs = clockMs(), buffering = false) }
+                    if (seekGen.get() == gen) {
+                        seekedTo = -1
+                        _status.update { if (seekGen.get() != gen) it else it.copy(positionMs = clockMs(), buffering = false) }
+                    }
                 }
                 if (p.pkt == null) audioEnded = true
             }
         } finally {
+            // The line this thread opened, also when release() ran before it was open.
+            output.close()
             av_frame_free(frame)
             outBuf.close()
             swr_free(swr)
