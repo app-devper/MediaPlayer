@@ -22,7 +22,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
@@ -40,7 +39,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,7 +62,6 @@ import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.ui.formatClock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import org.jetbrains.skia.ColorAlphaType
@@ -95,7 +92,7 @@ actual fun NativeMediaPlayer(
     val report by rememberUpdatedState(onStatus)
     // "Stopped" = loaded but not started, finished, or stopped by a controller; reported as STOPPED rather than PAUSED.
     var stopped by remember(url) { mutableStateOf(!autoPlay) }
-    var seeking by remember { mutableStateOf<Float?>(null) }
+    var seeking by remember { mutableStateOf(false) }
     var sliderVolume by remember { mutableFloatStateOf(100f) }
 
     fun rendererStatus() = RendererStatus(
@@ -159,7 +156,7 @@ actual fun NativeMediaPlayer(
     // moves to the video area when the bar hides, so it isn't lost with the hidden controls.
     var controlsHaveFocus by remember { mutableStateOf(false) }
     val videoFocus = remember { FocusRequester() }
-    val canHide = !isAudio && status.playing && !status.buffering && seeking == null && !overControls
+    val canHide = !isAudio && status.playing && !status.buffering && !seeking && !overControls
     LaunchedEffect(canHide) {
         controlsVisible = true
         if (!canHide) return@LaunchedEffect
@@ -183,8 +180,14 @@ actual fun NativeMediaPlayer(
     val content = if (isAudio) c.textPrimary else Color.White
     val controls: @Composable () -> Unit = {
         // Stays up while the pointer is on it or one of its controls has keyboard focus.
-        Column(
-            Modifier.fillMaxWidth()
+        PlayerControlBar(
+            playing = status.playing,
+            positionMs = status.positionMs,
+            durationMs = status.durationMs,
+            onPlayPause = ::togglePlay,
+            onSeek = player::seek,
+            content = content,
+            modifier = Modifier
                 .onFocusChanged { controlsHaveFocus = it.hasFocus }
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
@@ -196,50 +199,22 @@ actual fun NativeMediaPlayer(
                         }
                     }
                 },
+            onDraggingChange = { seeking = it },
+            fullscreen = fullscreen,
+            onToggleFullscreen = onToggleFullscreen,
         ) {
-            // Same seek bar as the song screens (thin track, round thumb).
+            Icon(AppIcons.Volume, null, Modifier.size(18.dp), tint = content.copy(alpha = 0.85f))
             ThinSlider(
-                value = seeking ?: if (status.durationMs > 0) (status.positionMs.toFloat() / status.durationMs).coerceIn(0f, 1f) else 0f,
-                onValueChange = { seeking = it },
-                onValueChangeFinished = {
-                    seeking?.let { player.seek((it * status.durationMs).toLong()) }
-                    seeking = null
+                value = sliderVolume,
+                onValueChange = {
+                    sliderVolume = it
+                    player.setVolume(it / 100f)
                 },
-                enabled = status.durationMs > 0,
+                valueRange = 0f..100f,
                 activeColor = content,
                 inactiveColor = content.copy(alpha = 0.3f),
-                modifier = Modifier.fillMaxWidth().height(20.dp),
+                modifier = Modifier.padding(start = 6.dp).width(110.dp),
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = ::togglePlay) {
-                    Icon(if (status.playing) AppIcons.Pause else AppIcons.Play, if (status.playing) "Pause" else "Play", tint = content)
-                }
-                val position = seeking?.let { (it * status.durationMs).toLong() } ?: status.positionMs
-                Text(
-                    // Unknown duration (live stream): just the position.
-                    if (status.durationMs > 0) "${formatClock(position)} / ${formatClock(status.durationMs)}" else formatClock(position),
-                    color = content.copy(alpha = 0.85f),
-                    style = MaterialTheme.typography.labelMedium,
-                )
-                Spacer(Modifier.weight(1f))
-                Icon(AppIcons.Volume, null, Modifier.size(18.dp), tint = content.copy(alpha = 0.85f))
-                ThinSlider(
-                    value = sliderVolume,
-                    onValueChange = {
-                        sliderVolume = it
-                        player.setVolume(it / 100f)
-                    },
-                    valueRange = 0f..100f,
-                    activeColor = content,
-                    inactiveColor = content.copy(alpha = 0.3f),
-                    modifier = Modifier.padding(start = 6.dp).width(110.dp),
-                )
-                if (onToggleFullscreen != null) {
-                    IconButton(onClick = onToggleFullscreen) {
-                        Icon(if (fullscreen) AppIcons.Minimize else AppIcons.Maximize, if (fullscreen) "Exit full screen" else "Full screen", tint = content)
-                    }
-                }
-            }
         }
     }
 
