@@ -22,7 +22,9 @@ private tailrec fun Context.activity(): Activity? = when (this) {
 @Composable
 actual fun SystemFullscreenEffect(fullscreen: Boolean, onExit: () -> Unit) {
     val activity = LocalContext.current.activity() ?: return
-    BackHandler(enabled = fullscreen, onBack = onExit)
+    // Added when full screen starts, so it's the newest handler and Back leaves full screen first
+    // (one added at start-up is older than the navigation's, which then took Back off the player).
+    if (fullscreen) BackHandler(onBack = onExit)
     DisposableEffect(fullscreen) {
         val bars = WindowCompat.getInsetsController(activity.window, activity.window.decorView)
         if (fullscreen) {
