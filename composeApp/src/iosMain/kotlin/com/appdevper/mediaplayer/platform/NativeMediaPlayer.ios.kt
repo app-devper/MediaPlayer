@@ -71,6 +71,8 @@ actual fun NativeMediaPlayer(
                     allowsPictureInPicturePlayback = true
                     // Now playing is the background player's.
                     updatesNowPlayingInfoCenter = false
+                    // So the background pause leaves Picture in Picture playing.
+                    delegate = background.pictureInPictureDelegate
                 }
             },
             // The player plays on (its sound) when this leaves the screen.
@@ -95,7 +97,7 @@ actual fun NativeMediaPlayer(
             }
         }
     }
-    val playing = !stopped && shown.state != TransportState.STOPPED && background.isPlaying
+    val playing = !stopped && (shown.state == TransportState.PLAYING || shown.state == TransportState.TRANSITIONING)
     fun togglePlay() {
         if (playing) background.pause() else background.resume()
         shown = background.status()

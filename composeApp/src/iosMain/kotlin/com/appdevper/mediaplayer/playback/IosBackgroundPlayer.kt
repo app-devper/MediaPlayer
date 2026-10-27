@@ -19,6 +19,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import platform.AVFAudio.AVAudioSessionInterruptionNotification
+import platform.AVFAudio.AVAudioSessionInterruptionOptionKey
+import platform.AVFAudio.AVAudioSessionInterruptionOptionShouldResume
+import platform.AVFAudio.AVAudioSessionInterruptionTypeBegan
+import platform.AVFAudio.AVAudioSessionInterruptionTypeEnded
+import platform.AVFAudio.AVAudioSessionInterruptionTypeKey
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
@@ -31,6 +37,7 @@ import platform.AVFoundation.currentItem
 import platform.AVFoundation.currentTime
 import platform.AVFoundation.duration
 import platform.AVFoundation.error
+import platform.AVFoundation.externalPlaybackActive
 import platform.AVFoundation.pause
 import platform.AVFoundation.play
 import platform.AVFoundation.rate
@@ -40,10 +47,13 @@ import platform.AVFoundation.status
 import platform.AVFoundation.timeControlStatus
 import platform.AVFoundation.usesExternalPlaybackWhileExternalScreenIsActive
 import platform.AVFoundation.volume
+import platform.AVKit.AVPlayerViewController
+import platform.AVKit.AVPlayerViewControllerDelegateProtocol
 import platform.CoreMedia.CMTimeGetSeconds
 import platform.CoreMedia.CMTimeMakeWithSeconds
 import platform.Foundation.NSCharacterSet
 import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSNumber
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSString
 import platform.Foundation.NSURL
@@ -51,6 +61,7 @@ import platform.Foundation.URLQueryAllowedCharacterSet
 import platform.Foundation.create
 import platform.Foundation.stringByAddingPercentEncodingWithAllowedCharacters
 import platform.MediaPlayer.MPChangePlaybackPositionCommandEvent
+import platform.darwin.NSObject
 import platform.MediaPlayer.MPMediaItemPropertyAlbumTitle
 import platform.MediaPlayer.MPMediaItemPropertyArtist
 import platform.MediaPlayer.MPMediaItemPropertyPlaybackDuration
@@ -95,6 +106,23 @@ class IosBackgroundPlayer(private val session: PlaybackSession) {
     private var pausedInBackground = false
     private val scope = MainScope()
 
+    /** AVKit's Picture in Picture is up; set through [pictureInPictureDelegate]. */
+    private var pictureInPicture = false
+
+    /** For the video view's AVPlayerViewController (its delegate is weak; this keeps it). */
+    val pictureInPictureDelegate: AVPlayerViewControllerDelegateProtocol = object : NSObject(), AVPlayerViewControllerDelegateProtocol {
+        override fun playerViewControllerWillStartPictureInPicture(playerViewController: AVPlayerViewController) {
+            pictureInPicture = true
+        }
+
+        override fun playerViewControllerDidStopPictureInPicture(playerViewController: AVPlayerViewController) {
+            pictureInPicture = false
+        }
+    }
+
+    // Playing when a call (or another app's audio) interrupted it: it goes on afterwards if iOS says so.
+    private var playingBeforeInterruption = false
+
     init {
         NSNotificationCenter.defaultCenter.addObserverForName(AVPlayerItemDidPlayToEndTimeNotification, null, NSOperationQueue.mainQueue) { note ->
             if (note?.`object` == player.currentItem && loaded != null) {
@@ -103,9 +131,21 @@ class IosBackgroundPlayer(private val session: PlaybackSession) {
             }
         }
         NSNotificationCenter.defaultCenter.addObserverForName(UIApplicationDidEnterBackgroundNotification, null, NSOperationQueue.mainQueue) { _ ->
-            if (loaded?.kind == MediaKind.VIDEO && player.rate > 0f) {
+            // Not while it's shown elsewhere: in Picture in Picture, or on an Apple TV (AirPlay).
+            if (loaded?.kind == MediaKind.VIDEO && player.rate > 0f && !pictureInPicture && !player.externalPlaybackActive) {
                 player.pause()
                 pausedInBackground = true
+            }
+        }
+        NSNotificationCenter.defaultCenter.addObserverForName(AVAudioSessionInterruptionNotification, null, NSOperationQueue.mainQueue) { note ->
+            val info = note?.userInfo ?: return@addObserverForName
+            val type = (info[AVAudioSessionInterruptionTypeKey] as? NSNumber)?.unsignedLongValue
+            if (type == AVAudioSessionInterruptionTypeBegan) {
+                playingBeforeInterruption = isPlaying
+            } else if (type == AVAudioSessionInterruptionTypeEnded) {
+                val options = (info[AVAudioSessionInterruptionOptionKey] as? NSNumber)?.unsignedLongValue ?: 0u
+                if (playingBeforeInterruption && options and AVAudioSessionInterruptionOptionShouldResume != 0uL) resume()
+                playingBeforeInterruption = false
             }
         }
         NSNotificationCenter.defaultCenter.addObserverForName(UIApplicationWillEnterForegroundNotification, null, NSOperationQueue.mainQueue) { _ ->
@@ -135,7 +175,7 @@ class IosBackgroundPlayer(private val session: PlaybackSession) {
                         player.pause()
                         seek(0, keepStopped = true)
                     }
-                    is LocalPlayerCommand.Seek -> seek(cmd.positionMs)
+                    is LocalPlayerCommand.Seek -> seek(cmd.positionMs, keepStopped = true)
                 }
             }
         }
@@ -179,8 +219,14 @@ class IosBackgroundPlayer(private val session: PlaybackSession) {
 
     /** Play, from our controls, a controller or the lock screen: from the start once finished. */
     fun resume() {
-        if (loaded == null) return
+        val entry = loaded ?: return
         pausedInBackground = false
+        // A failed item never plays again: load it anew, where it was.
+        if (player.currentItem?.status == AVPlayerItemStatusFailed) {
+            val at = positionMs()
+            entry.streamUrl?.let(::toNsUrl)?.let { player.replaceCurrentItemWithPlayerItem(AVPlayerItem.playerItemWithURL(it)) }
+            if (at > 0) player.seekToTime(CMTimeMakeWithSeconds(at / 1000.0, 600))
+        }
         if (_stopped.value && atEnd()) player.seekToTime(CMTimeMakeWithSeconds(0.0, 600))
         _stopped.value = false
         player.play()
