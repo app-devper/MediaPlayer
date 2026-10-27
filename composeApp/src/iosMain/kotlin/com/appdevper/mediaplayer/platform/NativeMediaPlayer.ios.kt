@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -21,8 +23,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.UIKitViewController
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
@@ -33,6 +39,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
+import platform.AVFoundation.AVPlayerItemStatusFailed
 import platform.AVFoundation.AVPlayerTimeControlStatusPaused
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
 import platform.AVFoundation.AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate
@@ -40,10 +47,12 @@ import platform.AVFoundation.allowsExternalPlayback
 import platform.AVFoundation.currentItem
 import platform.AVFoundation.currentTime
 import platform.AVFoundation.duration
+import platform.AVFoundation.error
 import platform.AVFoundation.pause
 import platform.AVFoundation.play
 import platform.AVFoundation.replaceCurrentItemWithPlayerItem
 import platform.AVFoundation.seekToTime
+import platform.AVFoundation.status
 import platform.AVFoundation.timeControlStatus
 import platform.AVFoundation.usesExternalPlaybackWhileExternalScreenIsActive
 import platform.AVFoundation.volume
@@ -58,6 +67,7 @@ import platform.Foundation.NSURL
 import platform.Foundation.URLQueryAllowedCharacterSet
 import platform.Foundation.create
 import platform.Foundation.stringByAddingPercentEncodingWithAllowedCharacters
+import platform.UIKit.accessibilityElementsHidden
 
 private fun toNsUrl(url: String): NSURL? =
     NSURL.URLWithString(url) ?: NSString.create(string = url).stringByAddingPercentEncodingWithAllowedCharacters(
@@ -115,7 +125,7 @@ actual fun NativeMediaPlayer(
         commands.collect { cmd ->
             when (cmd) {
                 LocalPlayerCommand.Play -> {
-                    if (stopped && player.positionMs() >= player.durationMs() - 500) player.seekToMs(0)
+                    if (stopped && player.atEnd()) player.seekToMs(0)
                     stopped = false
                     player.play()
                 }
@@ -143,9 +153,11 @@ actual fun NativeMediaPlayer(
             factory = {
                 AVPlayerViewController().apply {
                     this.player = player
-                    showsPlaybackControls = true
+                    // Songs: our bar draws the controls; this unseen view is only kept for now playing.
+                    showsPlaybackControls = !isAudio
                     allowsPictureInPicturePlayback = !isAudio
                     updatesNowPlayingInfoCenter = true
+                    if (isAudio) view.accessibilityElementsHidden = true
                 }
             },
             modifier = viewModifier,
@@ -156,10 +168,16 @@ actual fun NativeMediaPlayer(
         // the song page gives them and were cut off; its view stays (unseen) for the lock screen's
         // now playing info.
         var shown by remember(player) { mutableStateOf(player.status(stopped)) }
-        LaunchedEffect(player) {
-            while (true) {
-                shown = player.status(stopped)
-                delay(CONTROLS_POLL_MS)
+        var error by remember(player) { mutableStateOf<String?>(null) }
+        // Only while the app is in front (the status loop above keeps reporting in the background).
+        val lifecycle = LocalLifecycleOwner.current.lifecycle
+        LaunchedEffect(player, lifecycle) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    shown = player.status(stopped)
+                    error = player.currentItem?.takeIf { it.status == AVPlayerItemStatusFailed }?.error?.localizedDescription
+                    delay(CONTROLS_POLL_MS)
+                }
             }
         }
         val playing = !stopped && player.timeControlStatus != AVPlayerTimeControlStatusPaused
@@ -167,7 +185,7 @@ actual fun NativeMediaPlayer(
             if (playing) {
                 player.pause()
             } else {
-                if (player.positionMs() >= player.durationMs() - 500) player.seekToMs(0)
+                if (stopped && player.atEnd()) player.seekToMs(0)
                 stopped = false
                 player.play()
             }
@@ -176,8 +194,10 @@ actual fun NativeMediaPlayer(
         val c = AppTheme.colors
         Column(modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.Bottom) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                if (shown.state == TransportState.TRANSITIONING) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.textSecondary)
+                when {
+                    error != null -> Text(error.orEmpty(), color = c.danger, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    shown.state == TransportState.TRANSITIONING ->
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.textSecondary)
                 }
             }
             PlayerControlBar(
@@ -191,7 +211,10 @@ actual fun NativeMediaPlayer(
                     shown = player.status(stopped)
                 },
                 content = c.textPrimary,
-            )
+            ) {
+                // AVKit's controls had the AirPlay button; songs keep one here.
+                AirPlayButton(Modifier.size(40.dp), tint = c.textPrimary)
+            }
             playerView(Modifier.size(1.dp).alpha(0f))
         }
         return
@@ -206,6 +229,9 @@ private fun Double.toMs(): Long = if (isNaN() || isInfinite() || this < 0) 0 els
 private fun AVPlayer.positionMs(): Long = CMTimeGetSeconds(currentTime()).toMs()
 
 private fun AVPlayer.durationMs(): Long = currentItem?.let { CMTimeGetSeconds(it.duration).toMs() } ?: 0
+
+/** Finished (a known duration, and at its end): Play starts it over. A stream of unknown length never is. */
+private fun AVPlayer.atEnd(): Boolean = durationMs() > 0 && positionMs() >= durationMs() - 500
 
 private fun AVPlayer.seekToMs(ms: Long) = seekToTime(CMTimeMakeWithSeconds(ms / 1000.0, 600))
 
