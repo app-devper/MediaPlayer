@@ -85,7 +85,8 @@ class FfmpegPlayerTest {
         override fun bufferedMs() = 0L
         override fun pause() { paused = true }
         override fun resume() { paused = false }
-        override fun flush() {}
+        @Volatile var flushes = 0
+        override fun flush() { flushes++ }
         override fun close() {}
     }
 
@@ -131,12 +132,50 @@ class FfmpegPlayerTest {
     @Test
     fun aVideoWithoutAudioPlaysOnAfterASeek() = runBlocking<Unit> {
         // No audio: the video's own clock times the frames. Reporting the seek target must not stop it.
-        writeHls(seconds = 6, withAudio = false)
+        writeHls(seconds = 6, audioSeconds = 0)
         val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
         withTimeout(10_000) { p.status.first { it.positionMs > 500 } }
         p.seek(2_510) // between two frames (25 fps)
         val moving = withTimeout(10_000) { p.status.first { it.positionMs > 3_200 } }
         assertTrue(moving.positionMs < 5_000, "played on from the seek: ${moving.positionMs}")
+    }
+
+    @Test
+    fun theLastOfTwoQuickSeeksWins() = runBlocking<Unit> {
+        // The demuxer used to read the target, then clear it: a seek landing in between was lost.
+        writeHls(seconds = 6)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 500 } }
+        repeat(20) { i ->
+            p.seek(1_000)
+            if (i % 2 == 0) Thread.sleep(1)
+            p.seek(4_500)
+            val at = withTimeout(10_000) { p.status.first { !it.buffering && it.positionMs >= 4_500 } }
+            assertTrue(at.positionMs < 5_600, "round $i: played from ${at.positionMs}, not 4.5 s")
+        }
+    }
+
+    @Test
+    fun aSeekWhilePausedDropsTheOldAudio() = runBlocking<Unit> {
+        writeHls(seconds = 6)
+        val out = RealTimeOutput()
+        val p = FfmpegPlayer(url, autoPlay = true, output = out).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 500 } }
+        p.pause()
+        val before = out.flushes
+        p.seek(4_000)
+        assertTrue(out.flushes > before, "buffered audio from before the seek was kept")
+    }
+
+    @Test
+    fun anAudioTrackShorterThanTheVideoDoesntFreezeThePosition() = runBlocking<Unit> {
+        // Seek past the audio's end: video is the clock there, the position must move on.
+        writeHls(seconds = 6, audioSeconds = 2)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 300 } }
+        p.seek(3_500)
+        val moving = withTimeout(10_000) { p.status.first { it.positionMs > 4_200 } }
+        assertTrue(moving.positionMs < 6_200)
     }
 
     @Test
@@ -200,7 +239,9 @@ class FfmpegPlayerTest {
         assertTrue(afterSeek.error == null, "error ${afterSeek.error}")
     }
 
-    private fun writeHls(seconds: Int, sub: String = "", withAudio: Boolean = true) {
+    /** [audioSeconds]: how much of it has audio (0 = none, less than [seconds] = audio ends early). */
+    private fun writeHls(seconds: Int, sub: String = "", audioSeconds: Int = seconds) {
+        val withAudio = audioSeconds > 0
         val target = File(dir, sub).apply { mkdirs() }
         val h264 = avcodec_find_encoder(AV_CODEC_ID_H264)
         val aac = avcodec_find_encoder(AV_CODEC_ID_AAC)
@@ -256,10 +297,11 @@ class FfmpegPlayerTest {
         check(av_frame_get_buffer(af, 0) >= 0)
 
         var videoPts = 0L
-        var audioPts = if (withAudio) 0L else seconds * 44_100L // no audio: only video is written
-        while (videoPts < seconds * 25L || audioPts < seconds * 44_100L) {
+        var audioPts = 0L
+        while (videoPts < seconds * 25L || audioPts < audioSeconds * 44_100L) {
             // Interleave by time so the muxer gets both streams evenly.
-            if (videoPts * 44_100 / 25 <= audioPts && videoPts < seconds * 25L) {
+            val audioDone = audioPts >= audioSeconds * 44_100L
+            if (videoPts < seconds * 25L && (audioDone || videoPts * 44_100 / 25 <= audioPts)) {
                 vf.pts(videoPts++)
                 avcodec_send_frame(v, vf)
                 drain(v, 0, vs.time_base())
