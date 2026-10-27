@@ -164,7 +164,7 @@ class PlaybackSession(
                         next()
                         return@launch
                     }
-                    wasPlaying = status.state == TransportState.PLAYING || status.state == TransportState.TRANSITIONING
+                    wasPlaying = status.isPlaying
                 }
                 delay(pollIntervalMs)
             }

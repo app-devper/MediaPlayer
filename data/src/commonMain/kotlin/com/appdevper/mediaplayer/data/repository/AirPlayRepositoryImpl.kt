@@ -59,12 +59,27 @@ class AirPlayRepositoryImpl(
     private val nowMs: () -> Long = { monotonicStart.elapsedNow().inWholeMilliseconds },
 ) : AirPlayRepository {
 
-    // YouTube's seek bar on the phone sends /rate 0, /scrub, /rate 0 (or just /scrub, /rate 0) while
-    // dragging, and then often never the /rate 1 that resumes. A pause that brackets a seek is that drag,
-    // not the user pausing: if the video was playing, it plays on after the seek.
-    @Volatile private var pausedAtMs = Long.MIN_VALUE / 2
-    @Volatile private var pausedWhilePlaying = false
-    @Volatile private var resumedAfterSeekAtMs = Long.MIN_VALUE / 2
+    // YouTube's seek bar on the phone sends (/rate 0,) /scrub, /rate 0 for a drag and then often never
+    // the /rate 1 that resumes. That trailing /rate 0 comes 13-233 ms after the seek (seen on an iPhone),
+    // faster than anyone pauses by hand: when the video was playing before the drag, it plays on.
+    // UxPlay calls these from its single httpd thread, so they never run concurrently.
+    private val drag = DragState()
+
+    private class DragState {
+        @Volatile var pausedAtMs = Long.MIN_VALUE / 2
+        @Volatile var pausedWhilePlaying = false
+        @Volatile var seekAtMs = Long.MIN_VALUE / 2
+        @Volatile var playingBeforeSeek = false
+        @Volatile var resumedAtMs = Long.MIN_VALUE / 2
+
+        fun reset() {
+            pausedAtMs = Long.MIN_VALUE / 2
+            pausedWhilePlaying = false
+            seekAtMs = Long.MIN_VALUE / 2
+            playingBeforeSeek = false
+            resumedAtMs = Long.MIN_VALUE / 2
+        }
+    }
 
     private val _status = MutableStateFlow(if (receiver == null) AirPlayStatus.Unsupported else AirPlayStatus.Stopped)
     override val status: StateFlow<AirPlayStatus> = _status.asStateFlow()
@@ -126,7 +141,11 @@ class AirPlayRepositoryImpl(
 
     @Volatile private var endJob: Job? = null
 
-    private fun isPlaying() = playback.status?.state.let { it == TransportState.PLAYING || it == TransportState.TRANSITIONING }
+    /** The sender's video is what our player has and it's playing (not an earlier item's state). */
+    private fun isPlaying(): Boolean {
+        val p = playback
+        return videoId != null && p.entry?.id == videoId && p.status?.isPlaying == true
+    }
 
     /**
      * The sender's video is still what our player has. If the user played something else meanwhile, a
@@ -148,6 +167,7 @@ class AirPlayRepositoryImpl(
             val id = "airplay-${++videoSequence}"
             endJob?.cancel()
             endJob = null
+            drag.reset()
             videoId = id
             // The sender moved from AirPlay audio to video (YouTube Music does when switching song → video).
             _activity.update { it.copy(audioOnly = false, nowPlaying = null, videoEntryId = id) }
@@ -170,30 +190,31 @@ class AirPlayRepositoryImpl(
             if (!videoIsPlayingHere()) return
             _commands.tryEmit(CastCommand.Seek((seconds * 1000).toLong()))
             val now = nowMs()
-            if (pausedWhilePlaying && now - pausedAtMs <= SCRUB_WINDOW_MS) {
-                // Paused for the drag: play on.
-                pausedWhilePlaying = false
-                resumedAfterSeekAtMs = now
-                _commands.tryEmit(CastCommand.Play)
-            } else if (isPlaying()) {
-                // Seek first: the /rate 0 that follows within the window is the same drag.
-                resumedAfterSeekAtMs = now
-            }
+            drag.seekAtMs = now
+            // Playing, or paused by the drag's own leading /rate 0 (a drag can take a few seconds).
+            drag.playingBeforeSeek = isPlaying() || (drag.pausedWhilePlaying && now - drag.pausedAtMs <= DRAG_MS)
         }
 
         override fun setRate(rate: Float) {
             if (!videoIsPlayingHere()) return
             val now = nowMs()
             if (rate > 0f) {
-                pausedWhilePlaying = false
-                // Already playing on after the drag's seek.
-                if (now - resumedAfterSeekAtMs > SCRUB_WINDOW_MS) _commands.tryEmit(CastCommand.Play)
+                drag.pausedWhilePlaying = false
+                // Already playing on after the drag: not twice.
+                if (now - drag.resumedAtMs <= DRAG_MS && isPlaying()) return
+                _commands.tryEmit(CastCommand.Play)
                 return
             }
-            // The /rate 0 that follows the drag's seek: still the drag.
-            if (now - resumedAfterSeekAtMs <= SCRUB_WINDOW_MS) return
-            pausedAtMs = now
-            pausedWhilePlaying = isPlaying()
+            if (drag.playingBeforeSeek && now - drag.seekAtMs <= TRAILING_PAUSE_MS) {
+                // The drag's trailing /rate 0: play on (this also undoes its leading pause).
+                drag.playingBeforeSeek = false
+                drag.pausedWhilePlaying = false
+                drag.resumedAtMs = now
+                _commands.tryEmit(CastCommand.Play)
+                return
+            }
+            drag.pausedAtMs = now
+            drag.pausedWhilePlaying = isPlaying()
             _commands.tryEmit(CastCommand.Pause)
         }
 
@@ -203,6 +224,7 @@ class AirPlayRepositoryImpl(
             _activity.update { it.copy(videoEntryId = null) }
             endJob?.cancel()
             endJob = null
+            drag.reset()
             _commands.tryEmit(CastCommand.Stop)
             volumeBeforeVideo?.let { _commands.tryEmit(CastCommand.SetVolume(it)) }
             volumeBeforeVideo = null
@@ -225,7 +247,7 @@ class AirPlayRepositoryImpl(
             return AirPlayVideoInfo(
                 durationSeconds = status.durationMs / 1000.0,
                 positionSeconds = (if (finished) status.durationMs else status.positionMs) / 1000.0,
-                playing = status.state == TransportState.PLAYING || status.state == TransportState.TRANSITIONING,
+                playing = status.isPlaying,
             )
         }
     }
@@ -312,6 +334,8 @@ class AirPlayRepositoryImpl(
     }
 }
 
-/** A pause and a seek this close together are one drag of the sender's seek bar. */
-private const val SCRUB_WINDOW_MS = 1_500L
+/** The drag's trailing /rate 0 comes this soon after its seek (13-233 ms seen); a hand is slower. */
+private const val TRAILING_PAUSE_MS = 400L
+/** A drag (its leading /rate 0 to its seek) takes up to this long. */
+private const val DRAG_MS = 3_000L
 private val monotonicStart = TimeSource.Monotonic.markNow()

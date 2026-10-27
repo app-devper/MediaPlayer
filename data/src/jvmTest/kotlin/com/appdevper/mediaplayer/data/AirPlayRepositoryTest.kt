@@ -19,6 +19,8 @@ import com.appdevper.mediaplayer.data.repository.SettingsRepositoryImpl
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
+import com.appdevper.mediaplayer.domain.model.MediaEntry
+import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.SenderCommand
@@ -168,50 +170,75 @@ class AirPlayRepositoryTest {
 
     @Test
     fun aDragOfTheSendersSeekBarKeepsPlaying() = runBlocking<Unit> {
-        var now = 0L
+        var now = 100_000L
         val receiver = FakeReceiver()
         val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope, nowMs = { now })
         val video = assertNotNull(receiver.video)
         val commands = mutableListOf<CastCommand>()
         val collecting = scope.launch { repo.commands.collect { commands += it } }
-        video.play("http://localhost:7000/master.m3u8", startSeconds = 0f)
-        val entry = assertIs<CastCommand.Load>(commands.single()).entry
+        var entry = MediaEntry("", "", "", MediaKind.VIDEO)
+        fun load() {
+            video.play("http://localhost:7000/master.m3u8", startSeconds = 0f)
+            entry = assertIs<CastCommand.Load>(commands.last()).entry
+            commands.clear()
+        }
         fun reported(state: TransportState) = repo.publish(ReceiverPlayback(entry, RendererStatus(state, 10_000, 600_000)))
-        fun sent() = commands.drop(1).also { commands.retainAll(listOf(commands.first())) }
+        fun sent() = commands.toList().also { commands.clear() }
+        load()
 
-        // YouTube's drag while playing: /rate 0, /scrub, /rate 0 and no /rate 1. It plays on.
+        // YouTube's drag while playing: /rate 0, /scrub, /rate 0 ~20 ms later, no /rate 1. It plays on.
         reported(TransportState.PLAYING)
-        video.setRate(0f); now += 200
+        video.setRate(0f); now += 300
         video.seek(191.7f); now += 20
         video.setRate(0f)
         assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(191_700), CastCommand.Play), sent())
-        // ...and when it does send /rate 1 too, it's already playing: not sent twice. Later, it's play.
+        // A /rate 1 that comes too is not sent twice while it plays; later on, it's play.
         now += 1_000; video.setRate(1f)
         assertEquals(emptyList(), sent())
         now += 5_000; video.setRate(1f)
         assertEquals(listOf(CastCommand.Play), sent())
 
-        // Seek first, then /rate 0 (also seen from YouTube): the same drag, it plays on.
+        // The seek-first variant (/scrub, then /rate 0 at once).
         now += 10_000
-        reported(TransportState.PLAYING)
         video.seek(124.7f); now += 30
         video.setRate(0f)
-        assertEquals(listOf(CastCommand.Seek(124_700)), sent())
+        assertEquals(listOf(CastCommand.Seek(124_700), CastCommand.Play), sent())
+
+        // A long drag (its leading pause 2 s before the seek).
+        now += 10_000
+        video.setRate(0f); now += 2_000
+        video.seek(300f); now += 20
+        video.setRate(0f)
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(300_000), CastCommand.Play), sent())
+
+        // The user pauses 1 s after a seek: that's a pause.
+        now += 10_000
+        video.seek(60f); now += 1_000
+        video.setRate(0f)
+        assertEquals(listOf(CastCommand.Seek(60_000), CastCommand.Pause), sent())
+
+        // The user pauses, then skips (no trailing /rate 0): stays paused.
+        now += 10_000
+        reported(TransportState.PLAYING)
+        video.setRate(0f); now += 800
+        video.seek(90f)
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(90_000)), sent())
 
         // A drag while paused stays paused.
         now += 10_000
         reported(TransportState.PAUSED)
-        video.setRate(0f); now += 200
-        video.seek(90f); now += 20
+        video.setRate(0f); now += 300
+        video.seek(45f); now += 20
         video.setRate(0f)
-        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(90_000), CastCommand.Pause), sent())
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(45_000), CastCommand.Pause), sent())
 
-        // The user's own pause, and a seek well after it: no resume.
-        now += 10_000
+        // Nothing carries over to the next video, and an earlier item's "playing" doesn't count.
         reported(TransportState.PLAYING)
-        video.setRate(0f); now += 5_000
-        video.seek(300f)
-        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(300_000)), sent())
+        video.seek(10f)
+        load() // the next video, not reported yet (the player still shows the old one)
+        now += 20
+        video.setRate(0f)
+        assertEquals(listOf(CastCommand.Pause), sent())
         collecting.cancel()
     }
 

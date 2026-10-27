@@ -49,7 +49,10 @@ data class RendererStatus(
     val durationMs: Long,
     /** Played to its end (not stopped by a controller, nor by leaving the player). Local players only. */
     val ended: Boolean = false,
-)
+) {
+    /** Playing, or buffering on its way to playing. */
+    val isPlaying: Boolean get() = state == TransportState.PLAYING || state == TransportState.TRANSITIONING
+}
 
 data class RemotePlayback(
     val status: RendererStatus? = null,
