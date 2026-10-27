@@ -2,6 +2,14 @@
 
 package com.appdevper.mediaplayer.platform
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -10,8 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.UIKitViewController
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
@@ -21,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
+import platform.AVFoundation.AVPlayerTimeControlStatusPaused
 import platform.AVFoundation.AVPlayerTimeControlStatusPlaying
 import platform.AVFoundation.AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate
 import platform.AVFoundation.allowsExternalPlayback
@@ -125,18 +138,68 @@ actual fun NativeMediaPlayer(
         }
     }
     LaunchedEffect(player, volume) { player.volume = volume.coerceIn(0f, 1f) }
-    UIKitViewController(
-        factory = {
-            AVPlayerViewController().apply {
-                this.player = player
-                showsPlaybackControls = true
-                allowsPictureInPicturePlayback = !isAudio
-                updatesNowPlayingInfoCenter = true
+    val playerView: @Composable (Modifier) -> Unit = { viewModifier ->
+        UIKitViewController(
+            factory = {
+                AVPlayerViewController().apply {
+                    this.player = player
+                    showsPlaybackControls = true
+                    allowsPictureInPicturePlayback = !isAudio
+                    updatesNowPlayingInfoCenter = true
+                }
+            },
+            modifier = viewModifier,
+        )
+    }
+    if (isAudio) {
+        // Songs: our control bar, as on the other platforms. AVKit's controls need more height than
+        // the song page gives them and were cut off; its view stays (unseen) for the lock screen's
+        // now playing info.
+        var shown by remember(player) { mutableStateOf(player.status(stopped)) }
+        LaunchedEffect(player) {
+            while (true) {
+                shown = player.status(stopped)
+                delay(CONTROLS_POLL_MS)
             }
-        },
-        modifier = modifier,
-    )
+        }
+        val playing = !stopped && player.timeControlStatus != AVPlayerTimeControlStatusPaused
+        fun togglePlay() {
+            if (playing) {
+                player.pause()
+            } else {
+                if (player.positionMs() >= player.durationMs() - 500) player.seekToMs(0)
+                stopped = false
+                player.play()
+            }
+            shown = player.status(stopped)
+        }
+        val c = AppTheme.colors
+        Column(modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.Bottom) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                if (shown.state == TransportState.TRANSITIONING) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.textSecondary)
+                }
+            }
+            PlayerControlBar(
+                playing = playing,
+                positionMs = shown.positionMs,
+                durationMs = shown.durationMs,
+                onPlayPause = ::togglePlay,
+                onSeek = {
+                    stopped = false
+                    player.seekToMs(it)
+                    shown = player.status(stopped)
+                },
+                content = c.textPrimary,
+            )
+            playerView(Modifier.size(1.dp).alpha(0f))
+        }
+        return
+    }
+    playerView(modifier)
 }
+
+private const val CONTROLS_POLL_MS = 200L
 
 private fun Double.toMs(): Long = if (isNaN() || isInfinite() || this < 0) 0 else (this * 1000).toLong()
 
