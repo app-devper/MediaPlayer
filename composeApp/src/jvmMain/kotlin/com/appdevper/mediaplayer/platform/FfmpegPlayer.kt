@@ -124,10 +124,12 @@ class FfmpegPlayer(
     private val shownSeek = AtomicReference<SeekRequest?>(null)
     // play(), pause(), seek() and the end-of-stream check: one at a time, so none undoes another.
     private val control = Any()
-    // When the written audio ran out (all of it heard, nothing new written), 0 = it hasn't: from then on
-    // the clock runs on from the audio's end instead of standing still (audio shorter than the video,
-    // a gap, a seek past the audio's end).
-    @Volatile private var audioDrainedAtNs = 0L
+    // When audio was last written (audio thread only), and whether it has run out: nothing heard and
+    // nothing written for AUDIO_RAN_OUT_MS (audio shorter than the video). Then the wall clock takes
+    // over from the audio's end, instead of the picture standing still. A shorter gap only holds the
+    // clock, so it stays in step when the audio comes back.
+    @Volatile private var audioWrittenAtNs = 0L
+    @Volatile private var audioRanOut = false
 
     private class Packet(val pkt: AVPacket?, val serial: Int, val flushTo: Long = -1L)
 
@@ -184,7 +186,7 @@ class FfmpegPlayer(
         val request = SeekRequest(target, serial.incrementAndGet())
         // Until audio from after the seek is heard, frames are timed by the wall clock from the target.
         audioWrittenEndMs = -1
-        audioDrainedAtNs = 0L
+        audioRanOut = false
         wallBaseMs = target
         wallStartNs = System.nanoTime()
         shownSeek.set(request)
@@ -228,22 +230,28 @@ class FfmpegPlayer(
     }
 
     /** Audio is what's advancing the clock (it's being heard), as opposed to the wall clock. */
-    private fun audioIsClock(): Boolean = hasAudio && audioWrittenEndMs >= 0 && audioDrainedAtNs == 0L
+    private fun audioIsClock(): Boolean = hasAudio && audioWrittenEndMs >= 0 && !audioRanOut
 
     /**
      * What frames are timed against: the audio being heard; when there's none (after a seek, or it ran
      * out), the wall clock, which runs on from the seek target or from the audio's end.
      */
     private fun playbackClockMs(): Long {
+        if (!audioIsClock()) return wallClockMs()
         val written = audioWrittenEndMs
-        if (hasAudio && written >= 0) {
-            val buffered = output.bufferedMs()
-            if (buffered > 0 || paused) return (written - buffered).coerceAtLeast(0)
-            val now = System.nanoTime()
-            val drainedAt = audioDrainedAtNs.takeIf { it != 0L } ?: now.also { audioDrainedAtNs = it }
-            return written + (now - drainedAt) / 1_000_000
+        val buffered = output.bufferedMs()
+        if (buffered <= 0 && !paused && System.nanoTime() - audioWrittenAtNs > AUDIO_RAN_OUT_MS * 1_000_000) {
+            // Under the lock, so a write (or seek) in between wins, and pause()/play() see one clock.
+            synchronized(control) {
+                if (audioWrittenEndMs == written && !audioRanOut && !paused) {
+                    wallBaseMs = written
+                    wallStartNs = System.nanoTime()
+                    audioRanOut = true
+                }
+            }
+            return playbackClockMs()
         }
-        return wallClockMs()
+        return (written - buffered).coerceAtLeast(0)
     }
 
     private fun wallClockMs(): Long = when {
@@ -567,8 +575,11 @@ class FfmpegPlayer(
                         output.flush()
                         break
                     }
-                    audioWrittenEndMs = (if (pts >= 0) pts else maxOf(audioWrittenEndMs, 0)) + converted * 1000L / rate
-                    audioDrainedAtNs = 0L
+                    synchronized(control) {
+                        audioWrittenEndMs = (if (pts >= 0) pts else maxOf(audioWrittenEndMs, 0)) + converted * 1000L / rate
+                        audioWrittenAtNs = System.nanoTime()
+                        audioRanOut = false
+                    }
                     if (p.serial != serial.get()) { audioWrittenEndMs = -1; break }
                     played(p.serial, playbackClockMs())
                 }
@@ -600,6 +611,8 @@ class FfmpegPlayer(
     private companion object {
         const val MAX_QUEUED = 256
         const val LATE_DROP_MS = 150
+        // Longer than the sound line holds (~250 ms) plus a write: audio still coming never gets here.
+        const val AUDIO_RAN_OUT_MS = 500L
 
         /** AIRPLAY_LOG=info|debug also logs the player (and FFmpeg's own warnings). */
         val DEBUG = System.getenv("AIRPLAY_LOG") != null

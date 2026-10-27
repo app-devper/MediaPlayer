@@ -191,6 +191,21 @@ class FfmpegPlayerTest {
     }
 
     @Test
+    fun aPauseAfterTheAudioRanOutResumesWhereItWas() = runBlocking<Unit> {
+        // The clock running on from the audio's end must not count the pause.
+        writeHls(seconds = 6, audioSeconds = 2)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 3_000 } }
+        p.pause()
+        val pausedAt = p.status.value.positionMs
+        Thread.sleep(2_500)
+        p.play()
+        Thread.sleep(500)
+        val after = p.status.value
+        assertTrue(!after.ended && after.positionMs in pausedAt..pausedAt + 1_200, "paused at $pausedAt, then $after")
+    }
+
+    @Test
     fun aSeekJustBeforeTheAudioEndsPlaysOn() = runBlocking<Unit> {
         writeHls(seconds = 6, audioSeconds = 2)
         val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
