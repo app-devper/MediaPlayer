@@ -39,6 +39,7 @@ import org.junit.Assume.assumeNotNull
 import java.io.File
 import java.net.InetSocketAddress
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.test.AfterTest
@@ -85,8 +86,8 @@ class FfmpegPlayerTest {
         override fun bufferedMs() = 0L
         override fun pause() { paused = true }
         override fun resume() { paused = false }
-        @Volatile var flushes = 0
-        override fun flush() { flushes++ }
+        val flushes = AtomicInteger()
+        override fun flush() { flushes.incrementAndGet() }
         override fun close() {}
     }
 
@@ -143,15 +144,16 @@ class FfmpegPlayerTest {
     @Test
     fun theLastOfTwoQuickSeeksWins() = runBlocking<Unit> {
         // The demuxer used to read the target, then clear it: a seek landing in between was lost.
-        writeHls(seconds = 6)
+        // The first settled position after the two seeks must be the second one's.
+        writeHls(seconds = 12)
         val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
         withTimeout(10_000) { p.status.first { it.positionMs > 500 } }
         repeat(20) { i ->
             p.seek(1_000)
             if (i % 2 == 0) Thread.sleep(1)
             p.seek(4_500)
-            val at = withTimeout(10_000) { p.status.first { !it.buffering && it.positionMs >= 4_500 } }
-            assertTrue(at.positionMs < 5_600, "round $i: played from ${at.positionMs}, not 4.5 s")
+            val at = withTimeout(5_000) { p.status.first { !it.buffering } }
+            assertTrue(at.positionMs in 4_500..5_600, "round $i: played from ${at.positionMs}, not 4.5 s")
         }
     }
 
@@ -162,9 +164,9 @@ class FfmpegPlayerTest {
         val p = FfmpegPlayer(url, autoPlay = true, output = out).also { player = it }
         withTimeout(10_000) { p.status.first { it.positionMs > 500 } }
         p.pause()
-        val before = out.flushes
+        val before = out.flushes.get()
         p.seek(4_000)
-        assertTrue(out.flushes > before, "buffered audio from before the seek was kept")
+        assertTrue(out.flushes.get() > before, "buffered audio from before the seek was kept")
     }
 
     @Test
@@ -176,6 +178,51 @@ class FfmpegPlayerTest {
         p.seek(3_500)
         val moving = withTimeout(10_000) { p.status.first { it.positionMs > 4_200 } }
         assertTrue(moving.positionMs < 6_200)
+    }
+
+    @Test
+    fun anAudioTrackShorterThanTheVideoPlaysToTheEnd() = runBlocking<Unit> {
+        // No seek: when the audio runs out, the clock runs on and the video plays to its end.
+        writeHls(seconds = 5, audioSeconds = 2)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        val moving = withTimeout(10_000) { p.status.first { it.positionMs > 3_500 } }
+        assertTrue(moving.error == null, "error ${moving.error}")
+        withTimeout(10_000) { p.status.first { it.ended } }
+    }
+
+    @Test
+    fun aSeekJustBeforeTheAudioEndsPlaysOn() = runBlocking<Unit> {
+        writeHls(seconds = 6, audioSeconds = 2)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 300 } }
+        p.seek(1_600)
+        val moving = withTimeout(10_000) { p.status.first { it.positionMs > 3_000 } }
+        assertTrue(moving.positionMs < 6_200)
+    }
+
+    @Test
+    fun aSeekPastTheAudioOfALongVideoPlaysOn() = runBlocking<Unit> {
+        // The audio's end-of-stream only comes at the file's end: until then video must move the position.
+        writeHls(seconds = 20, audioSeconds = 2)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 300 } }
+        segmentDelayMs = 400 // like a network: the file's end isn't read long before it's played
+        p.seek(8_000)
+        val moving = withTimeout(10_000) { p.status.first { it.positionMs > 8_700 && !it.buffering } }
+        assertTrue(moving.positionMs < 10_500, "played on from the seek: ${moving.positionMs}")
+    }
+
+    @Test
+    fun aSeekWhilePausedShowsNoSpinnerUntilPlay() = runBlocking<Unit> {
+        writeHls(seconds = 6)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 500 } }
+        p.pause()
+        p.seek(3_000)
+        assertTrue(!p.status.value.buffering, "spinner while paused")
+        p.play()
+        val after = withTimeout(10_000) { p.status.first { !it.buffering && it.positionMs >= 3_000 } }
+        assertTrue(after.positionMs < 4_500, "played on from the seek: ${after.positionMs}")
     }
 
     @Test

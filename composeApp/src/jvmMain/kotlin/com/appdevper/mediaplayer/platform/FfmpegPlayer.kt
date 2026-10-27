@@ -122,6 +122,12 @@ class FfmpegPlayer(
     private val serial = AtomicInteger(0)
     private val pendingSeek = AtomicReference<SeekRequest?>(null)
     private val shownSeek = AtomicReference<SeekRequest?>(null)
+    // play(), pause(), seek() and the end-of-stream check: one at a time, so none undoes another.
+    private val control = Any()
+    // When the written audio ran out (all of it heard, nothing new written), 0 = it hasn't: from then on
+    // the clock runs on from the audio's end instead of standing still (audio shorter than the video,
+    // a gap, a seek past the audio's end).
+    @Volatile private var audioDrainedAtNs = 0L
 
     private class Packet(val pkt: AVPacket?, val serial: Int, val flushTo: Long = -1L)
 
@@ -154,16 +160,17 @@ class FfmpegPlayer(
         demuxThread.start()
     }
 
-    fun play() {
+    fun play() = synchronized(control) {
         if (!paused) return
         if (_status.value.ended) seek(0)
         paused = false
         wallStartNs = System.nanoTime()
         output.resume()
-        _status.update { it.copy(playing = true, ended = false) }
+        // A seek made while paused is loaded now.
+        _status.update { it.copy(playing = true, ended = false, buffering = it.buffering || shownSeek.get() != null) }
     }
 
-    fun pause() {
+    fun pause() = synchronized(control) {
         if (paused) return
         // The running clock (not a shown seek target), so frames stay in step after play().
         wallBaseMs = playbackClockMs()
@@ -172,19 +179,20 @@ class FfmpegPlayer(
         _status.update { it.copy(playing = false) }
     }
 
-    fun seek(positionMs: Long) {
+    fun seek(positionMs: Long) = synchronized(control) {
         val target = positionMs.coerceAtLeast(0)
         val request = SeekRequest(target, serial.incrementAndGet())
         // Until audio from after the seek is heard, frames are timed by the wall clock from the target.
         audioWrittenEndMs = -1
+        audioDrainedAtNs = 0L
         wallBaseMs = target
         wallStartNs = System.nanoTime()
         shownSeek.set(request)
         pendingSeek.set(request)
         // Paused, the audio thread won't take the flush marker: drop what's buffered from before now,
-        // so it isn't heard on play().
+        // so it isn't heard on play(). Paused, nothing loads either: no spinner until play().
         if (paused) output.flush()
-        _status.update { it.copy(positionMs = target, ended = false, buffering = true) }
+        _status.update { it.copy(positionMs = target, ended = false, buffering = !paused) }
     }
 
     /** 0..1, applied to the samples. */
@@ -211,9 +219,6 @@ class FfmpegPlayer(
         return true
     }
 
-    /** The position to show: the seek target until a frame from there plays. */
-    private fun clockMs(): Long = shownSeek.get()?.targetMs ?: playbackClockMs()
-
     /** A frame of [frameSerial] at [positionMs] played: show it, unless a newer seek came meanwhile. */
     private fun played(frameSerial: Int, positionMs: Long) {
         shownSeek.get()?.let { if (it.serial == frameSerial) shownSeek.compareAndSet(it, null) }
@@ -222,9 +227,26 @@ class FfmpegPlayer(
         }
     }
 
-    /** What frames are timed against: keeps running after a seek (from the target, via wallBaseMs). */
-    private fun playbackClockMs(): Long = when {
-        hasAudio && audioWrittenEndMs >= 0 -> (audioWrittenEndMs - output.bufferedMs()).coerceAtLeast(0)
+    /** Audio is what's advancing the clock (it's being heard), as opposed to the wall clock. */
+    private fun audioIsClock(): Boolean = hasAudio && audioWrittenEndMs >= 0 && audioDrainedAtNs == 0L
+
+    /**
+     * What frames are timed against: the audio being heard; when there's none (after a seek, or it ran
+     * out), the wall clock, which runs on from the seek target or from the audio's end.
+     */
+    private fun playbackClockMs(): Long {
+        val written = audioWrittenEndMs
+        if (hasAudio && written >= 0) {
+            val buffered = output.bufferedMs()
+            if (buffered > 0 || paused) return (written - buffered).coerceAtLeast(0)
+            val now = System.nanoTime()
+            val drainedAt = audioDrainedAtNs.takeIf { it != 0L } ?: now.also { audioDrainedAtNs = it }
+            return written + (now - drainedAt) / 1_000_000
+        }
+        return wallClockMs()
+    }
+
+    private fun wallClockMs(): Long = when {
         paused -> wallBaseMs
         else -> wallBaseMs + (System.nanoTime() - wallStartNs) / 1_000_000
     }
@@ -312,10 +334,14 @@ class FfmpegPlayer(
                     }
                     if (eof) {
                         if (audioEnded && videoEnded && (!hasAudio || output.bufferedMs() <= 0)) {
-                            // A seek landing meanwhile wins: it cleared `ended`, and the next pass applies it.
-                            val current = pendingSeek.get() == null && readSerial == serial.get()
-                            _status.update { if (!current) it else it.copy(ended = true, playing = false, buffering = false) }
-                            if (current) paused = true
+                            // Under the same lock as seek()/play(): one landing meanwhile wins (it cleared
+                            // `ended`, and the next pass applies it), never the other way round.
+                            synchronized(control) {
+                                if (pendingSeek.get() == null && readSerial == serial.get() && !_status.value.ended) {
+                                    _status.update { it.copy(ended = true, playing = false, buffering = false) }
+                                    paused = true
+                                }
+                            }
                         }
                         Thread.sleep(20)
                         continue
@@ -436,12 +462,13 @@ class FfmpegPlayer(
                         if (_frames.value == null) debug("first picture ${w}x$h at $pts ms")
                         _frames.value = BgraFrame(w, h, packedRows(bgra, w, h))
                     }
-                    // A frame from before a seek must not report the old position as "settled".
-                    // No audio (or none left after the seek, e.g. a shorter audio track): video is the clock.
-                    if (!hasAudio || audioEnded) played(p.serial, maxOf(pts, 0))
+                    // While audio isn't being heard (none, none yet after a seek, or it ran out), video
+                    // moves the position.
+                    if (!audioIsClock()) played(p.serial, maxOf(pts, 0))
                     av_frame_unref(frame)
                 }
-                if (p.pkt == null) videoEnded = true
+                // An end-of-stream marker from before a seek doesn't end the new position.
+                if (p.pkt == null && p.serial == serial.get()) videoEnded = true
             }
         } finally {
             av_frame_free(frame)
@@ -534,14 +561,18 @@ class FfmpegPlayer(
                     val pcm = ByteArray(converted * 4).also { outBuf.position(0).get(it) }
                     applyGain(pcm)
                     output.write(pcm)
-                    // Old audio finishing while a seek is pending must not move the position back.
-                    // Old audio finishing after a seek must not set the clock or the position.
-                    if (p.serial != serial.get()) break
+                    // A seek came while writing (the line may have been flushed before this write
+                    // went in): drop it, and don't let old audio set the clock or the position.
+                    if (p.serial != serial.get()) {
+                        output.flush()
+                        break
+                    }
                     audioWrittenEndMs = (if (pts >= 0) pts else maxOf(audioWrittenEndMs, 0)) + converted * 1000L / rate
-                    if (p.serial != serial.get()) { audioWrittenEndMs = -1; break } // a seek came in between
+                    audioDrainedAtNs = 0L
+                    if (p.serial != serial.get()) { audioWrittenEndMs = -1; break }
                     played(p.serial, playbackClockMs())
                 }
-                if (p.pkt == null) audioEnded = true
+                if (p.pkt == null && p.serial == serial.get()) audioEnded = true
             }
         } finally {
             // The line this thread opened, also when release() ran before it was open.
