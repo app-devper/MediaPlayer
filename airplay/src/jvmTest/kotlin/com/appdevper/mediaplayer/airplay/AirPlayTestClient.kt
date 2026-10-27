@@ -37,12 +37,19 @@ internal class AirPlayTestClient(host: String, port: Int) : AutoCloseable {
      * RTSP request as on iOS's RAOP connection (CSeq), or with [sessionId] and no CSeq as iOS does
      * when it pairs on the AirPlay (video) connection itself. Status 0 = the receiver closed the connection.
      */
-    fun rtsp(method: String, path: String, body: ByteArray = ByteArray(0), sessionId: String? = null): Response {
+    fun rtsp(
+        method: String,
+        path: String,
+        body: ByteArray = ByteArray(0),
+        sessionId: String? = null,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): Response {
         // Like iOS: a GET /info with a Content-Type only asks for the TXT records.
         val headers = buildMap {
             if (sessionId == null) put("CSeq", (++cseq).toString()) else put("X-Apple-Session-ID", sessionId)
             put("User-Agent", "AirPlay/600.8.41")
             if (body.isNotEmpty()) put("Content-Type", "application/octet-stream")
+            putAll(extraHeaders)
         }
         return send("$method $path RTSP/1.0", headers, body)
     }

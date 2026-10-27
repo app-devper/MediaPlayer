@@ -396,9 +396,12 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
 
     if (!conn->have_active_remote) {
         const char *active_remote = http_request_get_header(request, "Active-Remote");
-        /* MediaPlayer: only once both ids came (a request with Active-Remote alone doesn't use up the one call) */
+        /* MediaPlayer: only once both ids came (a request with Active-Remote alone doesn't use up the one
+           call), and only from a verified sender: an unpaired host on the LAN must not take over where
+           the app's next/previous/play-pause go */
         const char *dacp_id = http_request_get_header(request, "DACP-ID");
-        if (active_remote && dacp_id) {
+        if (active_remote && dacp_id &&
+            (pairing_session_is_verified(conn->session) || conn_has_verified_raop_peer(raop, conn))) {
             conn->have_active_remote = true;
             if (raop->callbacks.export_dacp) {
                 raop->callbacks.export_dacp(raop->callbacks.cls, active_remote, dacp_id,

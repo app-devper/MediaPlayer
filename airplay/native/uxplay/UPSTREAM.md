@@ -36,6 +36,7 @@ Copied unchanged, except:
     sender one by one (~2 s for YouTube) and the player then probed all of them.
   - `raop.h` / `raop.c` `export_dacp`: also gets the connection's remote address and zone id, so the
     app can reach the sender's DACP remote-control service (next/previous/play-pause) at that address.
-    It's called once both Active-Remote and DACP-ID came (upstream: on the first Active-Remote alone).
+    It's called once both Active-Remote and DACP-ID came (upstream: on the first Active-Remote alone),
+    and only for a pair-verified connection (or a verified RAOP peer from the same address).
 
 Any local change to these files must be listed here.

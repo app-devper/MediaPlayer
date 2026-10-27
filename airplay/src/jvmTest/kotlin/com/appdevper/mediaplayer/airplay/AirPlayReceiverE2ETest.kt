@@ -22,6 +22,12 @@ import java.security.spec.EdECPublicKeySpec
 import java.security.spec.NamedParameterSpec
 import java.security.spec.XECPublicKeySpec
 import javax.crypto.Cipher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import java.util.concurrent.CopyOnWriteArrayList
 import javax.crypto.KeyAgreement
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -105,6 +111,28 @@ class AirPlayReceiverE2ETest {
             assertEquals(200, c.rtsp("POST", "/pair-verify", byteArrayOf(0, 0, 0, 0) + ctr.update(ourSig)).status)
             assertEquals(200, c.rtsp("GET", "/info").status) // session still open
         }
+    }
+
+    @Test
+    fun onlyAVerifiedSenderOffersRemoteControl() = runBlocking<Unit> {
+        val port = start()
+        val offered = CopyOnWriteArrayList<AirPlayEvent>()
+        val collecting = launch(Dispatchers.Default) {
+            receiver.events.collect { if (it == AirPlayEvent.RemoteControlAvailable) offered += it }
+        }
+        delay(100)
+        val dacp = mapOf("DACP-ID" to "C674262D939888D7", "Active-Remote" to "12252432")
+        // An unpaired host on the LAN can't make our next/previous go to it.
+        AirPlayTestClient("127.0.0.1", port).use { c -> c.rtsp("OPTIONS", "*", extraHeaders = dacp) }
+        delay(300)
+        assertTrue(offered.isEmpty(), "an unverified connection offered remote control")
+        // A sender that completed pair-verify does.
+        AirPlayTestClient("127.0.0.1", port).use { c ->
+            assertTrue(c.pairVerify())
+            c.rtsp("OPTIONS", "*", extraHeaders = dacp)
+            withTimeout(3_000) { while (offered.isEmpty()) delay(20) }
+        }
+        collecting.cancel()
     }
 
     @Test
