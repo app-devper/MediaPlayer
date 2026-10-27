@@ -3,6 +3,7 @@ package com.appdevper.mediaplayer.feature.shell
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
@@ -30,6 +31,11 @@ data class ShellUiState(
     val target: PlaybackTarget = PlaybackTarget.Local,
     val nowPlaying: MediaEntry? = null,
     val remotePlaying: Boolean = false,
+    /**
+     * Our own player still runs off the player screen (Android plays on in the background): playing
+     * or paused. Null when there's nothing to control (the others stop their player off screen).
+     */
+    val localPlaying: Boolean? = null,
     val airPlay: AirPlayActivity = AirPlayActivity(),
 ) {
     /** Something to show under "Now playing": our own item, or audio a sender plays here. */
@@ -67,6 +73,11 @@ class ShellViewModel(
             target = playback.target,
             nowPlaying = playback.current,
             remotePlaying = playback.remote.status?.state == TransportState.PLAYING,
+            localPlaying = when (playback.local?.state.takeIf { playback.target == PlaybackTarget.Local }) {
+                TransportState.PLAYING, TransportState.TRANSITIONING -> true
+                TransportState.PAUSED -> false
+                else -> null
+            },
             airPlay = airPlayActivity,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShellUiState())
@@ -76,4 +87,6 @@ class ShellViewModel(
     fun selectTarget(target: PlaybackTarget) = session.setTarget(target)
 
     fun togglePause() = session.togglePause()
+
+    fun toggleLocal() = session.sendLocal(if (uiState.value.localPlaying == true) LocalPlayerCommand.Pause else LocalPlayerCommand.Play)
 }

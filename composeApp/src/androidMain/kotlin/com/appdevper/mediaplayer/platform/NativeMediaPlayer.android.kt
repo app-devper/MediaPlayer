@@ -35,12 +35,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
@@ -51,16 +49,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
+import com.appdevper.mediaplayer.playback.BackgroundPlayer
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.koin.compose.koinInject
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
@@ -68,7 +63,11 @@ import com.appdevper.mediaplayer.domain.model.TransportState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 
-/** ExoPlayer (Media3) player — replaces the old `LocalPlayback` (android.media.MediaPlayer). */
+/**
+ * Shows the app's one player ([BackgroundPlayer]) and its controls. That player follows the playback
+ * session by itself (loads the item, takes [commands], reports the status, moves on at the end, sets
+ * the volume) and keeps playing when this leaves the screen, so those parameters are unused here.
+ */
 @OptIn(UnstableApi::class)
 @Composable
 actual fun NativeMediaPlayer(
@@ -85,96 +84,18 @@ actual fun NativeMediaPlayer(
     fullscreen: Boolean,
     onToggleFullscreen: (() -> Unit)?,
 ) {
-    val context = LocalContext.current
-    val ended by rememberUpdatedState(onEnded)
-    val report by rememberUpdatedState(onStatus)
-    // "Stopped" = loaded but not started, or stopped by a controller; reported as STOPPED rather than PAUSED.
-    var stopped by remember(url) { mutableStateOf(!autoPlay) }
-    var error by remember(url) { mutableStateOf<String?>(null) }
-    val player = remember(url) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(
-                MediaItem.Builder()
-                    .setUri(url)
-                    .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
-                    .build(),
-            )
-            if (startPositionMs > 0) seekTo(startPositionMs)
-            prepare()
-            playWhenReady = autoPlay
-        }
-    }
-    fun status() = RendererStatus(
-        state = when {
-            stopped || player.playbackState == Player.STATE_ENDED -> TransportState.STOPPED
-            player.isPlaying -> TransportState.PLAYING
-            player.playWhenReady && player.playbackState == Player.STATE_BUFFERING -> TransportState.TRANSITIONING
-            else -> TransportState.PAUSED
-        },
-        positionMs = player.currentPosition.coerceAtLeast(0),
-        durationMs = player.duration.takeIf { it > 0 } ?: 0,
-        ended = player.playbackState == Player.STATE_ENDED,
-    )
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) ended()
-            }
+    val background = koinInject<BackgroundPlayer>()
+    val player = background.player
+    val stopped by background.stopped.collectAsStateWithLifecycle()
+    val error by background.error.collectAsStateWithLifecycle()
 
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) stopped = false // started from its own controls too
-            }
-
-            override fun onPlayerError(e: PlaybackException) {
-                error = e.message ?: e.errorCodeName
-            }
-        }
-        player.addListener(listener)
-        onDispose {
-            report(status().copy(state = TransportState.STOPPED))
-            player.removeListener(listener)
-            player.release()
-        }
-    }
-    /** Play, from our controls or a controller: from the start once ended, and after an error, loaded again. */
-    fun resume() {
-        stopped = false
-        if (error != null) {
-            error = null
-            player.prepare()
-        }
-        if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
-        player.play()
-    }
-    LaunchedEffect(player) {
-        commands.collect { cmd ->
-            when (cmd) {
-                LocalPlayerCommand.Play -> resume()
-                LocalPlayerCommand.Pause -> player.pause()
-                LocalPlayerCommand.Stop -> {
-                    stopped = true
-                    player.pause()
-                    player.seekTo(0)
-                }
-                is LocalPlayerCommand.Seek -> player.seekTo(cmd.positionMs)
-            }
-        }
-    }
-    LaunchedEffect(player) {
-        while (true) {
-            report(status())
-            delay(STATUS_INTERVAL_MS)
-        }
-    }
-    LaunchedEffect(player, volume) { player.volume = volume.coerceIn(0f, 1f) }
-
-    // What the controls show, polled more often than the status is reported so the seek bar moves smoothly
-    // (only while the app is in front). Only the bar reads the position; the rest reads derived state,
-    // so it isn't recomposed on every poll.
-    fun snapshot() = Shown(status(), player.playWhenReady)
-    var shown by remember(player) { mutableStateOf(snapshot()) }
+    // What the controls show, polled often so the seek bar moves smoothly (only while the app is in
+    // front). Only the bar reads the position; the rest reads derived state, so it isn't recomposed on
+    // every poll.
+    fun snapshot() = Shown(background.status(), player.playWhenReady)
+    var shown by remember(url) { mutableStateOf(snapshot()) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(player, lifecycle) {
+    LaunchedEffect(url, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 shown = snapshot()
@@ -182,10 +103,11 @@ actual fun NativeMediaPlayer(
             }
         }
     }
-    val playing by remember(player) {
+    val playing by remember(url) {
         derivedStateOf { shown.playWhenReady && !stopped && error == null && shown.status.state != TransportState.STOPPED }
     }
-    val buffering by remember(player) { derivedStateOf { shown.status.state == TransportState.TRANSITIONING } }
+    val buffering by remember(url) { derivedStateOf { shown.status.state == TransportState.TRANSITIONING } }
+    fun resume() = background.resume()
     fun togglePlay() {
         if (playing) player.pause() else resume()
         shown = snapshot()
@@ -206,8 +128,7 @@ actual fun NativeMediaPlayer(
                 togglePlay()
             },
             onSeek = {
-                stopped = false
-                player.seekTo(it)
+                background.seek(it)
                 shown = snapshot()
             },
             content = content,
@@ -285,6 +206,8 @@ actual fun NativeMediaPlayer(
                     useController = false
                 }
             },
+            // The player plays on (its sound, without a picture) when this leaves the screen.
+            onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize(),
         )
         // Over the picture: taps go to Compose, not to the PlayerView.

@@ -32,6 +32,9 @@ import com.appdevper.mediaplayer.feature.browse.BrowseViewModel
 import com.appdevper.mediaplayer.feature.player.PlayerViewModel
 import com.appdevper.mediaplayer.feature.server.ServerViewModel
 import com.appdevper.mediaplayer.feature.shell.ShellViewModel
+import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -221,6 +224,39 @@ class PresentationTest {
         assertEquals(listOf("Samsung Q80 TV"), vm.uiState.value.renderers.map { it.name })
         vm.selectTarget(PlaybackTarget.Renderer(fakeTv))
         assertEquals(PlaybackTarget.Renderer(fakeTv), vm.uiState.value.target)
+    }
+
+    @Test
+    fun theMiniPlayerPlaysAndPausesOurPlayerOffScreen() = runTest {
+        val vm = ShellViewModel(
+            com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
+            ObserveServerStatusUseCase(FakeServer()),
+            com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
+            session,
+            receiverSession(),
+            airPlaySession(),
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
+        session.play(song, listOf(song))
+        // Nothing reported yet, or a player that stopped when it left the screen: nothing to control.
+        assertEquals(null, vm.uiState.value.localPlaying)
+        session.reportLocalStatus(RendererStatus(TransportState.STOPPED, 0, 180_000))
+        assertEquals(null, vm.uiState.value.localPlaying)
+
+        // Android's player plays on in the background: the mini player pauses and plays it.
+        session.reportLocalStatus(RendererStatus(TransportState.PLAYING, 5_000, 180_000))
+        assertEquals(true, vm.uiState.value.localPlaying)
+        vm.toggleLocal()
+        assertEquals(LocalPlayerCommand.Pause, session.localCommands.first())
+        session.reportLocalStatus(RendererStatus(TransportState.PAUSED, 5_000, 180_000))
+        assertEquals(false, vm.uiState.value.localPlaying)
+        vm.toggleLocal()
+        assertEquals(LocalPlayerCommand.Play, session.localCommands.first())
+
+        // Playing on a TV: that's the renderer's play/pause, not ours.
+        vm.selectTarget(PlaybackTarget.Renderer(fakeTv))
+        assertEquals(null, vm.uiState.value.localPlaying)
     }
 
     @Test
