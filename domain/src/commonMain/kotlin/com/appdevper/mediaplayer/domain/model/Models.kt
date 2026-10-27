@@ -70,6 +70,8 @@ data class PlaybackState(
     val local: RendererStatus? = null,
     val localVolume: Int = 100,
     val localMuted: Boolean = false,
+    /** Counts play()/playAt(): a player that outlives its screen loads the same item again when it changes. */
+    val loads: Int = 0,
 ) {
     val current: MediaEntry? get() = queue.getOrNull(index)
     val hasNext: Boolean get() = index < queue.lastIndex

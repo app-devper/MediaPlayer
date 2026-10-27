@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.appdevper.mediaplayer.ServerService
 import com.appdevper.mediaplayer.data.platform.ServerHost
+import com.appdevper.mediaplayer.playback.BackgroundPlayer
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -24,4 +25,5 @@ private class ServiceServerHost(private val context: Context) : ServerHost {
 
 actual val platformAppModule: Module = module {
     single<ServerHost> { ServiceServerHost(androidContext()) }
+    single { BackgroundPlayer(androidContext(), get(), get()) }
 }

@@ -69,6 +69,20 @@ class PlaybackSessionTest {
     }
 
     @Test
+    fun playingTheSameItemAgainIsANewLoad() = runTest {
+        // A player that outlives its screen (Android's) must load it again: from the start, playing.
+        val session = PlaybackSession(FakeRenderer(), backgroundScope)
+        session.play(folder[3], folder)
+        val first = session.state.value.loads
+        session.play(folder[3], folder)
+        assertEquals(first + 1, session.state.value.loads)
+        session.playAt(session.state.value.index)
+        assertEquals(first + 2, session.state.value.loads)
+        session.reportLocalStatus(null)
+        assertEquals(first + 2, session.state.value.loads) // status updates aren't loads
+    }
+
+    @Test
     fun rendererLoadsAndAutoAdvances() = runTest {
         val fake = FakeRenderer()
         val session = PlaybackSession(fake, backgroundScope, pollIntervalMs = 100)

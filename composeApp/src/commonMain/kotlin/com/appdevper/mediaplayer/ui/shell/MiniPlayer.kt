@@ -29,12 +29,13 @@ import com.appdevper.mediaplayer.feature.shell.ShellUiState
 import com.appdevper.mediaplayer.ui.icon
 
 @Composable
-internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: () -> Unit) {
+internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: () -> Unit, onToggleLocal: () -> Unit) {
     val c = AppTheme.colors
     val airPlay = state.airPlay.takeIf { it.audioOnly }
     val item = state.nowPlaying
     if (airPlay == null && item == null) return
     val remote = (state.target as? PlaybackTarget.Renderer).takeIf { airPlay == null }
+    val localPlaying = state.localPlaying.takeIf { airPlay == null && remote == null }
     Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(12.dp), contentAlignment = Alignment.Center) {
         Row(
             Modifier.widthIn(max = 560.dp).fillMaxWidth()
@@ -62,6 +63,7 @@ internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: 
                     when {
                         airPlay != null -> listOfNotNull(airPlay.nowPlaying?.artist, "from ${airPlay.client ?: "AirPlay"}").joinToString(" · ")
                         remote != null -> "Playing on ${remote.device.name}"
+                        localPlaying != null -> "On this device"
                         else -> "Tap to open the player"
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -71,6 +73,8 @@ internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: 
             }
             if (remote != null) {
                 GhostIconButton(if (state.remotePlaying) AppIcons.Pause else AppIcons.Play, "Play/Pause", onTogglePause, tint = c.textPrimary)
+            } else if (localPlaying != null) {
+                GhostIconButton(if (localPlaying) AppIcons.Pause else AppIcons.Play, "Play/Pause", onToggleLocal, tint = c.textPrimary)
             } else {
                 GhostIconButton(AppIcons.ChevronRight, "Open player", onOpen)
             }

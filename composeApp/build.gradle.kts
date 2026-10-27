@@ -52,6 +52,8 @@ kotlin {
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.ui)
             implementation(libs.media3.exoplayer.hls) // AirPlay video (YouTube) is HLS
+            implementation(libs.media3.session) // background playback: notification, lock screen, headset
+            implementation(libs.androidx.lifecycle.process) // videos pause while the app is in the background
         }
 
         jvmMain.dependencies {
