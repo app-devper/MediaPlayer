@@ -25,5 +25,5 @@ private class ServiceServerHost(private val context: Context) : ServerHost {
 
 actual val platformAppModule: Module = module {
     single<ServerHost> { ServiceServerHost(androidContext()) }
-    single { BackgroundPlayer(androidContext(), get()) }
+    single { BackgroundPlayer(androidContext(), get(), get()) }
 }

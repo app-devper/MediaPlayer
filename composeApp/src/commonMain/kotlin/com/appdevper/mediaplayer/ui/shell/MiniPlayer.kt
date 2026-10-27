@@ -63,7 +63,7 @@ internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: 
                     when {
                         airPlay != null -> listOfNotNull(airPlay.nowPlaying?.artist, "from ${airPlay.client ?: "AirPlay"}").joinToString(" · ")
                         remote != null -> "Playing on ${remote.device.name}"
-                        localPlaying != null -> "Playing on this device"
+                        localPlaying != null -> "On this device"
                         else -> "Tap to open the player"
                     },
                     style = MaterialTheme.typography.bodySmall,

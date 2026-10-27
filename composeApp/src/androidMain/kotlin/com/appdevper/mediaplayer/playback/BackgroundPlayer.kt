@@ -24,7 +24,10 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.model.SenderCommand
+import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.playback.drives
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
@@ -46,15 +49,21 @@ import kotlinx.coroutines.launch
  * Everything here runs on the main thread, as ExoPlayer requires.
  */
 @OptIn(UnstableApi::class)
-class BackgroundPlayer(private val context: Context, private val session: PlaybackSession) {
+class BackgroundPlayer(
+    private val context: Context,
+    private val session: PlaybackSession,
+    private val airPlay: AirPlayReceiverSession,
+) {
 
     val player: ExoPlayer = ExoPlayer.Builder(context)
         // Pauses for calls and other apps' audio, and when headphones are unplugged.
-        .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
+        .setAudioAttributes(audioAttributes(MediaKind.AUDIO), true)
         .setHandleAudioBecomingNoisy(true)
+        // Keeps Wi-Fi awake for NAS / DLNA streams with the screen off.
+        .setWakeMode(C.WAKE_MODE_NETWORK)
         .build()
 
-    /** What the media session (notification, lock screen, headset) drives: next/previous go to the queue. */
+    /** What the media session (notification, lock screen, headset) drives: next/previous go to the queue, or to an AirPlay sender. */
     val sessionPlayer: Player = object : ForwardingPlayer(player) {
         override fun getAvailableCommands(): Player.Commands =
             super.getAvailableCommands().buildUpon().addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS).build()
@@ -63,13 +72,25 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
             command == Player.COMMAND_SEEK_TO_NEXT || command == Player.COMMAND_SEEK_TO_PREVIOUS || super.isCommandAvailable(command)
 
         override fun play() = resume()
-        override fun seekToNext() { session.next() }
-        override fun seekToNextMediaItem() { session.next() }
-        override fun seekToPreviousMediaItem() { session.previous() }
+        override fun seekToNext() = next()
+        override fun seekToNextMediaItem() = next()
+        override fun seekToPreviousMediaItem() = previous(restart = false)
+        override fun seekToPrevious() = previous(restart = true)
+    }
 
-        // Like other players: back to the start, or the previous item when near the start.
-        override fun seekToPrevious() {
-            if (player.currentPosition > RESTART_MS || !session.previous()) player.seekTo(0)
+    // An AirPlay sender's video: skipping is the sender's call (its queue), as on the player screen.
+    private fun senderDrives() = airPlay.activity.value.drives(session.state.value.current)
+
+    private fun next() {
+        if (senderDrives()) scope.launch { airPlay.sendToSender(SenderCommand.Next) } else session.next()
+    }
+
+    /** With [restart], like other players: back to the start, or the previous item when near the start. */
+    private fun previous(restart: Boolean) {
+        when {
+            senderDrives() -> scope.launch { airPlay.sendToSender(SenderCommand.Previous) }
+            restart && player.currentPosition > RESTART_MS -> player.seekTo(0)
+            !session.previous() -> player.seekTo(0)
         }
     }
 
@@ -83,7 +104,10 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
 
     /** The item in the player, or null (nothing, a photo, or playing on a renderer). */
     private var loaded: MediaEntry? = null
+    // Paused because the app went to the background (a video): it plays on when the app is back, unless
+    // anything else paused, played or stopped it meanwhile.
     private var pausedInBackground = false
+    private var pausingForBackground = false
     private var controller: ListenableFuture<MediaController>? = null
     private val scope = MainScope()
 
@@ -97,7 +121,13 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) _stopped.value = false // started from the notification or a headset too
+                if (!isPlaying) return
+                _stopped.value = false // started from the notification or a headset too
+                connectService() // again, if it was swiped away meanwhile
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!pausingForBackground) pausedInBackground = false
             }
 
             override fun onPlayerError(e: PlaybackException) {
@@ -106,9 +136,9 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
         })
         scope.launch {
             session.state
-                .map { s -> Load(s.current.takeIf { s.target == PlaybackTarget.Local && it?.kind.playable }, s.autoPlay, s.startPositionMs) }
-                // A new item, or the same one moved here from a renderer; not every status update.
-                .distinctUntilChanged { a, b -> a.entry?.id == b.entry?.id && a.entry?.streamUrl == b.entry?.streamUrl }
+                .map { s -> Load(s.current.takeIf { s.target == PlaybackTarget.Local && it?.kind.playable }, s.autoPlay, s.startPositionMs, s.loads) }
+                // A new item, the same one played again or moved here from a renderer; not every status update.
+                .distinctUntilChanged { a, b -> a.loads == b.loads && a.entry?.id == b.entry?.id && a.entry?.streamUrl == b.entry?.streamUrl }
                 .collect(::load)
         }
         scope.launch {
@@ -116,6 +146,7 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
         }
         scope.launch {
             session.localCommands.collect { cmd ->
+                pausedInBackground = false
                 when (cmd) {
                     LocalPlayerCommand.Play -> resume()
                     LocalPlayerCommand.Pause -> player.pause()
@@ -137,8 +168,10 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {
                 if (loaded?.kind == MediaKind.VIDEO && player.playWhenReady) {
-                    pausedInBackground = true
+                    pausingForBackground = true
                     player.pause()
+                    pausingForBackground = false
+                    pausedInBackground = true
                 }
             }
 
@@ -151,7 +184,7 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
         })
     }
 
-    private class Load(val entry: MediaEntry?, val autoPlay: Boolean, val startPositionMs: Long)
+    private class Load(val entry: MediaEntry?, val autoPlay: Boolean, val startPositionMs: Long, val loads: Int)
 
     private fun load(load: Load) {
         val entry = load.entry
@@ -159,6 +192,8 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
         pausedInBackground = false
         _error.value = null
         if (entry == null || url == null) {
+            // As the on-screen player did when it left: the last report says stopped, not playing.
+            if (loaded != null) session.reportLocalStatus(status().copy(state = TransportState.STOPPED))
             loaded = null
             _stopped.value = true
             player.stop()
@@ -167,6 +202,7 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
         }
         loaded = entry
         _stopped.value = !load.autoPlay
+        player.setAudioAttributes(audioAttributes(entry.kind), true)
         player.setMediaItem(
             MediaItem.Builder()
                 .setUri(url)
@@ -183,7 +219,6 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
         )
         player.prepare()
         player.playWhenReady = load.autoPlay
-        connectService()
     }
 
     /**
@@ -231,6 +266,11 @@ class BackgroundPlayer(private val context: Context, private val session: Playba
     )
 
     private val MediaKind?.playable get() = this == MediaKind.AUDIO || this == MediaKind.VIDEO
+
+    private fun audioAttributes(kind: MediaKind) = AudioAttributes.Builder()
+        .setUsage(C.USAGE_MEDIA)
+        .setContentType(if (kind == MediaKind.VIDEO) C.AUDIO_CONTENT_TYPE_MOVIE else C.AUDIO_CONTENT_TYPE_MUSIC)
+        .build()
 
     private companion object {
         const val STATUS_INTERVAL_MS = 500L

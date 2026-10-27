@@ -68,14 +68,14 @@ class PlaybackSession(
         val queue = siblings.filter { it == entry || (it.isPlayable && (it.kind == MediaKind.IMAGE) == photos) }
             .ifEmpty { listOf(entry) }
         dropLocalCommands()
-        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, startPositionMs = startPositionMs, local = null) }
+        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, startPositionMs = startPositionMs, local = null, loads = it.loads + 1) }
         if (remoteDevice != null) loadCurrent()
     }
 
     fun playAt(index: Int) {
         if (index !in _state.value.queue.indices) return
         dropLocalCommands()
-        _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0, local = null) }
+        _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0, local = null, loads = it.loads + 1) }
         if (remoteDevice != null) loadCurrent()
     }
 
