@@ -114,6 +114,9 @@ class FfmpegPlayer(
     @Volatile private var paused = !autoPlay
     @Volatile private var gain = 1f
     @Volatile private var seekTarget = -1L
+    // Where the last seek went, until a frame from there is played: the position to report meanwhile
+    // (also while paused, when the decoders don't run). -1 = none pending.
+    @Volatile private var seekedTo = -1L
     // Bumped on every seek; queued packets/frames from before it are dropped.
     private val serial = AtomicInteger(0)
 
@@ -167,6 +170,7 @@ class FfmpegPlayer(
         // Until audio after the seek is heard, the wall clock runs from the target.
         wallBaseMs = positionMs.coerceAtLeast(0)
         wallStartNs = System.nanoTime()
+        seekedTo = positionMs.coerceAtLeast(0)
         seekTarget = positionMs.coerceAtLeast(0)
         _status.update { it.copy(positionMs = positionMs.coerceAtLeast(0), ended = false, buffering = true) }
     }
@@ -192,6 +196,7 @@ class FfmpegPlayer(
     }
 
     private fun clockMs(): Long = when {
+        seekedTo >= 0 -> seekedTo
         hasAudio && audioWrittenEndMs >= 0 -> (audioWrittenEndMs - output.bufferedMs()).coerceAtLeast(0)
         paused -> wallBaseMs
         else -> wallBaseMs + (System.nanoTime() - wallStartNs) / 1_000_000
@@ -268,9 +273,10 @@ class FfmpegPlayer(
                 while (!closing) {
                     val target = seekTarget
                     if (target >= 0) {
+                        // Serial first: frames from before the seek stop counting from now on.
+                        val s = serial.incrementAndGet()
                         seekTarget = -1
                         avformat_seek_file(fmt, -1, Long.MIN_VALUE, target * 1000, Long.MAX_VALUE, 0)
-                        val s = serial.incrementAndGet()
                         listOf(videoQueue, audioQueue).forEach(::drainAndFree)
                         if (videoIndex >= 0) put(videoQueue, Packet(null, s, flushTo = target))
                         if (audioIndex >= 0) put(audioQueue, Packet(null, s, flushTo = target))
@@ -404,7 +410,10 @@ class FfmpegPlayer(
                         _frames.value = BgraFrame(w, h, packedRows(bgra, w, h))
                     }
                     // A frame from before a seek must not report the old position as "settled".
-                    if (!hasAudio && p.serial == serial.get()) _status.update { it.copy(positionMs = maxOf(pts, 0), buffering = false) }
+                    if (!hasAudio && p.serial == serial.get() && seekTarget < 0) {
+                        seekedTo = -1
+                        _status.update { it.copy(positionMs = maxOf(pts, 0), buffering = false) }
+                    }
                     av_frame_unref(frame)
                 }
                 if (p.pkt == null) videoEnded = true
@@ -500,8 +509,10 @@ class FfmpegPlayer(
                     val pcm = ByteArray(converted * 4).also { outBuf.position(0).get(it) }
                     applyGain(pcm)
                     output.write(pcm)
-                    if (p.serial != serial.get()) break
+                    // Old audio finishing while a seek is pending must not move the position back.
+                    if (p.serial != serial.get() || seekTarget >= 0) break
                     audioWrittenEndMs = (if (pts >= 0) pts else maxOf(audioWrittenEndMs, 0)) + converted * 1000L / rate
+                    seekedTo = -1
                     _status.update { it.copy(positionMs = clockMs(), buffering = false) }
                 }
                 if (p.pkt == null) audioEnded = true

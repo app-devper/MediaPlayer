@@ -43,6 +43,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /** The desktop player on a real HLS stream (H.264 + AAC), like AirPlay video from YouTube. */
@@ -50,6 +51,7 @@ class FfmpegPlayerTest {
     private val dir: File = Files.createTempDirectory("hls").toFile()
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { ex ->
+            if (ex.requestURI.path.endsWith(".ts")) Thread.sleep(segmentDelayMs)
             val f = File(dir, ex.requestURI.path.removePrefix("/"))
             if (!f.isFile) { ex.sendResponseHeaders(404, -1); ex.close(); return@createContext }
             ex.sendResponseHeaders(200, f.length())
@@ -58,6 +60,8 @@ class FfmpegPlayerTest {
         start()
     }
     private val url get() = "http://127.0.0.1:${server.address.port}/index.m3u8"
+    // A slow network (YouTube over the internet): the demuxer's seek then takes a while.
+    @Volatile private var segmentDelayMs = 0L
     private var player: FfmpegPlayer? = null
 
     @AfterTest
@@ -122,6 +126,26 @@ class FfmpegPlayerTest {
         val p = FfmpegPlayer("file://${secret.absolutePath}", autoPlay = true, output = RealTimeOutput()).also { player = it }
         val failed = withTimeout(10_000) { p.status.first { it.error != null } }
         assertTrue(failed.error!!.isNotEmpty())
+    }
+
+    @Test
+    fun aSeekRightBeforeAPauseKeepsItsPosition() = runBlocking<Unit> {
+        // YouTube's drag: /scrub then /rate 0 at once. The old audio finishing must not put the position
+        // back, and while paused (decoders idle) the target is what's reported.
+        writeHls(seconds = 6)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 1_500 } }
+        segmentDelayMs = 600
+        p.seek(4_200)
+        p.pause()
+        repeat(10) {
+            Thread.sleep(100)
+            assertEquals(4_200, p.status.value.positionMs, "position while paused after the seek")
+        }
+        segmentDelayMs = 0
+        p.play()
+        val after = withTimeout(10_000) { p.status.first { it.positionMs > 4_300 && !it.buffering } }
+        assertTrue(after.positionMs < 5_500, "played on from the seek: ${after.positionMs}")
     }
 
     @Test
