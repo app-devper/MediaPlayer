@@ -124,6 +124,26 @@ class FfmpegPlayerTest {
         assertTrue(failed.error!!.isNotEmpty())
     }
 
+    @Test
+    fun survivesManyQuickSeeksAndReleases() = runBlocking<Unit> {
+        // Seeking cleared the packet queues while the decoders took from them: a packet could be freed
+        // twice (JVM crash in av_buffer_unref). Many seeks while both decoders are busy, then release.
+        writeHls(seconds = 6)
+        repeat(3) { round ->
+            val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+            withTimeout(10_000) { p.status.first { it.positionMs > 200 } }
+            val random = java.util.Random(round.toLong())
+            repeat(150) {
+                p.seek(random.nextInt(5_500).toLong())
+                Thread.sleep(random.nextInt(4).toLong())
+            }
+            val settled = withTimeout(10_000) { p.status.first { !it.buffering && it.error == null } }
+            assertTrue(settled.error == null)
+            p.release()
+            player = null
+        }
+    }
+
     /** A VOD HLS stream (1 s segments) of red 320x240 video and a 440 Hz tone. */
     @Test
     fun seeksInAMultiVariantStream() = runBlocking<Unit> {

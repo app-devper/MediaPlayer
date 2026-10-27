@@ -252,7 +252,7 @@ class FfmpegPlayer(
                     seekTarget = -1
                     avformat_seek_file(fmt, -1, Long.MIN_VALUE, target * 1000, Long.MAX_VALUE, 0)
                     val s = serial.incrementAndGet()
-                    listOf(videoQueue, audioQueue).forEach { q -> q.forEach { it.pkt?.let(::freePacket) }; q.clear() }
+                    listOf(videoQueue, audioQueue).forEach(::drainAndFree)
                     if (videoIndex >= 0) put(videoQueue, Packet(null, s, flushTo = target))
                     if (audioIndex >= 0) put(audioQueue, Packet(null, s, flushTo = target))
                     audioEnded = audioIndex < 0
@@ -284,9 +284,11 @@ class FfmpegPlayer(
             av_packet_free(pkt)
         } finally {
             closing = true
-            videoThread?.join(1_000)
-            audioThread?.join(1_000)
-            listOf(videoQueue, audioQueue).forEach { q -> q.forEach { it.pkt?.let(::freePacket) }; q.clear() }
+            // Fully: a decoder still running when fmt is closed reads freed memory. They stop within
+            // ~50 ms (queue poll) of `closing`; a stuck one keeps fmt alive rather than crash.
+            videoThread?.join()
+            audioThread?.join()
+            listOf(videoQueue, audioQueue).forEach(::drainAndFree)
             avformat_close_input(fmt)
         }
     }
@@ -300,6 +302,16 @@ class FfmpegPlayer(
     }
 
     private fun freePacket(pkt: AVPacket) = av_packet_free(pkt)
+
+    /**
+     * Empties [queue] and frees what was in it. drainTo takes each packet out under the queue's lock, so
+     * a packet is either taken by a decoder (which frees it) or here, never both (a double free).
+     */
+    private fun drainAndFree(queue: LinkedBlockingQueue<Packet>) {
+        val drained = ArrayList<Packet>(queue.size)
+        queue.drainTo(drained)
+        drained.forEach { it.pkt?.let(::freePacket) }
+    }
 
     private fun fail(message: String) {
         debug("error: $message")
@@ -321,14 +333,18 @@ class FfmpegPlayer(
         return ctx
     }
 
-    private fun ptsMs(fmt: AVFormatContext, index: Int, pts: Long): Long {
-        if (pts == AV_NOPTS_VALUE) return -1
+    /** A stream's time base and the file's start, copied out of fmt so decoders never read it while playing. */
+    private class Clock(private val num: Long, private val den: Long, private val startUs: Long) {
+        fun ms(pts: Long): Long = if (pts == AV_NOPTS_VALUE || den == 0L) -1 else pts * 1000 * num / den - startUs / 1000
+    }
+
+    private fun clockOf(fmt: AVFormatContext, index: Int): Clock {
         val tb = fmt.streams(index).time_base()
-        val startUs = fmt.start_time().takeIf { it != AV_NOPTS_VALUE } ?: 0
-        return pts * 1000 * tb.num() / tb.den() - startUs / 1000
+        return Clock(tb.num().toLong(), tb.den().toLong(), fmt.start_time().takeIf { it != AV_NOPTS_VALUE } ?: 0)
     }
 
     private fun videoLoop(fmt: AVFormatContext, index: Int) {
+        val clock = clockOf(fmt, index)
         val ctx = openDecoder(fmt, index) ?: run { videoEnded = true; return }
         val frame = av_frame_alloc()
         val bgra = av_frame_alloc()
@@ -347,7 +363,7 @@ class FfmpegPlayer(
                 p.pkt?.let(::freePacket)
                 if (sent < 0 && p.pkt != null) continue
                 while (!closing && avcodec_receive_frame(ctx, frame) == 0) {
-                    val pts = ptsMs(fmt, index, frame.best_effort_timestamp())
+                    val pts = clock.ms(frame.best_effort_timestamp())
                     if (skipBefore >= 0 && pts in 0 until skipBefore) { av_frame_unref(frame); continue }
                     skipBefore = -1
                     if (!waitUntil(pts, p.serial)) { av_frame_unref(frame); continue }
@@ -408,6 +424,7 @@ class FfmpegPlayer(
     }
 
     private fun audioLoop(fmt: AVFormatContext, index: Int) {
+        val clock = clockOf(fmt, index)
         val ctx = openDecoder(fmt, index) ?: run { audioEnded = true; hasAudio = false; return }
         val rate = ctx.sample_rate().takeIf { it > 0 } ?: 48_000
         val swr: SwrContext = swr_alloc()
@@ -440,7 +457,7 @@ class FfmpegPlayer(
                 p.pkt?.let(::freePacket)
                 if (sent < 0 && p.pkt != null) continue
                 while (!closing && p.serial == serial.get() && avcodec_receive_frame(ctx, frame) == 0) {
-                    val pts = ptsMs(fmt, index, frame.best_effort_timestamp())
+                    val pts = clock.ms(frame.best_effort_timestamp())
                     val samples = frame.nb_samples()
                     val frameMs = samples * 1000L / rate
                     if (skipBefore >= 0 && pts >= 0 && pts + frameMs < skipBefore) { av_frame_unref(frame); continue }
