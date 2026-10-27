@@ -129,6 +129,17 @@ class FfmpegPlayerTest {
     }
 
     @Test
+    fun aVideoWithoutAudioPlaysOnAfterASeek() = runBlocking<Unit> {
+        // No audio: the video's own clock times the frames. Reporting the seek target must not stop it.
+        writeHls(seconds = 6, withAudio = false)
+        val p = FfmpegPlayer(url, autoPlay = true, output = RealTimeOutput()).also { player = it }
+        withTimeout(10_000) { p.status.first { it.positionMs > 500 } }
+        p.seek(2_510) // between two frames (25 fps)
+        val moving = withTimeout(10_000) { p.status.first { it.positionMs > 3_200 } }
+        assertTrue(moving.positionMs < 5_000, "played on from the seek: ${moving.positionMs}")
+    }
+
+    @Test
     fun aSeekRightBeforeAPauseKeepsItsPosition() = runBlocking<Unit> {
         // YouTube's drag: /scrub then /rate 0 at once. The old audio finishing must not put the position
         // back, and while paused (decoders idle) the target is what's reported.
@@ -189,7 +200,7 @@ class FfmpegPlayerTest {
         assertTrue(afterSeek.error == null, "error ${afterSeek.error}")
     }
 
-    private fun writeHls(seconds: Int, sub: String = "") {
+    private fun writeHls(seconds: Int, sub: String = "", withAudio: Boolean = true) {
         val target = File(dir, sub).apply { mkdirs() }
         val h264 = avcodec_find_encoder(AV_CODEC_ID_H264)
         val aac = avcodec_find_encoder(AV_CODEC_ID_AAC)
@@ -211,9 +222,10 @@ class FfmpegPlayerTest {
         av_channel_layout_default(a.ch_layout(), 2)
         a.time_base(AVRational().num(1).den(44_100))
         check(avcodec_open2(a, aac, null as AVDictionary?) >= 0)
-        val aStream = avformat_new_stream(out, null)
-        avcodec_parameters_from_context(aStream.codecpar(), a)
-        aStream.time_base(a.time_base())
+        val aStream = if (!withAudio) null else avformat_new_stream(out, null).also {
+            avcodec_parameters_from_context(it.codecpar(), a)
+            it.time_base(a.time_base())
+        }
 
         val opts = AVDictionary(null)
         av_dict_set(opts, "hls_time", "1", 0)
@@ -244,7 +256,7 @@ class FfmpegPlayerTest {
         check(av_frame_get_buffer(af, 0) >= 0)
 
         var videoPts = 0L
-        var audioPts = 0L
+        var audioPts = if (withAudio) 0L else seconds * 44_100L // no audio: only video is written
         while (videoPts < seconds * 25L || audioPts < seconds * 44_100L) {
             // Interleave by time so the muxer gets both streams evenly.
             if (videoPts * 44_100 / 25 <= audioPts && videoPts < seconds * 25L) {
@@ -257,11 +269,11 @@ class FfmpegPlayerTest {
                 af.pts(audioPts)
                 audioPts += n
                 avcodec_send_frame(a, af)
-                drain(a, 1, aStream.time_base())
+                drain(a, 1, aStream!!.time_base())
             }
         }
         avcodec_send_frame(v, null); drain(v, 0, vs.time_base())
-        avcodec_send_frame(a, null); drain(a, 1, aStream.time_base())
+        if (aStream != null) { avcodec_send_frame(a, null); drain(a, 1, aStream.time_base()) }
         av_write_trailer(out)
         avformat_free_context(out)
         check(File(target, "index.m3u8").readText().contains("#EXT-X-ENDLIST"))
