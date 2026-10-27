@@ -136,7 +136,11 @@ class UpnpTest {
         assertTrue(host.matches("http://192.168.1.20:49152/rootDesc.xml"))
         assertFalse(host.matches("http://192.168.1.21:8191/description.xml"))
 
-        assertEquals(listOf("http://nas.local:5000/description.xml"), ServerAddress.parse("nas.local:5000")?.descriptionUrls)
+        assertEquals("192.168.1.20", host.searchHost) // an IP gets the unicast M-SEARCH
+        val name = assertNotNull(ServerAddress.parse("nas.local:5000"))
+        assertEquals(listOf("http://nas.local:5000/description.xml"), name.descriptionUrls)
+        assertNull(name.searchHost) // a name is only fetched (its LOCATION keeps the name)
+        assertNull(ServerAddress.parse("192.168.1.300")?.searchHost)
 
         val url = assertNotNull(ServerAddress.parse("http://192.168.1.5:9000/dms/desc.xml"))
         assertEquals(null, url.host) // fetched as is, no search

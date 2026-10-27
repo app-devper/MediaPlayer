@@ -210,7 +210,10 @@ private fun AddServerByAddress(state: AddServerState, onAdd: (String) -> Unit, o
     Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (!open) {
             Row(
-                Modifier.heightIn(min = 48.dp).interactive({ open = true }, shape = Radius.pill).padding(horizontal = 4.dp),
+                Modifier.heightIn(min = 48.dp).interactive({
+                    onDismiss() // a fresh start: no earlier "Added" or "not found"
+                    open = true
+                }, shape = Radius.pill).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -247,7 +250,7 @@ private fun AddServerByAddress(state: AddServerState, onAdd: (String) -> Unit, o
             if (notFound != null) {
                 "No media server answered at ${notFound.address}. Check the address, and that both are on the same Wi‑Fi."
             } else {
-                "A PC, NAS or phone sharing media on this Wi‑Fi, for when it doesn't show up by itself. Its IP address, or the URL of its description.xml."
+                "A PC, NAS or phone sharing media on this Wi‑Fi, for when it doesn't show up by itself: its IP address (like 192.168.1.20), or the URL of its description.xml."
             },
             style = MaterialTheme.typography.bodySmall,
             color = if (notFound != null) c.danger else c.textTertiary,

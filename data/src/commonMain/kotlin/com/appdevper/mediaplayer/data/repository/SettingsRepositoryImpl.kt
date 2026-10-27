@@ -46,7 +46,7 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         get() = s.getStringOrNull(KEY_SERVER_ADDRESSES)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 
     fun addServerAddress(address: String) {
-        if (address !in serverAddresses) s.putString(KEY_SERVER_ADDRESSES, (serverAddresses + address).joinToString("\n"))
+        if (serverAddresses.none { it.equals(address, ignoreCase = true) }) s.putString(KEY_SERVER_ADDRESSES, (serverAddresses + address).joinToString("\n"))
     }
 
     override fun update(transform: (ServerSettings) -> ServerSettings) {

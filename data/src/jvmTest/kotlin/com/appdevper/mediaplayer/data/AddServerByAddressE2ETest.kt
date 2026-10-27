@@ -17,6 +17,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.Buffer
 import org.junit.Assume.assumeNotNull
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -47,6 +50,19 @@ class AddServerByAddressE2ETest {
                 val found = ControlPoint(ssdp, http, scope).addByAddress(address)
                 assertEquals(listOf("Living Room PC"), found.map { it.friendlyName }, address)
                 assertTrue(found.single().isMediaServer)
+            }
+
+            // The server answers a unicast M-SEARCH (what an iPhone without multicast relies on for
+            // other servers, whose ports aren't known): the reply carries its LOCATION.
+            DatagramSocket().use { client ->
+                client.soTimeout = 3_000
+                val search = "M-SEARCH * HTTP/1.1\r\nHOST: $ip:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 1\r\nST: ssdp:all\r\n\r\n".toByteArray()
+                client.send(DatagramPacket(search, search.size, InetAddress.getByName(ip), 1900))
+                val reply = DatagramPacket(ByteArray(2048), 2048)
+                client.receive(reply)
+                val text = String(reply.data, 0, reply.length)
+                assertTrue(text.startsWith("HTTP/1.1 200"), text)
+                assertTrue("LOCATION: ${running.url}/description.xml" in text, text)
             }
 
             // Nobody there (TEST-NET-1, never a real host): nothing, within the timeout.

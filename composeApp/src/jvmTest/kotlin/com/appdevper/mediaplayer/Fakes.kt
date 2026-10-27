@@ -40,8 +40,10 @@ class FakeDevices : DeviceRepository {
     /** Servers only found by asking their address (multicast doesn't reach them). */
     val byAddress = mutableMapOf<String, MediaDevice>()
     val asked = mutableListOf<String>()
+    var slow = false
     override suspend fun addByAddress(address: String): List<MediaDevice> {
         asked += address
+        if (slow) kotlinx.coroutines.delay(10_000)
         val found = listOfNotNull(byAddress[address.trim()])
         devices.value = (devices.value + found).distinct()
         return found

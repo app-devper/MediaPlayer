@@ -258,6 +258,14 @@ class PresentationTest {
         assertEquals(AddServerState.Added(listOf("Office NAS")), vm.uiState.value.addServer)
         assertTrue("Office NAS" in vm.uiState.value.servers.map { it.name })
         assertEquals(listOf("192.168.1.99", " 192.168.1.30 "), devices.asked)
+
+        // Cancel while it works: the search stops, and nothing turns up later.
+        devices.slow = true
+        vm.addServer("192.168.1.40")
+        assertEquals(AddServerState.Working, vm.uiState.value.addServer)
+        vm.dismissAddServer()
+        advanceUntilIdle()
+        assertEquals(AddServerState.Idle, vm.uiState.value.addServer)
     }
 
     @Test

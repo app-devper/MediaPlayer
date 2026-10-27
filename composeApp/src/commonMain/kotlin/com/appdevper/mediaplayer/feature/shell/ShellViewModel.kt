@@ -16,6 +16,7 @@ import com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase
 import com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -96,15 +97,20 @@ class ShellViewModel(
     fun addServer(address: String) {
         if (addServer.value is AddServerState.Working) return
         addServer.value = AddServerState.Working
-        viewModelScope.launch {
+        adding = viewModelScope.launch {
             val found = runCatching { addServerByAddress(address) }.getOrDefault(emptyList())
             addServer.value = if (found.isEmpty()) AddServerState.NotFound(address.trim()) else AddServerState.Added(found.map { it.name })
         }
     }
 
+    /** Cancel, or a fresh start: a search still running stops (it won't add or report anything later). */
     fun dismissAddServer() {
+        adding?.cancel()
+        adding = null
         addServer.value = AddServerState.Idle
     }
+
+    private var adding: Job? = null
 
     fun selectTarget(target: PlaybackTarget) = session.setTarget(target)
 

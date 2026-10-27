@@ -35,7 +35,11 @@ class DeviceRepositoryImpl(
 
     override suspend fun addByAddress(address: String): List<MediaDevice> {
         val found = controlPoint.addByAddress(address).filter { it.udn !in ownUdns() }.map { it.toDomain() }
-        if (found.isNotEmpty()) saveAddress(address.trim())
+        // Only an address that has something of ours to show is kept (and asked again later).
+        if (found.isNotEmpty()) {
+            controlPoint.remember(listOf(address.trim()))
+            saveAddress(address.trim())
+        }
         return found
     }
 }

@@ -6,12 +6,14 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.coroutineScope
@@ -114,7 +116,7 @@ class ControlPoint(
      * Apple's multicast entitlement, or a network that blocks it). [address] is a host or host:port,
      * asked with a unicast M-SEARCH on port 1900 (which UPnP devices answer as well) and on this
      * app's own server ports; or a device description URL, fetched as is. Returns what answered
-     * within [timeoutMs], and remembers [address] when something did.
+     * within [timeoutMs]; the caller [remember]s the address if it wants to keep it.
      */
     suspend fun addByAddress(address: String, timeoutMs: Long = 4_000): List<UpnpDevice> {
         val target = ServerAddress.parse(address) ?: return emptyList()
@@ -124,26 +126,25 @@ class ControlPoint(
             // Unicast search replies arrive like any other (onMessage); wait for them.
             devices.first { list -> list.any { target.matches(it.location) } }
         }
-        val there = (found ?: devices.value).filter { target.matches(it.location) }
-        if (there.isNotEmpty()) addresses.update { it + target.text }
-        return there
+        return (found ?: devices.value).filter { target.matches(it.location) }
     }
 
     private suspend fun probe(address: String) {
         val target = ServerAddress.parse(address) ?: return
         coroutineScope {
-            if (target.host != null && ssdp.ensureStarted()) {
+            val searchHost = target.searchHost
+            if (searchHost != null && ssdp.ensureStarted()) {
                 val search = SsdpMessage.build(
                     "M-SEARCH * HTTP/1.1",
                     listOf(
-                        "HOST" to "${target.host}:${SsdpEngine.SSDP_PORT}",
+                        "HOST" to "$searchHost:${SsdpEngine.SSDP_PORT}",
                         "MAN" to "\"ssdp:discover\"",
                         "MX" to "1",
                         "ST" to "ssdp:all",
                         "USER-AGENT" to SsdpEngine.USER_AGENT,
                     ),
                 )
-                launch { repeat(2) { ssdp.sendTo(search, target.host, SsdpEngine.SSDP_PORT); delay(300) } }
+                launch { repeat(2) { ssdp.sendTo(search, searchHost, SsdpEngine.SSDP_PORT); delay(300) } }
             }
             target.descriptionUrls.forEach { url ->
                 launch { withTimeoutOrNull(PROBE_HTTP_TIMEOUT_MS) { fetchDescription(url, DIRECT_TTL_SECONDS) } }
@@ -225,7 +226,8 @@ class ControlPoint(
         } catch (_: Throwable) {
             // unreachable / malformed device — ignore, it will be retried on the next announcement
         } finally {
-            mutex.withLock { pendingLocations.remove(location) }
+            // Probes cancel fetches (timeouts): the location must still be let go, or it's never fetched again.
+            withContext(NonCancellable) { mutex.withLock { pendingLocations.remove(location) } }
         }
     }
 
@@ -252,6 +254,13 @@ class ControlPoint(
  */
 internal class ServerAddress private constructor(val text: String, val host: String?, val descriptionUrls: List<String>) {
 
+    /**
+     * Where a unicast M-SEARCH goes: IPv4 addresses only. A name isn't resolved for it (iOS sends to
+     * literal addresses) and a device answers with its IP, which wouldn't match the name; names are
+     * fetched over HTTP, where LOCATION keeps the name.
+     */
+    val searchHost: String? get() = host?.takeIf(::isIpv4)
+
     /** A device found at [location] is this address's. */
     fun matches(location: String): Boolean =
         if (host == null) location == text else hostOf(location).equals(host, ignoreCase = true)
@@ -271,6 +280,11 @@ internal class ServerAddress private constructor(val text: String, val host: Str
             if (host.isEmpty() || !host.all { it.isLetterOrDigit() || it == '.' || it == '-' }) return null
             val ports = port?.let(::listOf) ?: OWN_SERVER_PORTS
             return ServerAddress(text, host, ports.map { "http://$host:$it/description.xml" })
+        }
+
+        private fun isIpv4(host: String): Boolean {
+            val parts = host.split('.')
+            return parts.size == 4 && parts.all { p -> p.isNotEmpty() && p.length <= 3 && p.all(Char::isDigit) && p.toInt() <= 255 }
         }
 
         /** The host part of an http(s) URL. */
