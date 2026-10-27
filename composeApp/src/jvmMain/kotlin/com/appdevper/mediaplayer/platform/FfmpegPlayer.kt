@@ -261,8 +261,9 @@ class FfmpegPlayer(
                 }
                 if (eof) {
                     if (audioEnded && videoEnded && (!hasAudio || output.bufferedMs() <= 0)) {
-                        _status.update { it.copy(ended = true, playing = false, buffering = false) }
-                        paused = true
+                        // A seek landing meanwhile wins: it cleared `ended`, and the next pass applies it.
+                        _status.update { if (seekTarget >= 0) it else it.copy(ended = true, playing = false, buffering = false) }
+                        if (seekTarget < 0) paused = true
                     }
                     Thread.sleep(20)
                     continue

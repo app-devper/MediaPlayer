@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
@@ -113,6 +114,55 @@ class AirPlayRepositoryTest {
     }
 
     @Test
+    fun anEndedVideoTheSenderAbandonsIsClosedHere() = runBlocking<Unit> {
+        val receiver = FakeReceiver()
+        val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope, abandonedEndMs = 100)
+        val video = assertNotNull(receiver.video)
+        val commands = mutableListOf<CastCommand>()
+        val collecting = scope.launch { repo.commands.collect { commands += it } }
+
+        video.play("http://localhost:7000/master.m3u8", startSeconds = 0f)
+        val load = assertIs<CastCommand.Load>(commands.first())
+        // Leaving the player mid-video reports STOPPED too, but that isn't the end.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 120_000, 300_000)))
+        assertEquals(AirPlayVideoInfo(300.0, 120.0, playing = false), video.info())
+        delay(400)
+        assertIs<CastCommand.Load>(commands.last()) // not closed
+
+        // Ended 2 s short of the container duration: still the end.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 298_000, 300_000, ended = true)))
+        assertEquals(AirPlayVideoInfo(300.0, 300.0, playing = false), video.info())
+        // The phone seeks back after the end: that video isn't finished any more, the timer is cancelled.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 200_000, 300_000)))
+        assertEquals(AirPlayVideoInfo(300.0, 200.0, playing = false), video.info())
+        delay(400)
+        assertIs<CastCommand.Load>(commands.last())
+
+        // Ended again, then something else starts here before the timeout: it must not be stopped by it,
+        // nor driven by a late /rate or /scrub from the sender.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 298_000, 300_000, ended = true)))
+        val movie = load.entry.copy(id = "nas-movie", streamUrl = "http://nas/movie.mp4")
+        repo.publish(ReceiverPlayback(movie, RendererStatus(TransportState.PLAYING, 1_000, 5_000_000)))
+        delay(400)
+        assertIs<CastCommand.Load>(commands.last())
+        video.setRate(0f)
+        video.seek(10f)
+        assertIs<CastCommand.Load>(commands.last())
+
+        // Back to the ended video and nothing from the sender: closed here.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 298_000, 300_000, ended = true)))
+
+        // The phone went away without /stop: the session ends here, so a later /rate 1 can't restart it.
+        delay(400)
+        assertEquals(CastCommand.Stop, commands.last())
+        assertNull(video.info())
+        val before = commands.size
+        video.setRate(1f)
+        assertEquals(before, commands.size)
+        collecting.cancel()
+    }
+
+    @Test
     fun airPlayVideoDrivesOurPlayerAndReportsProgress() = runBlocking<Unit> {
         val receiver = FakeReceiver()
         val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope)
@@ -138,9 +188,10 @@ class AirPlayRepositoryTest {
         video.setRate(1f)
         assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(60_000), CastCommand.Play), commands.drop(1))
 
-        // Played to the end: the sender is told it's over.
-        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 300_000, 300_000)))
-        assertEquals(-1.0, video.info()?.durationSeconds)
+        // Played to the end: reported like an Apple TV does (at the end, paused), so the sender decides
+        // what's next. Duration -1 made UxPlay drop the connection and YouTube showed "Something went wrong".
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 299_400, 300_000, ended = true)))
+        assertEquals(AirPlayVideoInfo(300.0, 300.0, playing = false), video.info())
 
         // The user played something else here: also over.
         repo.publish(ReceiverPlayback(load.entry.copy(id = "nas-movie", streamUrl = "http://nas/movie.mp4"), RendererStatus(TransportState.PLAYING, 0, 0)))

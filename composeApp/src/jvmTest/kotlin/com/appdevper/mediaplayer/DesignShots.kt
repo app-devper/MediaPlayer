@@ -122,6 +122,19 @@ class DesignShots {
     private val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, artist = "Bodyslam", album = "Kraam", streamUrl = "http://h/a1.mp3", durationMs = 245_000)
     private val song2 = MediaEntry("a2", "0", "Lam Phloen", MediaKind.AUDIO, artist = "Bodyslam", streamUrl = "http://h/a2.mp3", durationMs = 201_000)
 
+    private val clip = MediaEntry("v1", "0", "Weekend in Chiang Mai", MediaKind.VIDEO, streamUrl = "http://127.0.0.1:9/v1.mp4", durationMs = 754_000)
+
+    @Test fun videoLocalDesktopDark() = shot("10-video-local-desktop-dark", 1280, 800, dark = true, setup = { s ->
+        s.play(clip, listOf(clip), autoPlay = false)
+    }, start = PlayerRoute, always = true) {
+        // Labelled controls over the picture (the stream can't load in tests, so no timing checks).
+        onNodeWithContentDescription("Play").assertExists()
+        onNodeWithContentDescription("Full screen").assertExists()
+    }
+    @Test fun songLocalPhoneLight() = shot("11-song-local-phone-light", 400, 860, dark = false, setup = { s ->
+        s.play(song, listOf(song, song2), autoPlay = false)
+    }, start = PlayerRoute)
+
     @Test fun homePhoneLight() = shot("1-home-phone-light", 400, 860, dark = false)
     @Test fun homeDesktopDark() = shot("2-home-desktop-dark", 1280, 800, dark = true)
     @Test fun browsePhoneLight() = shot("3-browse-phone-light", 400, 860, dark = false, start = BrowseRoute("uuid:nas", "0", "Living Room NAS"))

@@ -17,11 +17,14 @@ import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
+import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +47,12 @@ class AirPlayRepositoryImpl(
     private val settings: SettingsRepositoryImpl,
     private val storage: AppStorage,
     private val multicast: MulticastLock,
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
+    /**
+     * A video that ended and that its sender never stopped or replaced is closed after this long. Long:
+     * YouTube waits ~20 s on its end screen before the next video, and the user may seek back meanwhile.
+     */
+    private val abandonedEndMs: Long = 5 * 60_000,
 ) : AirPlayRepository {
 
     private val _status = MutableStateFlow(if (receiver == null) AirPlayStatus.Unsupported else AirPlayStatus.Stopped)
@@ -77,14 +85,45 @@ class AirPlayRepositoryImpl(
 
     override fun publish(playback: ReceiverPlayback) {
         this.playback = playback
-        if (playback.entry?.id != null && playback.entry?.id == videoId) videoLoaded = true
+        val id = videoId
+        val current = id != null && playback.entry?.id == id
+        if (current) videoLoaded = true
+        // Played to the end: the sender normally stops or plays the next video. If it never does
+        // (phone locked, app killed), end the session here so a later /rate can't restart it.
+        // Anything else (still playing, seeked back, something else plays now) cancels that.
+        if (current && playback.status.isFinished()) {
+            if (endJob == null) endJob = scope.launch {
+                delay(abandonedEndMs)
+                if (videoId == id && this@AirPlayRepositoryImpl.playback.entry?.id == id) video.stop()
+            }
+        } else {
+            endJob?.cancel()
+            endJob = null
+        }
     }
+
+    @Volatile private var endJob: Job? = null
+
+    /**
+     * The sender's video is still what our player has. If the user played something else meanwhile, a
+     * late /rate or /scrub from the sender must not drive it (before the player reports, the load counts).
+     */
+    private fun videoIsPlayingHere(): Boolean {
+        val id = videoId ?: return false
+        val entry = playback.entry
+        return !videoLoaded || entry == null || entry.id == id
+    }
+
+    /** The player reached the end; leaving the player or a controller's Stop isn't an end. */
+    private fun RendererStatus?.isFinished() = this != null && ended && durationMs > 0
 
     /** AirPlay video (YouTube, Safari…) → the same local player as DLNA casts. */
     private val video = object : AirPlayVideoControl {
         override fun play(url: String, startSeconds: Float) {
             // YouTube's next video comes at the same local URL: a new id makes the player load it.
             val id = "airplay-${++videoSequence}"
+            endJob?.cancel()
+            endJob = null
             videoId = id
             // The sender moved from AirPlay audio to video (YouTube Music does when switching song → video).
             _activity.update { it.copy(audioOnly = false, nowPlaying = null) }
@@ -104,18 +143,20 @@ class AirPlayRepositoryImpl(
         // Only while a video is current: after /stop, YouTube sends /rate 1 before the next /play,
         // which would otherwise resume the stopped one.
         override fun seek(seconds: Float) {
-            if (videoId == null) return
+            if (!videoIsPlayingHere()) return
             _commands.tryEmit(CastCommand.Seek((seconds * 1000).toLong()))
         }
 
         override fun setRate(rate: Float) {
-            if (videoId == null) return
+            if (!videoIsPlayingHere()) return
             _commands.tryEmit(if (rate > 0f) CastCommand.Play else CastCommand.Pause)
         }
 
         override fun stop() {
             if (videoId == null) return
             videoId = null
+            endJob?.cancel()
+            endJob = null
             _commands.tryEmit(CastCommand.Stop)
             volumeBeforeVideo?.let { _commands.tryEmit(CastCommand.SetVolume(it)) }
             volumeBeforeVideo = null
@@ -125,14 +166,19 @@ class AirPlayRepositoryImpl(
             val id = videoId ?: return null
             val p = playback
             if (p.entry?.id != id) {
-                // Something else plays here now: tell the sender its video is over.
+                // Something else plays here now: tell the sender its video is over. Deliberately -1:
+                // UxPlay then drops the sender's connection (YouTube shows an error), since the user
+                // replaced its video on this device.
                 return if (videoLoaded) AirPlayVideoInfo(-1.0, 0.0, playing = false) else null
             }
             val status = p.status ?: return null
-            val finished = status.state == TransportState.STOPPED && status.durationMs > 0 && status.positionMs >= status.durationMs - 1_000
+            // At the end: report the end, paused, as an Apple TV does; the sender then plays the next
+            // video or stops. (Duration -1, UxPlay's "finished", drops the sender's connection.)
+            // The last reported position can be seconds short of the container duration.
+            val finished = status.isFinished()
             return AirPlayVideoInfo(
-                durationSeconds = if (finished) -1.0 else status.durationMs / 1000.0,
-                positionSeconds = status.positionMs / 1000.0,
+                durationSeconds = status.durationMs / 1000.0,
+                positionSeconds = (if (finished) status.durationMs else status.positionMs) / 1000.0,
                 playing = status.state == TransportState.PLAYING || status.state == TransportState.TRANSITIONING,
             )
         }

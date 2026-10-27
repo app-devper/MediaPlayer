@@ -1,6 +1,34 @@
 package com.appdevper.mediaplayer.platform
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.onStart
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import com.appdevper.mediaplayer.designsystem.components.ThinSlider
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,8 +42,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -81,6 +107,7 @@ actual fun NativeMediaPlayer(
         },
         positionMs = status.positionMs,
         durationMs = status.durationMs,
+        ended = status.ended,
     )
 
     DisposableEffect(player) {
@@ -123,73 +150,177 @@ actual fun NativeMediaPlayer(
         player.setVolume(sliderVolume / 100f)
     }
 
-    val onVideoSlider = SliderDefaults.colors(
-        thumbColor = Color.White,
-        activeTrackColor = Color.White,
-        inactiveTrackColor = Color.White.copy(alpha = 0.25f),
-    )
-    Column(modifier.fillMaxSize()) {
-        Box(
-            Modifier.weight(1f).fillMaxWidth()
-                .then(if (onToggleFullscreen != null) Modifier.pointerInput(onToggleFullscreen) { detectTapGestures(onDoubleTap = { onToggleFullscreen() }) } else Modifier),
-            contentAlignment = Alignment.Center,
-        ) {
-            val f = frame
-            if (!isAudio && f != null) {
-                val bitmap = remember(f) {
-                    SkiaImage.makeRaster(ImageInfo(f.width, f.height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE), f.bgra, f.width * 4)
-                        .toComposeImageBitmap()
-                }
-                Image(bitmap, contentDescription = title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-            }
-            when {
-                status.error != null -> Text(status.error.orEmpty(), color = Color.White, modifier = Modifier.padding(16.dp))
-                status.buffering && status.playing -> CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp, color = Color.White)
-            }
+    // Video: controls float over the picture and hide while it plays; songs: always shown, in theme colors.
+    // Mouse moves and keys go through a flow, not state, so moving the mouse doesn't recompose the player.
+    val activity = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var overControls by remember { mutableStateOf(false) }
+    // Keyboard: the video area takes focus; keys there (or on a control) show the bar again, and focus
+    // moves to the video area when the bar hides, so it isn't lost with the hidden controls.
+    var controlsHaveFocus by remember { mutableStateOf(false) }
+    val videoFocus = remember { FocusRequester() }
+    val canHide = !isAudio && status.playing && !status.buffering && seeking == null && !overControls
+    LaunchedEffect(canHide) {
+        controlsVisible = true
+        if (!canHide) return@LaunchedEffect
+        activity.onStart { emit(Unit) }.collectLatest {
+            controlsVisible = true
+            delay(CONTROLS_HIDE_MS)
+            if (controlsHaveFocus) videoFocus.requestFocus()
+            controlsVisible = false
         }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    }
+    fun togglePlay() {
+        if (status.playing) {
+            player.pause()
+        } else {
+            stopped = false
+            player.play()
+        }
+    }
+
+    val c = AppTheme.colors
+    val content = if (isAudio) c.textPrimary else Color.White
+    val controls: @Composable () -> Unit = {
+        // Stays up while the pointer is on it or one of its controls has keyboard focus.
+        Column(
+            Modifier.fillMaxWidth()
+                .onFocusChanged { controlsHaveFocus = it.hasFocus }
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            when (awaitPointerEvent().type) {
+                                PointerEventType.Enter -> overControls = true
+                                PointerEventType.Exit -> overControls = false
+                            }
+                        }
+                    }
+                },
         ) {
-            IconButton(onClick = {
-                if (status.playing) {
-                    player.pause()
-                } else {
-                    stopped = false
-                    player.play()
-                }
-            }) {
-                Icon(if (status.playing) AppIcons.Pause else AppIcons.Play, "Play/Pause", tint = Color.White)
-            }
-            Text(formatClock(status.positionMs), color = Color.White, style = MaterialTheme.typography.labelSmall)
-            Slider(
-                value = seeking ?: if (status.durationMs > 0) status.positionMs.toFloat() / status.durationMs else 0f,
+            // Same seek bar as the song screens (thin track, round thumb).
+            ThinSlider(
+                value = seeking ?: if (status.durationMs > 0) (status.positionMs.toFloat() / status.durationMs).coerceIn(0f, 1f) else 0f,
                 onValueChange = { seeking = it },
                 onValueChangeFinished = {
                     seeking?.let { player.seek((it * status.durationMs).toLong()) }
                     seeking = null
                 },
                 enabled = status.durationMs > 0,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                colors = onVideoSlider,
+                activeColor = content,
+                inactiveColor = content.copy(alpha = 0.3f),
+                modifier = Modifier.fillMaxWidth().height(20.dp),
             )
-            Text(formatClock(status.durationMs), color = Color.White, style = MaterialTheme.typography.labelSmall)
-            Icon(AppIcons.Volume, null, tint = Color.White, modifier = Modifier.padding(start = 8.dp))
-            Slider(
-                value = sliderVolume,
-                onValueChange = {
-                    sliderVolume = it
-                    player.setVolume(it / 100f)
-                },
-                valueRange = 0f..100f,
-                modifier = Modifier.padding(start = 4.dp).width(120.dp),
-                colors = onVideoSlider,
-            )
-            if (onToggleFullscreen != null) {
-                IconButton(onClick = onToggleFullscreen) {
-                    Icon(if (fullscreen) AppIcons.Minimize else AppIcons.Maximize, if (fullscreen) "Exit full screen" else "Full screen", tint = Color.White)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = ::togglePlay) {
+                    Icon(if (status.playing) AppIcons.Pause else AppIcons.Play, if (status.playing) "Pause" else "Play", tint = content)
+                }
+                val position = seeking?.let { (it * status.durationMs).toLong() } ?: status.positionMs
+                Text(
+                    // Unknown duration (live stream): just the position.
+                    if (status.durationMs > 0) "${formatClock(position)} / ${formatClock(status.durationMs)}" else formatClock(position),
+                    color = content.copy(alpha = 0.85f),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Spacer(Modifier.weight(1f))
+                Icon(AppIcons.Volume, null, Modifier.size(18.dp), tint = content.copy(alpha = 0.85f))
+                ThinSlider(
+                    value = sliderVolume,
+                    onValueChange = {
+                        sliderVolume = it
+                        player.setVolume(it / 100f)
+                    },
+                    valueRange = 0f..100f,
+                    activeColor = content,
+                    inactiveColor = content.copy(alpha = 0.3f),
+                    modifier = Modifier.padding(start = 6.dp).width(110.dp),
+                )
+                if (onToggleFullscreen != null) {
+                    IconButton(onClick = onToggleFullscreen) {
+                        Icon(if (fullscreen) AppIcons.Minimize else AppIcons.Maximize, if (fullscreen) "Exit full screen" else "Full screen", tint = content)
+                    }
                 }
             }
         }
     }
+
+    if (isAudio) {
+        Column(modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.Bottom) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                when {
+                    status.error != null -> Text(
+                        status.error.orEmpty(), color = c.danger, style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    status.buffering && status.playing -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.textSecondary)
+                }
+            }
+            controls()
+        }
+        return
+    }
+    Box(
+        modifier.fillMaxSize()
+            // Any mouse movement or key brings the controls back.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent()
+                        activity.tryEmit(Unit)
+                    }
+                }
+            }
+            .onPreviewKeyEvent { activity.tryEmit(Unit); false }
+            .focusRequester(videoFocus)
+            .focusable()
+            // Space on the video area: play/pause, like clicking it.
+            .onKeyEvent { e ->
+                if (e.type == KeyEventType.KeyUp && e.key == Key.Spacebar) { togglePlay(); true } else false
+            }
+            .pointerInput(onToggleFullscreen) {
+                detectTapGestures(
+                    onTap = {
+                        videoFocus.requestFocus()
+                        togglePlay()
+                    },
+                    onDoubleTap = onToggleFullscreen?.let { toggle -> { toggle() } },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        val f = frame
+        if (f != null) {
+            val bitmap = remember(f) {
+                SkiaImage.makeRaster(ImageInfo(f.width, f.height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE), f.bgra, f.width * 4)
+                    .toComposeImageBitmap()
+            }
+            Image(bitmap, contentDescription = title, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        }
+        when {
+            status.error != null -> Text(status.error.orEmpty(), color = Color.White, modifier = Modifier.padding(16.dp))
+            status.buffering && status.playing -> CircularProgressIndicator(Modifier.size(36.dp), strokeWidth = 3.dp, color = Color.White)
+            // Paused: a big play button in the middle, like other video players.
+            !status.playing -> Box(
+                Modifier.size(64.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.Play, null, Modifier.size(30.dp), tint = Color.White)
+            }
+        }
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            Box(
+                Modifier.fillMaxWidth()
+                    // Clicks on the bar's empty parts (time, gaps, gradient) don't reach the video's play/pause.
+                    .pointerInput(Unit) { detectTapGestures {} }
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+                    .padding(start = 12.dp, end = 12.dp, top = 28.dp, bottom = 4.dp),
+            ) { controls() }
+        }
+    }
 }
+
+private const val CONTROLS_HIDE_MS = 2_500L
