@@ -191,7 +191,20 @@ static void audio_set_progress(void *cls, uint32_t *start, uint32_t *curr, uint3
     (void) cls;
     CALL(audio_progress, *start, *curr, *end);
 }
-static void export_dacp(void *cls, const char *active_remote, const char *dacp_id) { (void) cls; (void) active_remote; (void) dacp_id; }
+static bool all_chars(const char *s, size_t max, const char *allowed) {
+    size_t n = s ? strlen(s) : 0;
+    return n > 0 && n <= max && strspn(s, allowed) == n;
+}
+
+/* From the sender's request headers: only well-formed ids are passed on (they end up in an mDNS
+   name and an HTTP header). */
+static void export_dacp(void *cls, const char *active_remote, const char *dacp_id,
+                        const unsigned char *remote, int remotelen, unsigned int zone_id) {
+    (void) cls;
+    if (!all_chars(dacp_id, 16, "0123456789ABCDEFabcdef") || !all_chars(active_remote, 10, "0123456789")) return;
+    if (remotelen != 4 && remotelen != 16) return;
+    CALL(remote_control, dacp_id, active_remote, remote, remotelen, zone_id);
+}
 static void mirror_video_running(void *cls, bool running) { (void) cls; (void) running; }
 
 /* AirPlay video: forwarded to the app's player. */

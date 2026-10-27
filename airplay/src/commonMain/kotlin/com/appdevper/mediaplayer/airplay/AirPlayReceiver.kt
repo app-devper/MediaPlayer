@@ -49,6 +49,10 @@ sealed interface AirPlayEvent {
     data class Progress(val positionMs: Long, val durationMs: Long) : AirPlayEvent
     /** AirPlay volume: -30 dB (min) .. 0 dB (max); muted is -144. */
     data class Volume(val db: Float) : AirPlayEvent
+    /** The connected sender can be remote-controlled: [AirPlayReceiver.sendToSender] works. */
+    data object RemoteControlAvailable : AirPlayEvent
+    /** The sender's remote control can't be reached any more (it left, or its connection closed). */
+    data object RemoteControlLost : AirPlayEvent
     /** The connection broke; the receiver restarts itself. */
     data class ConnectionLost(val reason: Int) : AirPlayEvent
 }
@@ -101,9 +105,22 @@ interface AirPlayReceiver {
     /** Throws [AirPlayException] when the receiver can't start (no network, port in use…). */
     fun start(config: AirPlayConfig)
     fun stop()
+
+    /**
+     * Sends [command] to the connected sender (after [AirPlayEvent.RemoteControlAvailable]); false when
+     * there's none or it didn't take it. Network I/O: call from a coroutine.
+     */
+    suspend fun sendToSender(command: AirPlayRemoteCommand): Boolean
 }
 
 class AirPlayException(message: String) : Exception(message)
+
+/** What the sender's own controls do (its now-playing app: Music, YouTube, YouTube Music…). */
+enum class AirPlayRemoteCommand(internal val path: String) {
+    Next("nextitem"),
+    Previous("previtem"),
+    PlayPause("playpause"),
+}
 
 /** The platform's receiver, or null where AirPlay receiving isn't available (iOS). */
 expect fun createAirPlayReceiver(): AirPlayReceiver?

@@ -5,7 +5,9 @@ import com.appdevper.mediaplayer.data.di.platformDataModule
 import com.appdevper.mediaplayer.di.domainModule
 import com.appdevper.mediaplayer.di.platformAppModule
 import com.appdevper.mediaplayer.di.presentationModule
+import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerStatus
@@ -219,5 +221,33 @@ class PresentationTest {
         assertEquals(listOf("Samsung Q80 TV"), vm.uiState.value.renderers.map { it.name })
         vm.selectTarget(PlaybackTarget.Renderer(fakeTv))
         assertEquals(PlaybackTarget.Renderer(fakeTv), vm.uiState.value.target)
+    }
+
+    @Test
+    fun nextAndPreviousGoToTheSenderForItsAirPlayVideo() = runTest {
+        val airPlay = FakeAirPlay(AirPlayStatus.Running("Mac"))
+        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay))
+        val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
+        val song2 = MediaEntry("a2", "0", "Lam Phloen", MediaKind.AUDIO, streamUrl = "http://h/a2.mp3")
+
+        // Our own queue: next is ours, even when a sender is connected.
+        session.play(song, listOf(song, song2))
+        airPlay.activity.value = AirPlayActivity(client = "iPhone", canControlSender = true)
+        vm.next()
+        assertEquals("a2", session.state.value.current?.id)
+        assertTrue(airPlay.sentToSender.isEmpty())
+
+        // The sender's AirPlay video is what plays: its queue (YouTube) decides.
+        val video = MediaEntry("airplay-1", "-1", "AirPlay from iPhone", MediaKind.VIDEO, streamUrl = "http://localhost:7000/master.m3u8")
+        session.play(video, listOf(video))
+        airPlay.activity.value = AirPlayActivity(client = "iPhone", canControlSender = true, videoEntryId = "airplay-1")
+        vm.next()
+        vm.previous()
+        assertEquals(listOf(SenderCommand.Next, SenderCommand.Previous), airPlay.sentToSender)
+
+        // Without remote control from that sender, nothing is sent.
+        airPlay.activity.value = AirPlayActivity(client = "iPhone", canControlSender = false, videoEntryId = "airplay-1")
+        vm.next()
+        assertEquals(2, airPlay.sentToSender.size)
     }
 }

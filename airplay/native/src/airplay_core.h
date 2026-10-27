@@ -48,6 +48,10 @@ typedef struct ap_callbacks {
     /* the sender ended its audio stream (TEARDOWN) */
     void (*audio_stopped)(void *ctx);
     void (*audio_progress)(void *ctx, uint32_t start, uint32_t current, uint32_t end);
+    /* the sender can be remote-controlled (DACP): its ids, already checked to be hex / decimal, and its
+       address (4 or 16 bytes; zone_id for IPv6 link-local) */
+    void (*remote_control)(void *ctx, const char *dacp_id, const char *active_remote,
+                           const uint8_t *addr, int addr_len, unsigned int zone_id);
     /* AirPlay volume in dB: -30 (min) .. 0 (max), -144 = mute */
     void (*audio_volume)(void *ctx, float db);
     /* connection lost or the client went away uncleanly: the app should restart the receiver */

@@ -53,6 +53,8 @@ internal interface NativeListener {
     fun onAudioArtwork(image: ByteArray?)
     fun onAudioProgress(start: Long, current: Long, end: Long)
     fun onAudioStopped()
+    /** DACP-ID (hex) and Active-Remote (digits), checked in native code; the sender's address. */
+    fun onRemoteControl(dacpId: String, activeRemote: String, address: ByteArray, zoneId: Int)
     /** [duration s, position s, rate], or null while nothing is loaded; duration < 0 = finished. */
     fun videoInfo(): DoubleArray?
 }

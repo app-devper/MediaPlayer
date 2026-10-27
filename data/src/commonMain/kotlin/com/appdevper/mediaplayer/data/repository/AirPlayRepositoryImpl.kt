@@ -5,6 +5,7 @@ import com.appdevper.mediaplayer.airplay.AirPlayConfig
 import com.appdevper.mediaplayer.airplay.AirPlayEvent
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.airplay.AirPlayReceiver
+import com.appdevper.mediaplayer.airplay.AirPlayRemoteCommand
 import com.appdevper.mediaplayer.airplay.AirPlayVideoControl
 import com.appdevper.mediaplayer.airplay.AirPlayVideoInfo
 import com.appdevper.mediaplayer.airplay.airPlayGain
@@ -18,6 +19,7 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import kotlinx.coroutines.CoroutineScope
@@ -83,6 +85,17 @@ class AirPlayRepositoryImpl(
         _commands.tryEmit(CastCommand.SetVolume(volume))
     }
 
+    override suspend fun sendToSender(command: SenderCommand): Boolean {
+        val r = receiver ?: return false
+        return r.sendToSender(
+            when (command) {
+                SenderCommand.Next -> AirPlayRemoteCommand.Next
+                SenderCommand.Previous -> AirPlayRemoteCommand.Previous
+                SenderCommand.PlayPause -> AirPlayRemoteCommand.PlayPause
+            },
+        )
+    }
+
     override fun publish(playback: ReceiverPlayback) {
         this.playback = playback
         val id = videoId
@@ -126,7 +139,7 @@ class AirPlayRepositoryImpl(
             endJob = null
             videoId = id
             // The sender moved from AirPlay audio to video (YouTube Music does when switching song → video).
-            _activity.update { it.copy(audioOnly = false, nowPlaying = null) }
+            _activity.update { it.copy(audioOnly = false, nowPlaying = null, videoEntryId = id) }
             videoLoaded = false
             val entry = MediaEntry(
                 id = id,
@@ -155,6 +168,7 @@ class AirPlayRepositoryImpl(
         override fun stop() {
             if (videoId == null) return
             videoId = null
+            _activity.update { it.copy(videoEntryId = null) }
             endJob?.cancel()
             endJob = null
             _commands.tryEmit(CastCommand.Stop)
@@ -244,6 +258,8 @@ class AirPlayRepositoryImpl(
             AirPlayEvent.MirroringStopped -> _activity.update { it.copy(mirroring = false) }
             is AirPlayEvent.AudioStarted -> _activity.update { it.copy(audioOnly = !event.withScreen && !it.mirroring, pin = null) }
             AirPlayEvent.AudioStopped -> _activity.update { it.copy(audioOnly = false, nowPlaying = null) }
+            AirPlayEvent.RemoteControlAvailable -> _activity.update { it.copy(canControlSender = true) }
+            AirPlayEvent.RemoteControlLost -> _activity.update { it.copy(canControlSender = false) }
             is AirPlayEvent.Volume -> {
                 // Comes over the audio (RAOP) connection, also while the sender plays AirPlay video.
                 val gain = airPlayGain(event.db)

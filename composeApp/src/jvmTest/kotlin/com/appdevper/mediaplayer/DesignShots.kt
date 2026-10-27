@@ -39,6 +39,7 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
+import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
@@ -67,6 +68,7 @@ import org.koin.core.context.stopKoin
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import java.io.File
+import kotlin.test.assertEquals
 import kotlin.test.Test
 
 @OptIn(ExperimentalTestApi::class)
@@ -176,11 +178,13 @@ class DesignShots {
         onNodeWithContentDescription("Full screen").performClick() // leave it full screen for the picture
     }
 
+    private val music = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook"))
+
     @Test fun airPlayMusicDesktopDark() = shot(
         "9-airplay-music-desktop-dark", 1280, 800, dark = true, start = PlayerRoute, always = true,
-        airPlay = FakeAirPlay(AirPlayStatus.Running("Worawit's MacBook")).apply {
+        airPlay = music.apply {
             activity.value = AirPlayActivity(
-                client = "Worawit's iPhone", audioOnly = true,
+                client = "Worawit's iPhone", audioOnly = true, canControlSender = true,
                 nowPlaying = AirPlayNowPlaying("Khon Kaen Blues", "Bodyslam", "Kraam", cover(), positionMs = 83_000, durationMs = 245_000),
             )
         },
@@ -190,6 +194,13 @@ class DesignShots {
         onNodeWithText("Playing from Worawit's iPhone").assertExists()
         onNodeWithText("4:05").assertExists()
         onNodeWithText("Mirroring Worawit's iPhone").assertDoesNotExist()
+        // The sender takes remote control: the buttons go to its app.
+        onNodeWithContentDescription("Next").performClick()
+        onNodeWithContentDescription("Previous").performClick()
+        onNodeWithContentDescription("Pause").performClick()
+        onNodeWithContentDescription("Play").assertExists() // follows the tap
+        waitUntil(timeoutMillis = 5_000) { music.sentToSender.size == 3 }
+        assertEquals(listOf(SenderCommand.Next, SenderCommand.Previous, SenderCommand.PlayPause), music.sentToSender)
     }
 
     /** A gradient JPEG standing in for cover art from the sender. */

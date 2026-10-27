@@ -7,6 +7,7 @@ import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
+import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerCapabilities
@@ -82,6 +83,8 @@ class FakeAirPlay(status: AirPlayStatus = AirPlayStatus.Stopped) : AirPlayReposi
     override val commands = MutableSharedFlow<CastCommand>()
     override fun publish(playback: ReceiverPlayback) {}
     override suspend fun start(name: String, requirePin: Boolean) { status.value = AirPlayStatus.Running(name) }
+    val sentToSender = mutableListOf<SenderCommand>()
+    override suspend fun sendToSender(command: SenderCommand): Boolean { sentToSender += command; return true }
     override suspend fun stop() { status.value = AirPlayStatus.Stopped }
 }
 

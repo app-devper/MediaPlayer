@@ -165,7 +165,14 @@ data class AirPlayActivity(
     val pin: String? = null,
     /** The song an audio-only sender is playing (music apps), once it says. */
     val nowPlaying: AirPlayNowPlaying? = null,
+    /** The sender takes remote-control commands ([SenderCommand]): next, previous, play/pause. */
+    val canControlSender: Boolean = false,
+    /** The local player's entry for the sender's AirPlay video, while it's current. */
+    val videoEntryId: String? = null,
 )
+
+/** What a sender's own controls do in its now-playing app (Music, YouTube, YouTube Music…). */
+enum class SenderCommand { Next, Previous, PlayPause }
 
 /** Song details, cover art and progress an AirPlay audio sender reports. */
 data class AirPlayNowPlaying(
