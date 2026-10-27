@@ -1,6 +1,7 @@
 package com.appdevper.mediaplayer.di
 
 import com.appdevper.mediaplayer.data.platform.ServerHost
+import com.appdevper.mediaplayer.playback.IosBackgroundPlayer
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import platform.UIKit.UIApplication
@@ -20,4 +21,5 @@ private class IdleTimerServerHost : ServerHost {
 
 actual val platformAppModule: Module = module {
     single<ServerHost> { IdleTimerServerHost() }
+    single { IosBackgroundPlayer(get()) }
 }
