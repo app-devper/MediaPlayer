@@ -6,6 +6,7 @@ import com.appdevper.mediaplayer.data.di.platformDataModule
 import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.AppStartupUseCase
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
@@ -39,6 +40,7 @@ val domainModule = module {
     single { AirPlayReceiverSession(get(), get(), get(), get(AppScope)) }
     factoryOf(::ObserveDevicesUseCase)
     factoryOf(::RefreshDevicesUseCase)
+    factoryOf(::AddServerByAddressUseCase)
     factoryOf(::GetDeviceUseCase)
     factoryOf(::BrowseFolderUseCase)
     factoryOf(::FilterEntriesUseCase)

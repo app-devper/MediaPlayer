@@ -139,7 +139,15 @@ fun AppShell(startDestination: Any = HomeRoute) {
                             onSearchAgain = { vm.refresh() },
                         )
                         Box(Modifier.weight(1f).fillMaxWidth()) {
-                            AppNavHost(nav, startDestination, state, onSelectTarget = vm::selectTarget, onRefresh = { vm.refresh(clear = true) })
+                            AppNavHost(
+                                nav,
+                                startDestination,
+                                state,
+                                onSelectTarget = vm::selectTarget,
+                                onRefresh = { vm.refresh(clear = true) },
+                                onAddServer = vm::addServer,
+                                onDismissAddServer = vm::dismissAddServer,
+                            )
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = state.hasNowPlaying && !onPlayer,
                                 enter = slideInVertically { it } + fadeIn(),

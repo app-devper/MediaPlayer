@@ -32,6 +32,9 @@ import com.appdevper.mediaplayer.feature.browse.BrowseViewModel
 import com.appdevper.mediaplayer.feature.player.PlayerViewModel
 import com.appdevper.mediaplayer.feature.server.ServerViewModel
 import com.appdevper.mediaplayer.feature.shell.ShellViewModel
+import com.appdevper.mediaplayer.domain.model.MediaDevice
+import kotlinx.coroutines.test.advanceUntilIdle
+import com.appdevper.mediaplayer.feature.shell.AddServerState
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
@@ -193,6 +196,7 @@ class PresentationTest {
             com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
+            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
             session,
             receiverSession(),
             airPlaySession(airPlay = airPlay).also { it.start() },
@@ -215,6 +219,7 @@ class PresentationTest {
             com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
+            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
             session,
             receiverSession(),
             airPlaySession(),
@@ -227,11 +232,41 @@ class PresentationTest {
     }
 
     @Test
+    fun aServerCanBeAddedByItsAddress() = runTest {
+        val devices = FakeDevices()
+        val nas = MediaDevice("uuid:nas2", "Office NAS", "Synology", "DS220", "192.168.1.30", null, isServer = true, isRenderer = false)
+        devices.byAddress["192.168.1.30"] = nas
+        val vm = ShellViewModel(
+            com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(devices),
+            ObserveServerStatusUseCase(FakeServer()),
+            com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(devices),
+            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(devices),
+            session,
+            receiverSession(),
+            airPlaySession(),
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        vm.addServer("192.168.1.99")
+        advanceUntilIdle()
+        assertEquals(AddServerState.NotFound("192.168.1.99"), vm.uiState.value.addServer)
+        vm.dismissAddServer()
+        assertEquals(AddServerState.Idle, vm.uiState.value.addServer)
+
+        vm.addServer(" 192.168.1.30 ")
+        advanceUntilIdle()
+        assertEquals(AddServerState.Added(listOf("Office NAS")), vm.uiState.value.addServer)
+        assertTrue("Office NAS" in vm.uiState.value.servers.map { it.name })
+        assertEquals(listOf("192.168.1.99", " 192.168.1.30 "), devices.asked)
+    }
+
+    @Test
     fun theMiniPlayerPlaysAndPausesOurPlayerOffScreen() = runTest {
         val vm = ShellViewModel(
             com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
+            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
             session,
             receiverSession(),
             airPlaySession(),

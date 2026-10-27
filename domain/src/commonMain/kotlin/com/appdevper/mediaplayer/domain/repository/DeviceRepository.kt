@@ -11,4 +11,11 @@ interface DeviceRepository {
     fun refresh()
     fun reset()
     fun device(id: String): MediaDevice?
+
+    /**
+     * Asks [address] directly (a host, host:port or a description URL), for networks or devices where
+     * discovery can't find it (an iPhone without the multicast entitlement). Returns what answered,
+     * which then shows in [devices] and is asked again on later launches; empty if nothing did.
+     */
+    suspend fun addByAddress(address: String): List<MediaDevice>
 }

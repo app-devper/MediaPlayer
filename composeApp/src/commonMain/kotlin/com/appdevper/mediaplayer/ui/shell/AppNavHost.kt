@@ -20,6 +20,8 @@ internal fun AppNavHost(
     state: ShellUiState,
     onSelectTarget: (PlaybackTarget) -> Unit,
     onRefresh: () -> Unit,
+    onAddServer: (String) -> Unit,
+    onDismissAddServer: () -> Unit,
 ) {
     NavHost(nav, startDestination = startDestination) {
         composable<HomeRoute> {
@@ -29,6 +31,8 @@ internal fun AppNavHost(
                 onSelectTarget = onSelectTarget,
                 onRefresh = onRefresh,
                 onOpenMyServer = { nav.navigate(ServerRoute) },
+                onAddServer = onAddServer,
+                onDismissAddServer = onDismissAddServer,
             )
         }
         composable<BrowseRoute> { e ->

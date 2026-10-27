@@ -41,6 +41,14 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         s.putString(KEY_AIRPLAY_PAIRED, (airPlayPairedKeys + publicKey).joinToString("\n"))
     }
 
+    /** Media server addresses the user added by hand (asked directly, without multicast discovery). */
+    val serverAddresses: List<String>
+        get() = s.getStringOrNull(KEY_SERVER_ADDRESSES)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+
+    fun addServerAddress(address: String) {
+        if (address !in serverAddresses) s.putString(KEY_SERVER_ADDRESSES, (serverAddresses + address).joinToString("\n"))
+    }
+
     override fun update(transform: (ServerSettings) -> ServerSettings) {
         val next = transform(_serverSettings.value).let { it.copy(name = it.name.trim().ifEmpty { defaultName }) }
         s.putString(KEY_NAME, next.name)
@@ -78,6 +86,7 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         const val KEY_RENDERER_UDN = "renderer_udn"
         const val KEY_RECEIVER = "receiver_enabled"
         const val KEY_AIRPLAY = "airplay_enabled"
+        const val KEY_SERVER_ADDRESSES = "server_addresses"
         const val KEY_AIRPLAY_PIN = "airplay_require_pin"
         const val KEY_AIRPLAY_ID = "airplay_device_id"
         const val KEY_AIRPLAY_PAIRED = "airplay_paired_keys"
