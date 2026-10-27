@@ -55,7 +55,16 @@ class AirPlayRepositoryImpl(
      * YouTube waits ~20 s on its end screen before the next video, and the user may seek back meanwhile.
      */
     private val abandonedEndMs: Long = 5 * 60_000,
+    /** Monotonic milliseconds; a test can drive time. */
+    private val nowMs: () -> Long = { monotonicStart.elapsedNow().inWholeMilliseconds },
 ) : AirPlayRepository {
+
+    // YouTube's seek bar on the phone sends /rate 0, /scrub, /rate 0 while dragging, and then sometimes
+    // never the /rate 1 that resumes. A pause that brackets a seek is that drag, not the user pausing:
+    // if the video was playing, it plays on after the seek.
+    @Volatile private var pausedAtMs = Long.MIN_VALUE / 2
+    @Volatile private var pausedWhilePlaying = false
+    @Volatile private var resumedAfterSeekAtMs = Long.MIN_VALUE / 2
 
     private val _status = MutableStateFlow(if (receiver == null) AirPlayStatus.Unsupported else AirPlayStatus.Stopped)
     override val status: StateFlow<AirPlayStatus> = _status.asStateFlow()
@@ -158,11 +167,28 @@ class AirPlayRepositoryImpl(
         override fun seek(seconds: Float) {
             if (!videoIsPlayingHere()) return
             _commands.tryEmit(CastCommand.Seek((seconds * 1000).toLong()))
+            val now = nowMs()
+            if (pausedWhilePlaying && now - pausedAtMs <= SCRUB_WINDOW_MS) {
+                pausedWhilePlaying = false
+                resumedAfterSeekAtMs = now
+                _commands.tryEmit(CastCommand.Play)
+            }
         }
 
         override fun setRate(rate: Float) {
             if (!videoIsPlayingHere()) return
-            _commands.tryEmit(if (rate > 0f) CastCommand.Play else CastCommand.Pause)
+            val now = nowMs()
+            if (rate > 0f) {
+                pausedWhilePlaying = false
+                // Already playing on after the drag's seek.
+                if (now - resumedAfterSeekAtMs > SCRUB_WINDOW_MS) _commands.tryEmit(CastCommand.Play)
+                return
+            }
+            // The /rate 0 that follows the drag's seek: still the drag.
+            if (now - resumedAfterSeekAtMs <= SCRUB_WINDOW_MS) return
+            pausedAtMs = now
+            pausedWhilePlaying = playback.status?.state.let { it == TransportState.PLAYING || it == TransportState.TRANSITIONING }
+            _commands.tryEmit(CastCommand.Pause)
         }
 
         override fun stop() {
@@ -279,3 +305,7 @@ class AirPlayRepositoryImpl(
         }
     }
 }
+
+/** A pause and a seek this close together are one drag of the sender's seek bar. */
+private const val SCRUB_WINDOW_MS = 1_500L
+private val monotonicStart = TimeSource.Monotonic.markNow()

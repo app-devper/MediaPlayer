@@ -167,6 +167,48 @@ class AirPlayRepositoryTest {
     }
 
     @Test
+    fun aDragOfTheSendersSeekBarKeepsPlaying() = runBlocking<Unit> {
+        var now = 0L
+        val receiver = FakeReceiver()
+        val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope, nowMs = { now })
+        val video = assertNotNull(receiver.video)
+        val commands = mutableListOf<CastCommand>()
+        val collecting = scope.launch { repo.commands.collect { commands += it } }
+        video.play("http://localhost:7000/master.m3u8", startSeconds = 0f)
+        val entry = assertIs<CastCommand.Load>(commands.single()).entry
+        fun reported(state: TransportState) = repo.publish(ReceiverPlayback(entry, RendererStatus(state, 10_000, 600_000)))
+        fun sent() = commands.drop(1).also { commands.retainAll(listOf(commands.first())) }
+
+        // YouTube's drag while playing: /rate 0, /scrub, /rate 0 and no /rate 1. It plays on.
+        reported(TransportState.PLAYING)
+        video.setRate(0f); now += 200
+        video.seek(191.7f); now += 20
+        video.setRate(0f)
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(191_700), CastCommand.Play), sent())
+        // ...and when it does send /rate 1 too, it's already playing: not sent twice. Later, it's play.
+        now += 1_000; video.setRate(1f)
+        assertEquals(emptyList(), sent())
+        now += 5_000; video.setRate(1f)
+        assertEquals(listOf(CastCommand.Play), sent())
+
+        // A drag while paused stays paused.
+        now += 10_000
+        reported(TransportState.PAUSED)
+        video.setRate(0f); now += 200
+        video.seek(90f); now += 20
+        video.setRate(0f)
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(90_000), CastCommand.Pause), sent())
+
+        // The user's own pause, and a seek well after it: no resume.
+        now += 10_000
+        reported(TransportState.PLAYING)
+        video.setRate(0f); now += 5_000
+        video.seek(300f)
+        assertEquals(listOf(CastCommand.Pause, CastCommand.Seek(300_000)), sent())
+        collecting.cancel()
+    }
+
+    @Test
     fun airPlayVideoDrivesOurPlayerAndReportsProgress() = runBlocking<Unit> {
         val receiver = FakeReceiver()
         val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope)
