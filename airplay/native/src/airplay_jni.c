@@ -20,7 +20,7 @@ static struct {
     jmethodID log, connections, admit, show_pin, register_client, is_registered;
     jmethodID video_format, video, video_stop, audio_format, audio, audio_flush, audio_volume, reset;
     jmethodID video_play, video_scrub, video_rate, video_playback_stop, video_info;
-    jmethodID audio_metadata, audio_artwork, audio_progress, audio_stopped;
+    jmethodID audio_metadata, audio_artwork, audio_progress, audio_stopped, remote_control;
 } m;
 
 static void detach_thread(void *unused) {
@@ -220,6 +220,19 @@ static void cb_audio_artwork(void *ctx, const uint8_t *image, int len) {
     });
 }
 
+static void cb_remote_control(void *ctx, const char *dacp_id, const char *active_remote,
+                              const uint8_t *addr, int addr_len, unsigned int zone_id) {
+    (void) ctx;
+    WITH_ENV({
+        jstring a = jstr(env, dacp_id), b = jstr(env, active_remote);
+        jbyteArray ip = (*env)->NewByteArray(env, addr_len);
+        if (!ip) { clear_exception(env); (*env)->DeleteLocalRef(env, a); (*env)->DeleteLocalRef(env, b); break; }
+        (*env)->SetByteArrayRegion(env, ip, 0, addr_len, (const jbyte *) addr);
+        (*env)->CallVoidMethod(env, l, m.remote_control, a, b, ip, (jint) zone_id);
+        (*env)->DeleteLocalRef(env, a); (*env)->DeleteLocalRef(env, b); (*env)->DeleteLocalRef(env, ip);
+    });
+}
+
 static void cb_audio_stopped(void *ctx) {
     (void) ctx;
     WITH_ENV((*env)->CallVoidMethod(env, l, m.audio_stopped));
@@ -275,6 +288,7 @@ static bool lookup_methods(JNIEnv *env, jobject obj) {
     M(audio_artwork, "onAudioArtwork", "([B)V")
     M(audio_progress, "onAudioProgress", "(JJJ)V")
     M(audio_stopped, "onAudioStopped", "()V")
+    M(remote_control, "onRemoteControl", "(Ljava/lang/String;Ljava/lang/String;[BI)V")
 #undef M
     (*env)->DeleteLocalRef(env, c);
     return true;
@@ -322,6 +336,7 @@ Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject 
         .video_playback_stop = cb_video_playback_stop, .video_info = cb_video_info,
         .audio_metadata = cb_audio_metadata, .audio_artwork = cb_audio_artwork, .audio_progress = cb_audio_progress,
         .audio_stopped = cb_audio_stopped,
+        .remote_control = cb_remote_control,
     };
     int result = ap_start(&config, &cb);
     (*env)->ReleaseStringUTFChars(env, name, name_c);

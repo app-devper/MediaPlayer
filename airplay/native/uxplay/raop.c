@@ -396,11 +396,13 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
 
     if (!conn->have_active_remote) {
         const char *active_remote = http_request_get_header(request, "Active-Remote");
-        if (active_remote) {
+        /* MediaPlayer: only once both ids came (a request with Active-Remote alone doesn't use up the one call) */
+        const char *dacp_id = http_request_get_header(request, "DACP-ID");
+        if (active_remote && dacp_id) {
             conn->have_active_remote = true;
             if (raop->callbacks.export_dacp) {
-                const char *dacp_id = http_request_get_header(request, "DACP-ID");
-                raop->callbacks.export_dacp(raop->callbacks.cls, active_remote, dacp_id);
+                raop->callbacks.export_dacp(raop->callbacks.cls, active_remote, dacp_id,
+                                            conn->remote, conn->remotelen, conn->zone_id);
             }
         }
     }

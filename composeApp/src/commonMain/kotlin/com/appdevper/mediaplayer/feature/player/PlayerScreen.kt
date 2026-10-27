@@ -66,6 +66,7 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.playback.drives
 import com.appdevper.mediaplayer.platform.NativeMediaPlayer
 import com.appdevper.mediaplayer.ui.LocalFullscreen
 import com.appdevper.mediaplayer.ui.formatClock
@@ -81,16 +82,22 @@ fun PlayerScreen() {
     val airPlay by vm.airPlay.collectAsStateWithLifecycle()
     val item = state.current
     when {
-        airPlay.audioOnly -> AirPlayAudio(airPlay)
+        airPlay.audioOnly -> AirPlayAudio(
+            airPlay,
+            onPrevious = vm::previous,
+            onPlayPause = vm::senderPlayPause,
+            onNext = vm::next,
+        )
         item == null -> EmptyState(AppIcons.ListMusic, "Nothing playing", "Pick a video, song or photo from a media server.")
         state.target is PlaybackTarget.Renderer -> RemoteControls(state, item, vm)
         item.kind == MediaKind.IMAGE -> PhotoViewer(state, vm)
-        else -> LocalPlayer(state, item, vm)
+        // Its AirPlay video: the sender's queue decides next/previous.
+        else -> LocalPlayer(state, item, vm, senderSkips = airPlay.drives(item))
     }
 }
 
 @Composable
-private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel) {
+private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel, senderSkips: Boolean) {
     val c = AppTheme.colors
     val isAudio = item.kind == MediaKind.AUDIO
     val fullscreenState = LocalFullscreen.current
@@ -136,8 +143,8 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                             Text(item.title, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
                         }
-                        GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, enabled = state.hasPrevious, tint = c.textPrimary)
-                        GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, tint = c.textPrimary)
+                        GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, enabled = senderSkips || state.hasPrevious, tint = c.textPrimary)
+                        GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = senderSkips || state.hasNext, tint = c.textPrimary)
                     }
                 }
                 if (state.queue.size > 1) {

@@ -34,5 +34,8 @@ Copied unchanged, except:
     subtitles by `hls_master_single_variant()` (`../src/hls_master.c`, compiled into the uxplay
     library) before the media playlists are requested. Upstream fetched every variant from the
     sender one by one (~2 s for YouTube) and the player then probed all of them.
+  - `raop.h` / `raop.c` `export_dacp`: also gets the connection's remote address and zone id, so the
+    app can reach the sender's DACP remote-control service (next/previous/play-pause) at that address.
+    It's called once both Active-Remote and DACP-ID came (upstream: on the first Active-Remote alone).
 
 Any local change to these files must be listed here.

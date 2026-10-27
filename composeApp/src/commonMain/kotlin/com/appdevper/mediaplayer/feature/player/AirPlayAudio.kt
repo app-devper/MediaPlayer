@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -35,6 +36,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
+import com.appdevper.mediaplayer.designsystem.components.CircleButton
+import com.appdevper.mediaplayer.designsystem.components.GhostIconButton
 import com.appdevper.mediaplayer.designsystem.components.IconTile
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
@@ -47,7 +50,12 @@ import kotlinx.coroutines.delay
 
 /** What an iPhone/iPad/Mac plays through AirPlay audio (Music, YouTube Music, Spotify…): shown like our own songs. */
 @Composable
-internal fun AirPlayAudio(activity: AirPlayActivity) {
+internal fun AirPlayAudio(
+    activity: AirPlayActivity,
+    onPrevious: () -> Unit = {},
+    onPlayPause: () -> Unit = {},
+    onNext: () -> Unit = {},
+) {
     val c = AppTheme.colors
     val song = activity.nowPlaying ?: AirPlayNowPlaying()
     Column(
@@ -101,12 +109,28 @@ internal fun AirPlayAudio(activity: AirPlayActivity) {
                 }
             }
         }
-        Text(
-            "Use the controls on ${activity.client ?: "the sending device"} to pause or skip.",
-            style = MaterialTheme.typography.bodySmall,
-            color = c.textTertiary,
-            textAlign = TextAlign.Center,
-        )
+        if (activity.canControlSender) {
+            // Sent to the sender's app (it plays the music; we only hear it). The sender doesn't tell us
+            // whether it's paused, so the icon follows our own taps and resets with each new song.
+            var paused by remember(song.title, song.artist) { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                GhostIconButton(AppIcons.SkipPrevious, "Previous", onPrevious, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
+                CircleButton(
+                    if (paused) AppIcons.Play else AppIcons.Pause,
+                    if (paused) "Play" else "Pause",
+                    { paused = !paused; onPlayPause() },
+                    size = 64.dp,
+                )
+                GhostIconButton(AppIcons.SkipNext, "Next", onNext, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
+            }
+        } else {
+            Text(
+                "Use the controls on ${activity.client ?: "the sending device"} to pause or skip.",
+                style = MaterialTheme.typography.bodySmall,
+                color = c.textTertiary,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

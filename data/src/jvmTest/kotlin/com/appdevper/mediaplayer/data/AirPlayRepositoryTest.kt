@@ -8,6 +8,7 @@ import com.appdevper.mediaplayer.airplay.AirPlayException
 import com.appdevper.mediaplayer.airplay.AirPlayMediaSink
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.airplay.AirPlayReceiver
+import com.appdevper.mediaplayer.airplay.AirPlayRemoteCommand
 import com.appdevper.mediaplayer.airplay.AirPlayTrackInfo
 import com.appdevper.mediaplayer.airplay.AirPlayVideoControl
 import com.appdevper.mediaplayer.airplay.AirPlayVideoInfo
@@ -20,6 +21,7 @@ import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.russhwolf.settings.MapSettings
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +55,8 @@ private class FakeReceiver(var failWith: String? = null) : AirPlayReceiver {
         configs += config
     }
     override fun stop() { stops++ }
+    val sent = mutableListOf<AirPlayRemoteCommand>()
+    override suspend fun sendToSender(command: AirPlayRemoteCommand): Boolean { sent += command; return true }
 }
 
 private class CountingLock : MulticastLock {
@@ -229,6 +233,38 @@ class AirPlayRepositoryTest {
         assertEquals(CastCommand.SetVolume(100), commands.last())
         video.stop()
         assertEquals(CastCommand.SetVolume(80), commands.last())
+        collecting.cancel()
+    }
+
+    @Test
+    fun theSenderCanBeRemoteControlled() = runBlocking<Unit> {
+        val receiver = FakeReceiver()
+        val repo = AirPlayRepositoryImpl(receiver, player, settings, storage, CountingLock(), scope)
+        assertFalse(repo.activity.value.canControlSender)
+        receiver.events.emit(AirPlayEvent.Connections(1))
+        receiver.events.emit(AirPlayEvent.RemoteControlAvailable)
+        assertTrue(repo.activity.value.canControlSender)
+
+        // Our player's entry for the sender's video is known while it's current.
+        val video = assertNotNull(receiver.video)
+        val commands = mutableListOf<CastCommand>()
+        val collecting = scope.launch { repo.commands.collect { commands += it } }
+        video.play("http://localhost:7000/master.m3u8", startSeconds = 0f)
+        assertEquals(assertIs<CastCommand.Load>(commands.first()).entry.id, repo.activity.value.videoEntryId)
+
+        assertTrue(repo.sendToSender(SenderCommand.Next))
+        assertTrue(repo.sendToSender(SenderCommand.Previous))
+        assertTrue(repo.sendToSender(SenderCommand.PlayPause))
+        assertEquals(listOf(AirPlayRemoteCommand.Next, AirPlayRemoteCommand.Previous, AirPlayRemoteCommand.PlayPause), receiver.sent)
+
+        video.stop()
+        assertNull(repo.activity.value.videoEntryId)
+        // The sender's control port went away while another connection stays open: controls off.
+        receiver.events.emit(AirPlayEvent.RemoteControlLost)
+        assertFalse(repo.activity.value.canControlSender)
+        receiver.events.emit(AirPlayEvent.RemoteControlAvailable)
+        receiver.events.emit(AirPlayEvent.Connections(0))
+        assertFalse(repo.activity.value.canControlSender)
         collecting.cancel()
     }
 

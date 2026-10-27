@@ -3,6 +3,8 @@ package com.appdevper.mediaplayer.airplay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import java.net.Inet6Address
+import java.net.InetAddress
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 
@@ -19,6 +21,8 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
     // Restarting after a lost connection can't happen on the native thread reporting it (stop joins it).
     private val control = Executors.newSingleThreadExecutor { r -> Thread(r, "airplay-control").apply { isDaemon = true } }
     @Volatile private var config: AirPlayConfig? = null
+    // The connected sender's remote control, if it offered one.
+    @Volatile private var remote: DacpRemote? = null
 
     /** UxPlay log level printed to stderr (logcat on Android): AIRPLAY_LOG=info|debug, default errors only. */
     private val logLevel: Int = when (System.getenv("AIRPLAY_LOG")?.lowercase()) {
@@ -31,7 +35,10 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
         override fun onLog(level: Int, message: String) {
             if (level <= logLevel) System.err.println("${clock()} [airplay] ${message.trimEnd()}")
         }
-        override fun onConnections(open: Int) = emit(AirPlayEvent.Connections(open))
+        override fun onConnections(open: Int) {
+            if (open == 0) remote = null
+            emit(AirPlayEvent.Connections(open))
+        }
         override fun admit(deviceId: String, model: String, name: String): Boolean =
             access.admit(deviceId, model, name).also { if (it) emit(AirPlayEvent.ClientConnecting(name, model, deviceId)) }
         override fun onShowPin(pin: String) = emit(AirPlayEvent.ShowPin(pin))
@@ -58,6 +65,14 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
         override fun onAudioMetadata(dmap: ByteArray) = emit(AirPlayEvent.Track(Dmap.track(dmap)))
         override fun onAudioArtwork(image: ByteArray?) = emit(AirPlayEvent.Artwork(image))
         override fun onAudioStopped() = emit(AirPlayEvent.AudioStopped)
+        override fun onRemoteControl(dacpId: String, activeRemote: String, address: ByteArray, zoneId: Int) {
+            val sender = runCatching {
+                if (address.size == 16) Inet6Address.getByAddress(null, address, zoneId) else InetAddress.getByAddress(address)
+            }.getOrNull() ?: return
+            debug("remote control: $dacpId at ${sender.hostAddress}")
+            remote = DacpRemote(dacpId, activeRemote, sender)
+            emit(AirPlayEvent.RemoteControlAvailable)
+        }
         override fun onAudioProgress(start: Long, current: Long, end: Long) {
             val (position, duration) = Dmap.progress(start, current, end)
             emit(AirPlayEvent.Progress(position, duration))
@@ -73,6 +88,7 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
             doubleArrayOf(it.durationSeconds, it.positionSeconds, if (it.playing) 1.0 else 0.0)
         }
         override fun onReset(reason: Int) {
+            remote = null
             emit(AirPlayEvent.ConnectionLost(reason))
             control.execute { config?.let { runCatching { startNative(it) } } }
         }
@@ -91,8 +107,21 @@ internal class NativeAirPlayReceiver : AirPlayReceiver {
         onControlThread { startNative(config) }
     }
 
+    override suspend fun sendToSender(command: AirPlayRemoteCommand): Boolean {
+        val r = remote ?: return false
+        val result = r.send(command)
+        debug("remote $command -> $result")
+        if (result == DacpRemote.Result.Unreachable && remote === r) {
+            // Gone (the sender left, or only its video connection is still open): stop offering it.
+            remote = null
+            emit(AirPlayEvent.RemoteControlLost)
+        }
+        return result == DacpRemote.Result.Done
+    }
+
     override fun stop() {
         config = null
+        remote = null
         onControlThread { NativeAirPlay.stop() }
     }
 

@@ -4,6 +4,7 @@ import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
+import com.appdevper.mediaplayer.domain.model.SenderCommand
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -21,4 +22,7 @@ interface AirPlayRepository {
 
     /** Latest local playback, for the sender's progress bar. */
     fun publish(playback: ReceiverPlayback)
+
+    /** Asks the sender to skip or play/pause ([AirPlayActivity.canControlSender]); false if it didn't. */
+    suspend fun sendToSender(command: SenderCommand): Boolean
 }

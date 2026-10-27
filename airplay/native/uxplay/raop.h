@@ -111,7 +111,9 @@ struct raop_callbacks_s {
     void  (*register_client) (void *cls, const char *device_id, const char *pk_str, const char *name);
     bool  (*check_register) (void *cls, const char *pk_str);
     const char*  (*passwd) (void *cls, int *len);
-    void  (*export_dacp) (void *cls, const char *active_remote, const char *dacp_id);
+    /* MediaPlayer: with the sender's address, to reach its DACP remote-control service */
+    void  (*export_dacp) (void *cls, const char *active_remote, const char *dacp_id,
+                          const unsigned char *remote, int remotelen, unsigned int zone_id);
     /* for HLS video player controls */
     void  (*on_video_play) (void *cls, const char *location, const float start_position);
     void  (*on_video_scrub) (void *cls, const float position);

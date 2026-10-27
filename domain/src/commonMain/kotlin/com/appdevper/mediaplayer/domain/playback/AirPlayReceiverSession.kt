@@ -3,6 +3,8 @@ package com.appdevper.mediaplayer.domain.playback
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
+import com.appdevper.mediaplayer.domain.model.MediaEntry
+import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +43,9 @@ class AirPlayReceiverSession(
 
     private var started = false
 
+    /** Asks the sender to skip or play/pause in its own app; false when it didn't take it (or has none). */
+    suspend fun sendToSender(command: SenderCommand): Boolean = airPlay.sendToSender(command)
+
     fun start() {
         if (started || airPlay.status.value == AirPlayStatus.Unsupported) return
         started = true
@@ -70,3 +75,10 @@ class AirPlayReceiverSession(
         }
     }
 }
+
+/**
+ * The sender, not our queue, decides what's next: its music is playing, or [current] is its AirPlay
+ * video. Then next/previous go to the sender ([AirPlayReceiverSession.sendToSender]).
+ */
+fun AirPlayActivity.drives(current: MediaEntry?): Boolean =
+    canControlSender && !mirroring && (audioOnly || (videoEntryId != null && current?.id == videoEntryId))
