@@ -24,6 +24,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -122,30 +123,36 @@ fun AppShell(startDestination: Any = HomeRoute) {
                 )
             }
 
-            val main: @Composable () -> Unit = {
-                Column(Modifier.fillMaxSize().background(AppTheme.colors.background)) {
-                    if (!fullscreen) TopBar(
-                        state = state,
-                        showSidebarButton = !wide || !sidebarOpen,
-                        onSidebar = { if (wide) sidebarOpen = true else scope.launch { drawer.open() } },
-                        canGoBack = canGoBack,
-                        onBack = { nav.popBackStack() },
-                        onSelectTarget = vm::selectTarget,
-                        onSearchAgain = { vm.refresh() },
-                    )
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
-                        AppNavHost(nav, startDestination, state, onSelectTarget = vm::selectTarget, onRefresh = { vm.refresh(clear = true) })
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = state.hasNowPlaying && !onPlayer,
-                            enter = slideInVertically { it } + fadeIn(),
-                            exit = slideOutVertically { it } + fadeOut(),
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        ) {
-                            MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause)
+            // One instance, moved (not rebuilt) between the wide and narrow layouts below: turning a phone
+            // to landscape for full screen can make it wide, and rebuilding restarted the video in the player.
+            // What changes is passed in, so the moved content never sees an old value.
+            val movableMain = remember {
+                movableContentOf { fullscreen: Boolean, wide: Boolean, canGoBack: Boolean, onPlayer: Boolean ->
+                    Column(Modifier.fillMaxSize().background(AppTheme.colors.background)) {
+                        if (!fullscreen) TopBar(
+                            state = state,
+                            showSidebarButton = !wide || !sidebarOpen,
+                            onSidebar = { if (wide) sidebarOpen = true else scope.launch { drawer.open() } },
+                            canGoBack = canGoBack,
+                            onBack = { nav.popBackStack() },
+                            onSelectTarget = vm::selectTarget,
+                            onSearchAgain = { vm.refresh() },
+                        )
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            AppNavHost(nav, startDestination, state, onSelectTarget = vm::selectTarget, onRefresh = { vm.refresh(clear = true) })
+                            androidx.compose.animation.AnimatedVisibility(
+                                visible = state.hasNowPlaying && !onPlayer,
+                                enter = slideInVertically { it } + fadeIn(),
+                                exit = slideOutVertically { it } + fadeOut(),
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            ) {
+                                MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause)
+                            }
                         }
                     }
                 }
             }
+            val main: @Composable () -> Unit = { movableMain(fullscreen, wide, canGoBack, onPlayer) }
 
             if (wide) {
                 Row(Modifier.fillMaxSize()) {
