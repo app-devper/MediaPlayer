@@ -191,6 +191,13 @@ class AirPlayRepositoryTest {
         now += 5_000; video.setRate(1f)
         assertEquals(listOf(CastCommand.Play), sent())
 
+        // Seek first, then /rate 0 (also seen from YouTube): the same drag, it plays on.
+        now += 10_000
+        reported(TransportState.PLAYING)
+        video.seek(124.7f); now += 30
+        video.setRate(0f)
+        assertEquals(listOf(CastCommand.Seek(124_700)), sent())
+
         // A drag while paused stays paused.
         now += 10_000
         reported(TransportState.PAUSED)

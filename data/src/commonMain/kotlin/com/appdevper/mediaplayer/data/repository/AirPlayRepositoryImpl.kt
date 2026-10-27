@@ -59,9 +59,9 @@ class AirPlayRepositoryImpl(
     private val nowMs: () -> Long = { monotonicStart.elapsedNow().inWholeMilliseconds },
 ) : AirPlayRepository {
 
-    // YouTube's seek bar on the phone sends /rate 0, /scrub, /rate 0 while dragging, and then sometimes
-    // never the /rate 1 that resumes. A pause that brackets a seek is that drag, not the user pausing:
-    // if the video was playing, it plays on after the seek.
+    // YouTube's seek bar on the phone sends /rate 0, /scrub, /rate 0 (or just /scrub, /rate 0) while
+    // dragging, and then often never the /rate 1 that resumes. A pause that brackets a seek is that drag,
+    // not the user pausing: if the video was playing, it plays on after the seek.
     @Volatile private var pausedAtMs = Long.MIN_VALUE / 2
     @Volatile private var pausedWhilePlaying = false
     @Volatile private var resumedAfterSeekAtMs = Long.MIN_VALUE / 2
@@ -126,6 +126,8 @@ class AirPlayRepositoryImpl(
 
     @Volatile private var endJob: Job? = null
 
+    private fun isPlaying() = playback.status?.state.let { it == TransportState.PLAYING || it == TransportState.TRANSITIONING }
+
     /**
      * The sender's video is still what our player has. If the user played something else meanwhile, a
      * late /rate or /scrub from the sender must not drive it (before the player reports, the load counts).
@@ -169,9 +171,13 @@ class AirPlayRepositoryImpl(
             _commands.tryEmit(CastCommand.Seek((seconds * 1000).toLong()))
             val now = nowMs()
             if (pausedWhilePlaying && now - pausedAtMs <= SCRUB_WINDOW_MS) {
+                // Paused for the drag: play on.
                 pausedWhilePlaying = false
                 resumedAfterSeekAtMs = now
                 _commands.tryEmit(CastCommand.Play)
+            } else if (isPlaying()) {
+                // Seek first: the /rate 0 that follows within the window is the same drag.
+                resumedAfterSeekAtMs = now
             }
         }
 
@@ -187,7 +193,7 @@ class AirPlayRepositoryImpl(
             // The /rate 0 that follows the drag's seek: still the drag.
             if (now - resumedAfterSeekAtMs <= SCRUB_WINDOW_MS) return
             pausedAtMs = now
-            pausedWhilePlaying = playback.status?.state.let { it == TransportState.PLAYING || it == TransportState.TRANSITIONING }
+            pausedWhilePlaying = isPlaying()
             _commands.tryEmit(CastCommand.Pause)
         }
 
