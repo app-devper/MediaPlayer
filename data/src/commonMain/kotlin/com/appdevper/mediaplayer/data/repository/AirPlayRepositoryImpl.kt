@@ -104,6 +104,16 @@ class AirPlayRepositoryImpl(
 
     @Volatile private var endJob: Job? = null
 
+    /**
+     * The sender's video is still what our player has. If the user played something else meanwhile, a
+     * late /rate or /scrub from the sender must not drive it (before the player reports, the load counts).
+     */
+    private fun videoIsPlayingHere(): Boolean {
+        val id = videoId ?: return false
+        val entry = playback.entry
+        return !videoLoaded || entry == null || entry.id == id
+    }
+
     /** The player reached the end; leaving the player or a controller's Stop isn't an end. */
     private fun RendererStatus?.isFinished() = this != null && ended && durationMs > 0
 
@@ -133,12 +143,12 @@ class AirPlayRepositoryImpl(
         // Only while a video is current: after /stop, YouTube sends /rate 1 before the next /play,
         // which would otherwise resume the stopped one.
         override fun seek(seconds: Float) {
-            if (videoId == null) return
+            if (!videoIsPlayingHere()) return
             _commands.tryEmit(CastCommand.Seek((seconds * 1000).toLong()))
         }
 
         override fun setRate(rate: Float) {
-            if (videoId == null) return
+            if (!videoIsPlayingHere()) return
             _commands.tryEmit(if (rate > 0f) CastCommand.Play else CastCommand.Pause)
         }
 

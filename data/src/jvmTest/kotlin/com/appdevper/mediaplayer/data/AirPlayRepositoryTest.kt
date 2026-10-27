@@ -132,10 +132,21 @@ class AirPlayRepositoryTest {
         // Ended 2 s short of the container duration: still the end.
         repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 298_000, 300_000, ended = true)))
         assertEquals(AirPlayVideoInfo(300.0, 300.0, playing = false), video.info())
-        // Something else starts here before the timeout: it must not be stopped by it.
+        // The phone seeks back after the end: that video isn't finished any more, the timer is cancelled.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 200_000, 300_000)))
+        assertEquals(AirPlayVideoInfo(300.0, 200.0, playing = false), video.info())
+        delay(400)
+        assertIs<CastCommand.Load>(commands.last())
+
+        // Ended again, then something else starts here before the timeout: it must not be stopped by it,
+        // nor driven by a late /rate or /scrub from the sender.
+        repo.publish(ReceiverPlayback(load.entry, RendererStatus(TransportState.STOPPED, 298_000, 300_000, ended = true)))
         val movie = load.entry.copy(id = "nas-movie", streamUrl = "http://nas/movie.mp4")
         repo.publish(ReceiverPlayback(movie, RendererStatus(TransportState.PLAYING, 1_000, 5_000_000)))
         delay(400)
+        assertIs<CastCommand.Load>(commands.last())
+        video.setRate(0f)
+        video.seek(10f)
         assertIs<CastCommand.Load>(commands.last())
 
         // Back to the ended video and nothing from the sender: closed here.
