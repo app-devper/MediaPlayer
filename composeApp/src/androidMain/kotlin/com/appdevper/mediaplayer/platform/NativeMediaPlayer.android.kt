@@ -1,6 +1,22 @@
 package com.appdevper.mediaplayer.platform
 
 import androidx.annotation.OptIn
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.input.InputMode
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.clickable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -120,14 +136,20 @@ actual fun NativeMediaPlayer(
             player.release()
         }
     }
+    /** Play, from our controls or a controller: from the start once ended, and after an error, loaded again. */
+    fun resume() {
+        stopped = false
+        if (error != null) {
+            error = null
+            player.prepare()
+        }
+        if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+        player.play()
+    }
     LaunchedEffect(player) {
         commands.collect { cmd ->
             when (cmd) {
-                LocalPlayerCommand.Play -> {
-                    stopped = false
-                    if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
-                    player.play()
-                }
+                LocalPlayerCommand.Play -> resume()
                 LocalPlayerCommand.Pause -> player.pause()
                 LocalPlayerCommand.Stop -> {
                     stopped = true
@@ -146,37 +168,39 @@ actual fun NativeMediaPlayer(
     }
     LaunchedEffect(player, volume) { player.volume = volume.coerceIn(0f, 1f) }
 
-    // What the controls show, polled more often than the status is reported so the seek bar moves smoothly.
-    var shown by remember(player) { mutableStateOf(status()) }
-    LaunchedEffect(player) {
-        while (true) {
-            shown = status()
-            delay(CONTROLS_POLL_MS)
+    // What the controls show, polled more often than the status is reported so the seek bar moves smoothly
+    // (only while the app is in front). Only the bar reads the position; the rest reads derived state,
+    // so it isn't recomposed on every poll.
+    fun snapshot() = Shown(status(), player.playWhenReady)
+    var shown by remember(player) { mutableStateOf(snapshot()) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(player, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                shown = snapshot()
+                delay(CONTROLS_POLL_MS)
+            }
         }
     }
-    val playing = player.playWhenReady && !stopped && shown.state != TransportState.STOPPED
-    val buffering = shown.state == TransportState.TRANSITIONING
+    val playing by remember(player) {
+        derivedStateOf { shown.playWhenReady && !stopped && error == null && shown.status.state != TransportState.STOPPED }
+    }
+    val buffering by remember(player) { derivedStateOf { shown.status.state == TransportState.TRANSITIONING } }
     fun togglePlay() {
-        if (playing) {
-            player.pause()
-        } else {
-            stopped = false
-            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
-            player.play()
-        }
-        shown = status()
+        if (playing) player.pause() else resume()
+        shown = snapshot()
     }
 
     val c = AppTheme.colors
     val content = if (isAudio) c.textPrimary else Color.White
     var seeking by remember { mutableStateOf(false) }
-    // Bumped by every tap, so the hide timer starts over.
+    // Bumped by every tap or key, so the hide timer starts over.
     var touches by remember { mutableIntStateOf(0) }
     val controls: @Composable (Modifier) -> Unit = { barModifier ->
         PlayerControlBar(
             playing = playing,
-            positionMs = shown.positionMs,
-            durationMs = shown.durationMs,
+            positionMs = shown.status.positionMs,
+            durationMs = shown.status.durationMs,
             onPlayPause = {
                 touches++
                 togglePlay()
@@ -184,7 +208,7 @@ actual fun NativeMediaPlayer(
             onSeek = {
                 stopped = false
                 player.seekTo(it)
-                shown = status()
+                shown = snapshot()
             },
             content = content,
             modifier = barModifier,
@@ -211,18 +235,49 @@ actual fun NativeMediaPlayer(
         return
     }
 
-    // Video: the bar floats over the picture; a tap shows or hides it, and it hides by itself while playing.
+    // Video: the bar floats over the picture and hides by itself while playing; a tap (or the TV remote's
+    // OK) on the picture shows or hides it, any key shows it. Paused, loading or failed, it stays.
     var controlsVisible by remember { mutableStateOf(true) }
     val canHide = playing && !buffering && !seeking
+    val pictureFocus = remember { FocusRequester() }
+    var barHasFocus by remember { mutableStateOf(false) }
+    // With a remote or keyboard (TV, or the first D-pad press), the picture takes focus so keys reach the
+    // player: OK shows or hides the bar, media keys play and pause. Touch leaves focus alone.
+    val inputMode = LocalInputModeManager.current.inputMode
+    LaunchedEffect(inputMode) {
+        if (inputMode == InputMode.Keyboard && !barHasFocus) pictureFocus.requestFocus()
+    }
     LaunchedEffect(canHide, touches) {
         if (!canHide) {
             controlsVisible = true
             return@LaunchedEffect
         }
         delay(CONTROLS_HIDE_MS)
+        // A remote's focus on a bar button would be lost with the bar: it goes to the picture.
+        if (barHasFocus) pictureFocus.requestFocus()
         controlsVisible = false
     }
-    Box(modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.fillMaxSize().background(Color.Black)
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                touches++
+                when (e.key) {
+                    Key.MediaPlayPause -> togglePlay()
+                    Key.MediaPlay -> resume()
+                    Key.MediaPause -> player.pause()
+                    // OK: the focused picture's click shows or hides the bar (or the focused button's runs).
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> return@onPreviewKeyEvent false
+                    else -> {
+                        controlsVisible = true
+                        return@onPreviewKeyEvent false
+                    }
+                }
+                controlsVisible = true
+                true
+            },
+        contentAlignment = Alignment.Center,
+    ) {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -234,15 +289,12 @@ actual fun NativeMediaPlayer(
         )
         // Over the picture: taps go to Compose, not to the PlayerView.
         Box(
-            Modifier.fillMaxSize().pointerInput(onToggleFullscreen) {
-                detectTapGestures(
-                    onTap = {
-                        touches++
-                        controlsVisible = !controlsVisible
-                    },
-                    onDoubleTap = onToggleFullscreen?.let { toggle -> { toggle() } },
-                )
-            },
+            Modifier.fillMaxSize()
+                .focusRequester(pictureFocus)
+                .clickable(interactionSource = null, indication = null, onClickLabel = "Show or hide the controls") {
+                    touches++
+                    controlsVisible = if (canHide) !controlsVisible else true
+                },
         )
         when {
             error != null -> Text(error.orEmpty(), color = Color.White, modifier = Modifier.padding(16.dp))
@@ -250,7 +302,7 @@ actual fun NativeMediaPlayer(
             // Paused: a big play button in the middle, like other video players.
             !playing -> Box(
                 Modifier.size(64.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f))
-                    .pointerInput(Unit) { detectTapGestures { togglePlay() } },
+                    .clickable(role = Role.Button, onClick = ::togglePlay),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(AppIcons.Play, "Play", Modifier.size(30.dp), tint = Color.White)
@@ -264,6 +316,7 @@ actual fun NativeMediaPlayer(
         ) {
             controls(
                 Modifier
+                    .onFocusChanged { barHasFocus = it.hasFocus }
                     // Taps on the bar's empty parts don't reach the picture (which would hide the bar).
                     .pointerInput(Unit) { detectTapGestures { touches++ } }
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
@@ -272,6 +325,9 @@ actual fun NativeMediaPlayer(
         }
     }
 }
+
+/** What the controls show: the status, and whether it's meant to play (ExoPlayer's playWhenReady). */
+private data class Shown(val status: RendererStatus, val playWhenReady: Boolean)
 
 private const val CONTROLS_HIDE_MS = 2_500L
 private const val CONTROLS_POLL_MS = 200L

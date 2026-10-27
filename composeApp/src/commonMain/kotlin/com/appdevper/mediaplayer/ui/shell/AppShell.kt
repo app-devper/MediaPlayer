@@ -126,7 +126,7 @@ fun AppShell(startDestination: Any = HomeRoute) {
             // One instance, moved (not rebuilt) between the wide and narrow layouts below: turning a phone
             // to landscape for full screen can make it wide, and rebuilding restarted the video in the player.
             // What changes is passed in, so the moved content never sees an old value.
-            val movableMain = remember {
+            val movableMain = remember(startDestination, vm, nav) {
                 movableContentOf { fullscreen: Boolean, wide: Boolean, canGoBack: Boolean, onPlayer: Boolean ->
                     Column(Modifier.fillMaxSize().background(AppTheme.colors.background)) {
                         if (!fullscreen) TopBar(

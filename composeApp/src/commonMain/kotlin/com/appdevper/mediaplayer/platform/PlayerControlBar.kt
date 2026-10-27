@@ -11,6 +11,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +48,14 @@ internal fun PlayerControlBar(
 ) {
     var seeking by remember { mutableStateOf<Float?>(null) }
     val dragging by rememberUpdatedState(onDraggingChange)
+    // A drag that ends without onValueChangeFinished (the bar disabled or gone meanwhile) still ends.
+    LaunchedEffect(durationMs > 0) {
+        if (durationMs <= 0 && seeking != null) {
+            seeking = null
+            dragging(false)
+        }
+    }
+    DisposableEffect(Unit) { onDispose { if (seeking != null) dragging(false) } }
     Column(modifier.fillMaxWidth()) {
         ThinSlider(
             value = seeking ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f,
