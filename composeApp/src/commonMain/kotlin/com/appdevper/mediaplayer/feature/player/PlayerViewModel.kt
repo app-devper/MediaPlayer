@@ -9,11 +9,23 @@ import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
+import com.appdevper.mediaplayer.domain.model.Subtitle
+import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 
 /** Now playing: local player, photo viewer or renderer remote control. */
-class PlayerViewModel(private val session: PlaybackSession, private val airPlaySession: AirPlayReceiverSession) : ViewModel() {
+class PlayerViewModel(
+    private val session: PlaybackSession,
+    private val airPlaySession: AirPlayReceiverSession,
+    private val loadSubtitles: LoadSubtitlesUseCase,
+) : ViewModel() {
     val uiState: StateFlow<PlaybackState> = session.state
 
     /** This device's player, which the player screen shows and controls. */
@@ -37,6 +49,33 @@ class PlayerViewModel(private val session: PlaybackSession, private val airPlayS
         viewModelScope.launch { airPlaySession.sendToSender(SenderCommand.PlayPause) }
     }
 
+    private val _subtitles = MutableStateFlow(SubtitleState())
+
+    /** The subtitle picked for the current video (off until one is picked) and its lines. */
+    val subtitles: StateFlow<SubtitleState> = _subtitles.asStateFlow()
+    private var subtitleJob: Job? = null
+
+    init {
+        // Another item: subtitles off again (its files are others).
+        viewModelScope.launch { session.state.map { it.current }.distinctUntilChanged().collect { selectSubtitle(null) } }
+    }
+
+    /** Shows [subtitle] (fetched and read first), or none. */
+    fun selectSubtitle(subtitle: Subtitle?) {
+        subtitleJob?.cancel()
+        _subtitles.value = SubtitleState(selected = subtitle, loading = subtitle != null)
+        if (subtitle == null) return
+        subtitleJob = viewModelScope.launch {
+            val result = loadSubtitles(subtitle)
+            // Only for the pick still on screen (not one replaced, or turned off with another item).
+            if (_subtitles.value.selected != subtitle) return@launch
+            _subtitles.value = result.fold(
+                onSuccess = { SubtitleState(selected = subtitle, cues = it) },
+                onFailure = { SubtitleState(error = "Couldn't load the subtitles (${subtitle.label})") },
+            )
+        }
+    }
+
     fun playAt(index: Int) = session.playAt(index)
     fun toggleShuffle() = session.setShuffle(!session.state.value.shuffle)
     fun cycleRepeat() = session.cycleRepeat()
@@ -47,3 +86,11 @@ class PlayerViewModel(private val session: PlaybackSession, private val airPlayS
     fun setMuted(muted: Boolean) = session.setMuted(muted)
     fun playHere() = session.setTarget(PlaybackTarget.Local)
 }
+
+/** Subtitles on the player: the one picked, its lines once read, or why it couldn't be read. */
+data class SubtitleState(
+    val selected: Subtitle? = null,
+    val cues: List<SubtitleCue> = emptyList(),
+    val loading: Boolean = false,
+    val error: String? = null,
+)

@@ -62,15 +62,23 @@ data class LocalMedia(
     val resolution: String?,
     /** File path or content URI, interpreted by the owning [MediaLibrary]. */
     val source: String,
+    /** Sidecar subtitle files next to a video. */
+    val subtitles: List<LocalSubtitle> = emptyList(),
 ) {
     val extension: String get() = MimeTypes.extensionFor(mimeType, source)
 }
+
+/** A subtitle file found next to a video ([com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles]). */
+data class LocalSubtitle(val fileName: String, val language: String?, val source: String)
 
 interface MediaLibrary {
     suspend fun scan(kinds: Set<MediaKind>): List<LocalMedia>
 
     /** Opens the media for reading, positioned at [offset]. */
     fun open(media: LocalMedia, offset: Long): RawSource
+
+    /** Opens a subtitle file that [scan] found. Libraries that find none don't open any. */
+    fun openSubtitle(subtitle: LocalSubtitle): RawSource = throw kotlinx.io.IOException("No subtitles here")
 }
 
 /** Creates the platform's media library (MediaStore / folders / iOS Documents). */

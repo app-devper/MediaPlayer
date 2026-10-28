@@ -1,5 +1,9 @@
 package com.appdevper.mediaplayer.feature.player
 
+import com.appdevper.mediaplayer.domain.model.Subtitle
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -104,6 +108,7 @@ fun PlayerScreen() {
 @Composable
 private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel, senderSkips: Boolean) {
     val c = AppTheme.colors
+    val subtitles by vm.subtitles.collectAsStateWithLifecycle()
     val isAudio = item.kind == MediaKind.AUDIO
     val fullscreenState = LocalFullscreen.current
     val fullscreen = fullscreenState.isFullscreen && !isAudio
@@ -135,6 +140,7 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                     modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
                     fullscreen = fullscreen,
                     onToggleFullscreen = if (isAudio) null else fullscreenState::toggle,
+                    cues = subtitles.cues,
                 )
             }
         }
@@ -145,7 +151,9 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                         Column(Modifier.weight(1f)) {
                             Text(item.title, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
+                            subtitles.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.danger) }
                         }
+                        if (item.subtitles.isNotEmpty()) SubtitleMenu(item.subtitles, subtitles, vm::selectSubtitle)
                         if (!senderSkips) QueueModes(state, vm)
                         GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, tint = c.textPrimary)
                         GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = senderSkips || state.hasNext, tint = c.textPrimary)
@@ -344,5 +352,42 @@ private fun ModeButton(icon: ImageVector, name: String, state: String, on: Boole
     Box(contentAlignment = Alignment.BottomCenter) {
         GhostIconButton(icon, name, onClick, modifier = Modifier.semantics { stateDescription = state }, tint = if (on) c.textPrimary else c.textTertiary)
         if (on) Box(Modifier.padding(bottom = 2.dp).size(4.dp).clip(CircleShape).background(c.textPrimary))
+    }
+}
+
+/** Subtitles for this video: off, or one of its files (a check on the one showing). */
+@Composable
+private fun SubtitleMenu(options: List<Subtitle>, state: SubtitleState, onSelect: (Subtitle?) -> Unit) {
+    val c = AppTheme.colors
+    var open by remember { mutableStateOf(false) }
+    Box {
+        val shown = when {
+            state.loading -> "Loading"
+            else -> state.selected?.label ?: "Off"
+        }
+        ModeButton(AppIcons.Captions, "Subtitles", shown, on = state.selected != null) { open = true }
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            offset = DpOffset(0.dp, 4.dp),
+            shape = Radius.large,
+            containerColor = c.surface,
+            tonalElevation = 0.dp,
+            shadowElevation = 12.dp,
+            modifier = Modifier.width(240.dp).border(1.dp, c.border, Radius.large),
+        ) {
+            Text("Subtitles", style = MaterialTheme.typography.labelMedium, color = c.textTertiary, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
+            (listOf<Subtitle?>(null) + options).forEach { option ->
+                ListRow(
+                    title = option?.label ?: "Off",
+                    onClick = {
+                        open = false
+                        onSelect(option)
+                    },
+                    modifier = Modifier.padding(horizontal = 6.dp),
+                    trailing = { if (state.selected == option) Icon(AppIcons.Check, "Showing", Modifier.size(18.dp), tint = c.textPrimary) },
+                )
+            }
+        }
     }
 }

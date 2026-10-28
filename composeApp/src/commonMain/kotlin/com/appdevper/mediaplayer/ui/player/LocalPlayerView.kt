@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,13 +54,20 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appdevper.mediaplayer.designsystem.components.ThinSlider
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import com.appdevper.mediaplayer.domain.model.SubtitleCue
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.model.textAt
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.platform.AirPlayButton
 import com.appdevper.mediaplayer.platform.VideoSurface
@@ -96,9 +104,15 @@ internal fun LocalPlayerView(
     modifier: Modifier = Modifier,
     fullscreen: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
+    /** The picked subtitle's lines, shown over a video. */
+    cues: List<SubtitleCue> = emptyList(),
 ) {
     if (!isAudio && videoSurfaceHasControls) {
-        VideoSurface(title, modifier.fillMaxSize())
+        Box(modifier.fillMaxSize()) {
+            VideoSurface(title, Modifier.fillMaxSize())
+            // Above AVKit's own controls.
+            SubtitleLine(player, cues, fullscreen, Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = 72.dp))
+        }
         return
     }
     val status by player.status.collectAsStateWithLifecycle()
@@ -278,6 +292,11 @@ internal fun LocalPlayerView(
                 Icon(AppIcons.Play, if (pointerIsMouse) null else "Play", Modifier.size(30.dp), tint = Color.White)
             }
         }
+        // Moves up out of the bar's way while it shows.
+        SubtitleLine(
+            player, cues, fullscreen,
+            Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = if (controlsVisible) 80.dp else 24.dp),
+        )
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
@@ -318,6 +337,28 @@ internal fun LocalPlayerView(
             )
         }
     }
+}
+
+/**
+ * The subtitle line on screen now, white on a dark band so it reads on any picture. Only this reads
+ * the position, so the rest of the player isn't recomposed for it.
+ */
+@Composable
+private fun SubtitleLine(player: LocalPlayer, cues: List<SubtitleCue>, large: Boolean, modifier: Modifier) {
+    if (cues.isEmpty()) return
+    val status by player.status.collectAsStateWithLifecycle()
+    // Recomposes when the text changes, not on every position update.
+    val text by remember(cues) { derivedStateOf { status?.let { cues.textAt(it.positionMs) } } }
+    val line = text ?: return
+    Text(
+        line,
+        color = Color.White,
+        fontSize = if (large) 26.sp else 17.sp,
+        lineHeight = if (large) 32.sp else 22.sp,
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.bodyLarge.copy(shadow = Shadow(Color.Black, Offset(0f, 1f), 4f)),
+        modifier = modifier.background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
+    )
 }
 
 /** Mute button and volume slider (desktop's bar; phones have volume keys). */

@@ -123,7 +123,7 @@ class RendererClient(private val soap: SoapClient, val device: UpnpDevice) {
         runCatching { stop() }
         soap.invoke(
             avt, "SetAVTransportURI",
-            listOf(instance, "CurrentURI" to uri, "CurrentURIMetaData" to Didl.generate(listOf(item))),
+            listOf(instance, "CurrentURI" to uri, "CurrentURIMetaData" to Didl.generate(listOf(item), subtitleResources = false)),
         )
         if (autoPlay) play()
     }

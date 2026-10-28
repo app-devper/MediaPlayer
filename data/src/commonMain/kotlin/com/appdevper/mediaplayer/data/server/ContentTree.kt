@@ -1,11 +1,14 @@
 package com.appdevper.mediaplayer.data.server
 
 import com.appdevper.mediaplayer.data.platform.LocalMedia
+import com.appdevper.mediaplayer.data.platform.LocalSubtitle
 import com.appdevper.mediaplayer.data.upnp.Didl
 import com.appdevper.mediaplayer.data.upnp.DidlObject
 import com.appdevper.mediaplayer.data.upnp.DidlResource
+import com.appdevper.mediaplayer.data.upnp.DidlSubtitle
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.data.upnp.formatUpnpTime
+import io.ktor.http.encodeURLPathPart
 
 /**
  * The ContentDirectory tree published by the built-in server:
@@ -55,6 +58,9 @@ class ContentTree(media: List<LocalMedia>, private val baseUrl: String) {
     /** Resolves `/media/{id}.{ext}` -> media. */
     fun mediaForPath(fileName: String): LocalMedia? = mediaById[fileName.substringBeforeLast('.')]
 
+    /** Resolves `/subtitle/{id}/{n}/{file name}` -> the item's n-th subtitle. */
+    fun subtitle(id: String, n: Int): LocalSubtitle? = mediaById[id]?.subtitles?.getOrNull(n)
+
     private fun container(id: String, parent: String, title: String, count: Int) = DidlObject(
         id = id, parentId = parent, title = title, upnpClass = "object.container.storageFolder",
         isContainer = true, childCount = count, artist = null, album = null, albumArtUri = null, resources = emptyList(),
@@ -87,6 +93,10 @@ class ContentTree(media: List<LocalMedia>, private val baseUrl: String) {
                     resolution = m.resolution,
                 ),
             ),
+            // The file name stays in the URL, so players can tell the language (Movie.th.srt).
+            subtitles = m.subtitles.mapIndexed { n, s ->
+                DidlSubtitle("$baseUrl/subtitle/$id/$n/${s.fileName.encodeURLPathPart()}", s.fileName.substringAfterLast('.').lowercase())
+            },
         )
     }
 

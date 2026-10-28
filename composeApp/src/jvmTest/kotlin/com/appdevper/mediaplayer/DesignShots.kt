@@ -52,6 +52,7 @@ import com.appdevper.mediaplayer.domain.repository.LibraryRepository
 import com.appdevper.mediaplayer.domain.repository.MediaServerRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
+import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.ui.shell.AppShell
 import com.appdevper.mediaplayer.ui.shell.BrowseRoute
 import com.appdevper.mediaplayer.ui.shell.HomeRoute
@@ -100,6 +101,7 @@ class DesignShots {
                     single<MediaServerRepository> { server }
                     single<CastReceiverRepository> { FakeReceiver().apply { status.value = ReceiverStatus.Running("Worawit's MacBook") } }
                     single<AirPlayRepository> { airPlay }
+                    single<SubtitleRepository> { FakeSubtitles() }
                     single { AirPlayPlayer() }
                     single { FfmpegPlaybackEngine() } bind PlaybackEngine::class
                 },

@@ -1,6 +1,10 @@
 package com.appdevper.mediaplayer.data
 
 import com.appdevper.mediaplayer.data.platform.LocalMedia
+import com.appdevper.mediaplayer.data.platform.LocalSubtitle
+import com.appdevper.mediaplayer.data.mapper.toDomain
+import com.appdevper.mediaplayer.data.repository.SubtitleRepositoryImpl
+import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.data.platform.MediaLibrary
 import com.appdevper.mediaplayer.data.platform.localIpv4Address
 import com.appdevper.mediaplayer.data.server.MediaServer
@@ -33,10 +37,14 @@ import kotlin.test.assertTrue
 class MediaServerE2ETest {
 
     private val payload = ByteArray(10_000) { (it % 251).toByte() }
+    private val srt = "1\n00:00:01,000 --> 00:00:02,000\nสวัสดี\n".encodeToByteArray()
 
     private val library = object : MediaLibrary {
         override suspend fun scan(kinds: Set<MediaKind>) = listOf(
-            LocalMedia("a", MediaKind.VIDEO, "Clip <1>", null, null, "video/mp4", payload.size.toLong(), 65_000, "1920x1080", "/x/clip.mp4"),
+            LocalMedia(
+                "a", MediaKind.VIDEO, "Clip <1>", null, null, "video/mp4", payload.size.toLong(), 65_000, "1920x1080", "/x/clip.mp4",
+                subtitles = listOf(LocalSubtitle("Clip 1.th.srt", "th", "/x/Clip 1.th.srt")),
+            ),
             LocalMedia("b", MediaKind.AUDIO, "Song", "Artist", "Album", "audio/mpeg", payload.size.toLong(), 1_000, null, "/x/song.mp3"),
         ).filter { it.kind in kinds }
 
@@ -45,6 +53,8 @@ class MediaServerE2ETest {
             buf.write(payload, offset.toInt(), payload.size)
             return buf
         }
+
+        override fun openSubtitle(subtitle: LocalSubtitle): RawSource = Buffer().apply { write(srt) }
     }
 
     @Test
@@ -74,6 +84,13 @@ class MediaServerE2ETest {
 
             val full = http.get(clip.url!!).bodyAsBytes()
             assertTrue(full.contentEquals(payload))
+
+            // The sidecar subtitle: listed with the clip (the clip still plays its video), and served.
+            val subtitle = clip.subtitles.single()
+            assertEquals("srt", subtitle.type)
+            assertEquals(Subtitle(subtitle.uri, "Thai", "th"), subtitle.toDomain())
+            assertTrue(SubtitleRepositoryImpl(http).fetch(subtitle.uri).contentEquals(srt))
+            assertEquals(404, http.get(subtitle.uri.replace("/0/", "/1/")).status.value) // only files the scan found
 
             val partial = http.get(clip.url!!) { header("Range", "bytes=100-199") }
             assertEquals(206, partial.status.value)
