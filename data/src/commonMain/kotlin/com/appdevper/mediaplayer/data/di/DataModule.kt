@@ -59,26 +59,23 @@ val dataModule = module {
     // UPnP / DLNA infrastructure
     single { SsdpEngine(get(AppScope), get()) }
     single { SoapClient(get()) }
-    single { ControlPoint(get(), get(), get(AppScope)) }
+    single {
+        val renderer = get<MediaRenderer>()
+        // Our own renderer is hidden only while it runs, so a stale UDN never hides a real device.
+        val settings = get<SettingsRepositoryImpl>()
+        ControlPoint(
+            get(), get(), get(AppScope),
+            store = settings.addressStore,
+            ownUdns = { if (renderer.state.value is ReceiverStatus.Running) setOf(settings.rendererUdn) else emptySet() },
+        )
+    }
     single { ContentDirectoryClient(get()) }
     single { MediaServer(get(), get(AppScope), get()) }
     single { MediaRenderer(get(), get(), get(AppScope)) }
 
     // Repositories
     single { SettingsRepositoryImpl() } bind SettingsRepository::class
-    single<DeviceRepository> {
-        val settings = get<SettingsRepositoryImpl>()
-        val renderer = get<MediaRenderer>()
-        // Hide our own renderer only while it runs, so a stale UDN never hides a real device.
-        DeviceRepositoryImpl(
-            get(),
-            get(AppScope),
-            ownUdns = { if (renderer.state.value is ReceiverStatus.Running) setOf(settings.rendererUdn) else emptySet() },
-            savedAddresses = settings.serverAddresses,
-            saveAddress = settings::addServerAddress,
-            removeAddress = settings::removeServerAddress,
-        )
-    }
+    single<DeviceRepository> { DeviceRepositoryImpl(get(), get(AppScope)) }
     single<LibraryRepository> { LibraryRepositoryImpl(get(), get()) }
     single<RendererRepository> { RendererRepositoryImpl(get(), get()) }
     single<MediaServerRepository> { MediaServerRepositoryImpl(get(), get(), get(), get(), get(AppScope)) }

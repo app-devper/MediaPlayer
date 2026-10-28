@@ -4,6 +4,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -70,6 +73,10 @@ class ControlPoint(
     private val ssdp: SsdpEngine,
     private val http: HttpClient,
     private val scope: CoroutineScope,
+    /** Where the addresses added by hand are kept across launches. */
+    private val store: AddressStore = AddressStore.InMemory(),
+    /** UDNs of devices this app runs itself (our own renderer, while it runs): never offered. */
+    private val ownUdns: () -> Set<String> = { emptySet() },
 ) {
     private class Entry(val device: UpnpDevice, var expiresAt: TimeSource.Monotonic.ValueTimeMark)
 
@@ -77,17 +84,23 @@ class ControlPoint(
     private val entries = LinkedHashMap<String, Entry>()
     private val pendingLocations = HashSet<String>()
 
+    // Every device found, ours too; what's offered leaves ours out.
     private val _devices = MutableStateFlow<List<UpnpDevice>>(emptyList())
-    val devices: StateFlow<List<UpnpDevice>> = _devices.asStateFlow()
+    val devices: StateFlow<List<UpnpDevice>> = _devices.map(::offered).stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    private fun offered(list: List<UpnpDevice>): List<UpnpDevice> = ownUdns().let { own -> list.filter { it.udn !in own } }
 
     private val _searching = MutableStateFlow(false)
     val searching: StateFlow<Boolean> = _searching.asStateFlow()
 
     private var job: Job? = null
 
-    // Addresses the user added (see addByAddress): asked again on every search and now and then, as
-    // they may never be heard by multicast.
-    private val addresses = MutableStateFlow<Set<String>>(emptySet())
+    // Addresses the user added (see addByAddress), each once whatever its letter case, kept in [store]:
+    // asked again on every search and now and then, as they may never be heard by multicast.
+    private val addresses = MutableStateFlow(store.load().map(String::trim).filter(String::isNotEmpty).distinctBy(String::lowercase))
+
+    /** Addresses the user added by hand, in the order added. */
+    val addedAddresses: StateFlow<List<String>> = addresses.asStateFlow()
 
     fun start() {
         if (job != null) return
@@ -111,7 +124,8 @@ class ControlPoint(
      */
     suspend fun forget(address: String) {
         val text = address.trim()
-        addresses.update { set -> set.filterNot { it.equals(text, ignoreCase = true) }.toSet() }
+        addresses.update { list -> list.filterNot { it.equals(text, ignoreCase = true) } }
+        store.save(addresses.value)
         val target = ServerAddress.parse(text) ?: return
         mutex.withLock {
             // A probe of it still under way mustn't put it back: its late answers are ignored a while.
@@ -126,10 +140,11 @@ class ControlPoint(
     // Just-forgotten addresses, until when their late answers are ignored (under mutex).
     private val forgotten = HashMap<ServerAddress, TimeSource.Monotonic.ValueTimeMark>()
 
-    /** Addresses to ask directly from now on (e.g. ones saved from earlier sessions). */
-    fun remember(addresses: Collection<String>) {
-        this.addresses.update { it + addresses }
-        if (job != null) addresses.forEach { scope.launch { probe(it) } }
+    /** Asks [address] directly from now on, and keeps it (once, whatever its letter case). */
+    private fun keep(address: String) {
+        if (addresses.value.any { it.equals(address, ignoreCase = true) }) return
+        addresses.update { it + address }
+        store.save(addresses.value)
     }
 
     /**
@@ -137,7 +152,7 @@ class ControlPoint(
      * Apple's multicast entitlement, or a network that blocks it). [address] is a host or host:port,
      * asked with a unicast M-SEARCH on port 1900 (which UPnP devices answer as well) and on this
      * app's own server ports; or a device description URL, fetched as is. Returns what answered
-     * within [timeoutMs]; the caller [remember]s the address if it wants to keep it.
+     * within [timeoutMs], not our own; an address that found something is kept ([addedAddresses]).
      */
     suspend fun addByAddress(address: String, timeoutMs: Long = 4_000): List<UpnpDevice> {
         val target = ServerAddress.parse(address) ?: return emptyList()
@@ -147,9 +162,11 @@ class ControlPoint(
         val found = withTimeoutOrNull(timeoutMs) {
             probe(target.text)
             // Unicast search replies arrive like any other (onMessage); wait for them.
-            devices.first { list -> list.any { target.matches(it.location) } }
+            _devices.first { list -> offered(list).any { target.matches(it.location) } }
         }
-        return (found ?: devices.value).filter { target.matches(it.location) }
+        val there = offered(found ?: _devices.value).filter { target.matches(it.location) }
+        if (there.isNotEmpty()) keep(target.text)
+        return there
     }
 
     private suspend fun probe(address: String) {
@@ -264,7 +281,7 @@ class ControlPoint(
         _devices.update { entries.values.map { it.device }.sortedBy { it.friendlyName.lowercase() } }
     }
 
-    fun device(udn: String): UpnpDevice? = _devices.value.firstOrNull { it.udn == udn }
+    fun device(udn: String): UpnpDevice? = offered(_devices.value).firstOrNull { it.udn == udn }
 
     private companion object {
         const val ADDRESS_RECHECK_TICKS = 10 // × 30 s
@@ -320,5 +337,19 @@ internal class ServerAddress private constructor(val text: String, val host: Str
         /** The host part of an http(s) URL. */
         fun hostOf(url: String): String =
             url.substringAfter("://", "").substringBefore('/').substringBefore('?').substringAfterLast('@').substringBefore(':')
+    }
+}
+
+/** Keeps the addresses added by hand ([ControlPoint.addedAddresses]) across launches. */
+interface AddressStore {
+    fun load(): List<String>
+    fun save(addresses: List<String>)
+
+    /** Not kept (tests, previews). */
+    class InMemory(private var addresses: List<String> = emptyList()) : AddressStore {
+        override fun load() = addresses
+        override fun save(addresses: List<String>) {
+            this.addresses = addresses
+        }
     }
 }

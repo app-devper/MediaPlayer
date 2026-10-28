@@ -49,11 +49,17 @@ class AddServerByAddressE2ETest {
             // Generous timeout: a cold CI runner's first HTTP request and JIT can take seconds. Another
             // test's device on this host may answer too, so look for ours among what's found.
             for (address in listOf(ip!!, running.url.removePrefix("http://"), "${running.url}/description.xml")) {
-                val found = ControlPoint(ssdp, http, scope).addByAddress(address, timeoutMs = 10_000)
+                val controlPoint = ControlPoint(ssdp, http, scope)
+                val found = controlPoint.addByAddress(address, timeoutMs = 10_000)
                 val ours = found.filter { it.friendlyName == "Living Room PC" }
                 assertEquals(1, ours.size, "$address found ${found.map { "${it.friendlyName} @ ${it.location}" }}")
                 assertTrue(ours.single().isMediaServer, "$address: ${ours.single().deviceType}")
+                assertEquals(listOf(address), controlPoint.addedAddresses.value) // found something: kept
             }
+
+            // Our own device is never offered (e.g. our renderer, while it runs): nothing found, nothing kept.
+            val hidingOurs = ControlPoint(ssdp, http, scope, ownUdns = { setOf("uuid:by-address-1") })
+            assertEquals(emptyList(), hidingOurs.addByAddress(ip, timeoutMs = 3_000).filter { it.friendlyName == "Living Room PC" })
 
             // The server answers a unicast M-SEARCH (what an iPhone without multicast relies on for
             // other servers, whose ports aren't known): the reply carries its LOCATION.
@@ -70,8 +76,10 @@ class AddServerByAddressE2ETest {
 
             // Nobody there (TEST-NET-1, never a real host): nothing, within the timeout.
             val started = System.currentTimeMillis()
-            val nobody = ControlPoint(ssdp, http, scope).addByAddress("192.0.2.1", timeoutMs = 1_500)
+            val asked = ControlPoint(ssdp, http, scope)
+            val nobody = asked.addByAddress("192.0.2.1", timeoutMs = 1_500)
             assertEquals(emptyList(), nobody.map { it.friendlyName }, "192.0.2.1 found something")
+            assertEquals(emptyList(), asked.addedAddresses.value) // found nothing: not kept
             val took = System.currentTimeMillis() - started
             assertTrue(took < 6_000, "giving up on 192.0.2.1 took $took ms (timeout 1500)")
         } finally {
