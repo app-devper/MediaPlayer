@@ -2,6 +2,7 @@ package com.appdevper.mediaplayer.domain
 
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.TextTrack
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -137,6 +138,29 @@ class LocalPlayerTest {
         player.onAppBackground()
         runCurrent()
         assertEquals(TransportState.PLAYING, player.status.value?.state)
+    }
+
+    @Test
+    fun subtitleTracksInTheFileComeFromTheEngine() = runTest {
+        val engine = FakeEngine()
+        val player = player(engine)
+        player.load(movie, autoPlay = true, startPositionMs = 0)
+        runCurrent()
+        val thai = TextTrack("2:0", "Thai", "th")
+        engine.facts = engine.facts.copy(textTracks = listOf(thai))
+        advanceTimeBy(150)
+        assertEquals(listOf(thai), player.textTracks.value)
+
+        player.selectTextTrack(thai.id)
+        engine.facts = engine.facts.copy(subtitleText = "สวัสดี")
+        advanceTimeBy(150)
+        assertEquals("track:2:0", engine.calls.last())
+        assertEquals("สวัสดี", player.subtitleText.value)
+
+        player.load(photo, autoPlay = true, startPositionMs = 0) // nothing loaded: none
+        runCurrent()
+        assertEquals(emptyList(), player.textTracks.value)
+        assertNull(player.subtitleText.value)
     }
 
     @Test

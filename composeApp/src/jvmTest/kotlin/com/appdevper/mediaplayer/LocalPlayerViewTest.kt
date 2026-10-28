@@ -3,6 +3,7 @@ package com.appdevper.mediaplayer
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
@@ -119,6 +120,32 @@ class LocalPlayerViewTest {
                     waitForIdle()
                     onNodeWithText("Later").assertExists()
                     onNodeWithText("Hello there").assertDoesNotExist()
+                } finally {
+                    scope.cancel()
+                }
+            }
+        } finally {
+            stopKoin()
+        }
+    }
+
+    @Test
+    fun aTrackInsideTheVideoShowsThePlayersText() {
+        startKoin { modules(module { single { FfmpegPlaybackEngine() } }) }
+        try {
+            runComposeUiTest {
+                val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+                val engine = FakeEngine()
+                val player = LocalPlayer(engine, scope, pollIntervalMs = 50)
+                try {
+                    player.load(clip, autoPlay = false, startPositionMs = 0)
+                    setContent {
+                        AppTheme {
+                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
+                        }
+                    }
+                    engine.facts = engine.facts.copy(subtitleText = "From the file")
+                    waitUntil(timeoutMillis = 2_000) { onAllNodesWithText("From the file").fetchSemanticsNodes().isNotEmpty() }
                 } finally {
                     scope.cancel()
                 }

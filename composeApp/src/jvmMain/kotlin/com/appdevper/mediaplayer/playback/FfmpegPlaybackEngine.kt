@@ -20,9 +20,11 @@ class FfmpegPlaybackEngine : PlaybackEngine {
 
     private var url: String? = null
     private var gain = 1f
+    private var textTrack: String? = null
 
     override fun load(entry: MediaEntry, url: String, playWhenReady: Boolean, startPositionMs: Long) {
         this.url = url
+        textTrack = null
         open(url, playWhenReady, startPositionMs)
     }
 
@@ -34,7 +36,13 @@ class FfmpegPlaybackEngine : PlaybackEngine {
         }
     }
 
+    /** We draw it: [EngineFacts.subtitleText] from the player's cues of that stream. */
+    override fun selectTextTrack(id: String?) {
+        textTrack = id
+    }
+
     override fun unload() {
+        textTrack = null
         _player.value?.release()
         _player.value = null
         url = null
@@ -62,7 +70,8 @@ class FfmpegPlaybackEngine : PlaybackEngine {
     }
 
     override fun facts(): EngineFacts {
-        val status = _player.value?.status?.value ?: return EngineFacts()
+        val player = _player.value ?: return EngineFacts()
+        val status = player.status.value
         return EngineFacts(
             playing = status.playing,
             loading = status.buffering,
@@ -70,6 +79,8 @@ class FfmpegPlaybackEngine : PlaybackEngine {
             positionMs = status.positionMs,
             durationMs = status.durationMs,
             error = status.error,
+            textTracks = player.textTracks.value,
+            subtitleText = textTrack?.let { player.subtitleText(it, status.positionMs) },
         )
     }
 }

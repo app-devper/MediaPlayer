@@ -1,6 +1,15 @@
 package com.appdevper.mediaplayer
 
 import com.appdevper.mediaplayer.playback.FfmpegPlayer
+import com.appdevper.mediaplayer.domain.model.TextTrack
+import org.bytedeco.ffmpeg.avformat.AVIOContext
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_FLAG_GLOBAL_HEADER
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_SUBRIP
+import org.bytedeco.ffmpeg.global.avcodec.av_new_packet
+import org.bytedeco.ffmpeg.global.avformat.AVIO_FLAG_WRITE
+import org.bytedeco.ffmpeg.global.avformat.avio_closep
+import org.bytedeco.ffmpeg.global.avformat.avio_open
+import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_SUBTITLE
 import com.appdevper.mediaplayer.playback.PcmOutput
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.flow.first
@@ -299,6 +308,87 @@ class FfmpegPlayerTest {
         val afterSeek = withTimeout(10_000) { p.status.first { it.positionMs >= 4_000 && !it.buffering } }
         assertTrue(afterSeek.positionMs < 5_500, "seeked to ${afterSeek.positionMs}")
         assertTrue(afterSeek.error == null, "error ${afterSeek.error}")
+    }
+
+    @Test
+    fun readsTheTextSubtitleTrackInsideAnMkv() = runBlocking<Unit> {
+        writeMkvWithSubtitles()
+        val p = FfmpegPlayer("http://127.0.0.1:${server.address.port}/movie.mkv", autoPlay = false, output = RealTimeOutput()).also { player = it }
+        val tracks = withTimeout(10_000) { p.textTracks.first { it.isNotEmpty() } }
+        assertEquals(listOf(TextTrack("1", "Thai", "tha")), tracks)
+        // Cues are read ahead of playback, as the file is read.
+        withTimeout(10_000) { while (p.subtitleText("1", 1_500) == null) kotlinx.coroutines.delay(20) }
+        assertEquals("สวัสดี\nครับ", p.subtitleText("1", 1_500))
+        assertEquals("Second", p.subtitleText("1", 2_600))
+        assertEquals(null, p.subtitleText("1", 500))
+        assertEquals(null, p.subtitleText("9", 1_500)) // no such track
+    }
+
+    /** 4 s of H.264 in Matroska, with a Thai SubRip track: 1.0–2.0 s and 2.5–3.0 s. */
+    private fun writeMkvWithSubtitles() {
+        val file = File(dir, "movie.mkv")
+        val h264 = avcodec_find_encoder(AV_CODEC_ID_H264)
+        assumeNotNull(h264)
+        val out = AVFormatContext(null)
+        check(avformat_alloc_output_context2(out, null, "matroska", file.absolutePath) >= 0)
+        val io = AVIOContext(null)
+        check(avio_open(io, file.absolutePath, AVIO_FLAG_WRITE) >= 0)
+        out.pb(io)
+
+        val v: AVCodecContext = avcodec_alloc_context3(h264)
+        v.width(320); v.height(240); v.pix_fmt(AV_PIX_FMT_YUV420P)
+        v.time_base(AVRational().num(1).den(25)); v.framerate(AVRational().num(25).den(1))
+        v.gop_size(25); v.bit_rate(400_000)
+        v.flags(v.flags() or AV_CODEC_FLAG_GLOBAL_HEADER) // Matroska keeps H.264's parameters in its header
+        check(avcodec_open2(v, h264, null as AVDictionary?) >= 0)
+        val vs = avformat_new_stream(out, null)
+        avcodec_parameters_from_context(vs.codecpar(), v)
+        vs.time_base(v.time_base())
+
+        val ss = avformat_new_stream(out, null)
+        ss.codecpar().codec_type(AVMEDIA_TYPE_SUBTITLE)
+        ss.codecpar().codec_id(AV_CODEC_ID_SUBRIP)
+        ss.time_base(AVRational().num(1).den(1000))
+        val meta = AVDictionary(null)
+        av_dict_set(meta, "language", "tha", 0)
+        ss.metadata(meta)
+        val header = avformat_write_header(out, null as AVDictionary?)
+        check(header >= 0) { "write header: $header" }
+
+        val pkt = av_packet_alloc()
+        val vf: AVFrame = av_frame_alloc().apply { format(AV_PIX_FMT_YUV420P); width(320); height(240) }
+        check(av_frame_get_buffer(vf, 0) >= 0)
+        val ms = AVRational().num(1).den(1000)
+        val cues = listOf(Triple(1_000L, 1_000L, "สวัสดี\nครับ"), Triple(2_500L, 500L, "<i>Second</i>"))
+        var nextCue = 0
+        for (i in 0 until 100) {
+            // Each cue goes in at its time, among the frames (as a real file has it).
+            while (nextCue < cues.size && cues[nextCue].first <= i * 40L) {
+                val (start, duration, text) = cues[nextCue++]
+                val bytes = text.encodeToByteArray()
+                check(av_new_packet(pkt, bytes.size) >= 0)
+                pkt.data().put(bytes, 0, bytes.size)
+                pkt.pts(start); pkt.dts(start); pkt.duration(duration); pkt.stream_index(1)
+                av_packet_rescale_ts(pkt, ms, ss.time_base())
+                av_interleaved_write_frame(out, pkt)
+            }
+            vf.pts(i.toLong())
+            avcodec_send_frame(v, vf)
+            while (avcodec_receive_packet(v, pkt) == 0) {
+                av_packet_rescale_ts(pkt, v.time_base(), vs.time_base())
+                pkt.stream_index(0)
+                av_interleaved_write_frame(out, pkt)
+            }
+        }
+        avcodec_send_frame(v, null)
+        while (avcodec_receive_packet(v, pkt) == 0) {
+            av_packet_rescale_ts(pkt, v.time_base(), vs.time_base())
+            pkt.stream_index(0)
+            av_interleaved_write_frame(out, pkt)
+        }
+        av_write_trailer(out)
+        avio_closep(out.pb())
+        avformat_free_context(out)
     }
 
     /** [audioSeconds]: how much of it has audio (0 = none, less than [seconds] = audio ends early). */

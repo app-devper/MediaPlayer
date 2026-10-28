@@ -340,15 +340,16 @@ internal fun LocalPlayerView(
 }
 
 /**
- * The subtitle line on screen now, white on a dark band so it reads on any picture. Only this reads
- * the position, so the rest of the player isn't recomposed for it.
+ * The subtitle line on screen now (a file's, or a track's in the video), white on a dark band so it
+ * reads on any picture. Only this reads the position, so the rest of the player isn't recomposed for it.
  */
 @Composable
 private fun SubtitleLine(player: LocalPlayer, cues: List<SubtitleCue>, large: Boolean, modifier: Modifier) {
-    if (cues.isEmpty()) return
     val status by player.status.collectAsStateWithLifecycle()
+    // A track inside the file: the player's text; a file: its cues at the position.
+    val trackText by player.subtitleText.collectAsStateWithLifecycle()
     // Recomposes when the text changes, not on every position update.
-    val text by remember(cues) { derivedStateOf { status?.let { cues.textAt(it.positionMs) } } }
+    val text by remember(cues) { derivedStateOf { if (cues.isEmpty()) trackText else status?.let { cues.textAt(it.positionMs) } } }
     val line = text ?: return
     Text(
         line,

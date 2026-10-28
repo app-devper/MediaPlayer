@@ -11,6 +11,7 @@ import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.domain.model.TextTrack
 import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,9 +61,13 @@ class PlayerViewModel(
         viewModelScope.launch { session.state.map { it.current }.distinctUntilChanged().collect { selectSubtitle(null) } }
     }
 
-    /** Shows [subtitle] (fetched and read first), or none. */
+    /** Subtitle tracks inside the playing file. */
+    val textTracks: StateFlow<List<TextTrack>> = session.local.textTracks
+
+    /** Shows [subtitle] (fetched and read first), or none (no file's, no track's). */
     fun selectSubtitle(subtitle: Subtitle?) {
         subtitleJob?.cancel()
+        session.local.selectTextTrack(null)
         _subtitles.value = SubtitleState(selected = subtitle, loading = subtitle != null)
         if (subtitle == null) return
         subtitleJob = viewModelScope.launch {
@@ -76,6 +81,13 @@ class PlayerViewModel(
         }
     }
 
+    /** Shows a subtitle track inside the file (the player reads or draws it). */
+    fun selectTrack(track: TextTrack) {
+        subtitleJob?.cancel()
+        _subtitles.value = SubtitleState(track = track)
+        session.local.selectTextTrack(track.id)
+    }
+
     fun playAt(index: Int) = session.playAt(index)
     fun toggleShuffle() = session.setShuffle(!session.state.value.shuffle)
     fun cycleRepeat() = session.cycleRepeat()
@@ -87,9 +99,13 @@ class PlayerViewModel(
     fun playHere() = session.setTarget(PlaybackTarget.Local)
 }
 
-/** Subtitles on the player: the one picked, its lines once read, or why it couldn't be read. */
+/**
+ * Subtitles on the player: a file picked ([selected]) with its lines once read, or a track inside
+ * the video ([track]), or why a file couldn't be read.
+ */
 data class SubtitleState(
     val selected: Subtitle? = null,
+    val track: TextTrack? = null,
     val cues: List<SubtitleCue> = emptyList(),
     val loading: Boolean = false,
     val error: String? = null,

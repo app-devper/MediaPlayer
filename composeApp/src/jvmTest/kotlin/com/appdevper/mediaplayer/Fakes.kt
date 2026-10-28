@@ -124,7 +124,7 @@ class FakeReceiver : CastReceiverRepository {
 /** A platform player that does what it's told at once. */
 class FakeEngine : PlaybackEngine {
     val calls = mutableListOf<String>()
-    private var facts = EngineFacts()
+    var facts = EngineFacts()
     override fun load(entry: MediaEntry, url: String, playWhenReady: Boolean, startPositionMs: Long) {
         calls += "load:${entry.id}"
         facts = EngineFacts(playing = playWhenReady, positionMs = startPositionMs, durationMs = 180_000)
@@ -135,6 +135,7 @@ class FakeEngine : PlaybackEngine {
     override fun seekTo(positionMs: Long) { facts = facts.copy(positionMs = positionMs, ended = false) }
     override fun setVolume(volume: Float) {}
     override fun reload(positionMs: Long) {}
+    override fun selectTextTrack(id: String?) { calls += "track:$id" }
     override fun facts() = facts
 }
 

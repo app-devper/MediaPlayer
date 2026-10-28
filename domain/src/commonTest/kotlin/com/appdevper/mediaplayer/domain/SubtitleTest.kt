@@ -68,6 +68,12 @@ class SubtitleTest {
     }
 
     @Test
+    fun assEventsFromFfmpegBecomePlainText() {
+        assertEquals("Hello, there\nfriend", SubtitleParser.assText("0,0,Default,,0,0,0,,{\\i1}Hello, there{\\i0}\\Nfriend"))
+        assertEquals("Hi", SubtitleParser.assText("Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hi"))
+    }
+
+    @Test
     fun cuesWithoutABlankLineBetweenThemStayApart() {
         val srt = "1\n00:00:01,000 --> 00:00:02,000\nFirst\n2\n00:00:03,000 --> 00:00:04,000\nSecond\n3\n00:00:05,000 --> 00:00:06,000\nThird"
         assertEquals(listOf("First", "Second", "Third"), SubtitleParser.parse(srt).map { it.text })

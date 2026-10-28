@@ -3,6 +3,7 @@ package com.appdevper.mediaplayer.domain.session
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.TextTrack
 import com.appdevper.mediaplayer.domain.model.TransportState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -41,6 +42,16 @@ class LocalPlayer(
 
     /** Why the current item can't play, if it failed. */
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _textTracks = MutableStateFlow<List<TextTrack>>(emptyList())
+
+    /** Subtitle tracks inside the loaded file. */
+    val textTracks: StateFlow<List<TextTrack>> = _textTracks.asStateFlow()
+
+    private val _subtitleText = MutableStateFlow<String?>(null)
+
+    /** The selected track's text on screen now, when we draw it ([selectTextTrack]). */
+    val subtitleText: StateFlow<String?> = _subtitleText.asStateFlow()
 
     private val _loaded = MutableStateFlow<MediaEntry?>(null)
 
@@ -83,6 +94,8 @@ class LocalPlayer(
         poll = null
         _loaded.value = null
         _error.value = null
+        _textTracks.value = emptyList()
+        _subtitleText.value = null
         stopped = true
         pausedInBackground = false
         engine.unload()
@@ -109,6 +122,13 @@ class LocalPlayer(
     override fun seek(positionMs: Long) = whenLoaded {
         stopped = false
         engine.seekTo(positionMs.coerceAtLeast(0))
+    }
+
+    /** Shows a subtitle track inside the file ([textTracks]), or none. */
+    fun selectTextTrack(id: String?) = onPlayer {
+        if (_loaded.value == null) return@onPlayer
+        engine.selectTextTrack(id)
+        refresh()
     }
 
     /** 0..1. */
@@ -158,6 +178,8 @@ class LocalPlayer(
         // Started by itself (e.g. after a phone call) or by the system's controls: no longer stopped.
         if (facts.playing && !facts.ended) stopped = false
         _error.value = facts.error
+        _textTracks.value = facts.textTracks
+        _subtitleText.value = facts.subtitleText
         _status.value = RendererStatus(
             state = when {
                 facts.ended || (stopped && !facts.playing) -> TransportState.STOPPED

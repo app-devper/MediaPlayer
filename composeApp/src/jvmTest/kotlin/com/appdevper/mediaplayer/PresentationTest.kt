@@ -3,6 +3,7 @@ package com.appdevper.mediaplayer
 import com.appdevper.mediaplayer.feature.player.SubtitleState
 import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
 import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.domain.model.TextTrack
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.data.di.dataModule
 import com.appdevper.mediaplayer.data.di.platformDataModule
@@ -360,7 +361,14 @@ class PresentationTest {
         assertEquals(null, failed.selected)
         assertEquals("Couldn't load the subtitles (broken)", failed.error)
 
+        // A track inside the video: the player shows it; picking a file turns the track off.
+        val inside = TextTrack("2", "English", "eng")
+        vm.selectTrack(inside)
+        assertEquals(SubtitleState(track = inside), vm.subtitles.value)
+        assertEquals("track:2", engine.calls.last())
         vm.selectSubtitle(thai)
+        assertEquals("track:null", engine.calls.last())
+
         session.next() // another video: its own files, so off again
         assertEquals(SubtitleState(), vm.subtitles.value)
     }

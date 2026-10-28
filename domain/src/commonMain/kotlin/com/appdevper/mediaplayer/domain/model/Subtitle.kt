@@ -9,6 +9,14 @@ data class Subtitle(
     val language: String? = null,
 )
 
+/** A subtitle track inside the media file itself (MKV, MP4), as its player lists it. */
+data class TextTrack(
+    /** The player's own id for it. */
+    val id: String,
+    val label: String,
+    val language: String? = null,
+)
+
 /** One line (or a few) on screen from [startMs] until [endMs]. */
 data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String)
 

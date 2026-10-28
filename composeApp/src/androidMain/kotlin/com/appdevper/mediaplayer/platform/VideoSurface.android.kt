@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.platform
 
+import android.view.View
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -19,6 +20,8 @@ actual fun VideoSurface(title: String, modifier: Modifier) {
             PlayerView(ctx).apply {
                 this.player = player
                 useController = false
+                // Subtitles are ours (LocalPlayerView), not PlayerView's.
+                subtitleView?.visibility = View.GONE
             }
         },
         // The player plays on (its sound, without a picture) when this leaves the screen.
