@@ -97,7 +97,12 @@ class LocalPlayer(
         val sameItem = lastItem == item
         lastItem = item
         val url = entry.streamUrl
-        if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) return@onPlayer unloadNow()
+        if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) {
+            unloadNow()
+            // A photo is shown by the photo viewer, not played: reported as playing, from start to end.
+            if (url != null && entry.kind == MediaKind.IMAGE) showingPhoto()
+            return@onPlayer
+        }
         pausedInBackground = false
         stopped = !autoPlay
         subtitlesOfItem.onLoad(sameItem)
@@ -119,8 +124,20 @@ class LocalPlayer(
 
     override fun unload() = onPlayer(::unloadNow)
 
+    private fun showingPhoto() {
+        _status.value = RendererStatus(TransportState.PLAYING, 0, 0)
+        publish()
+    }
+
     private fun unloadNow() {
-        if (_loaded.value == null) return
+        if (_loaded.value == null) {
+            // A photo was shown: no longer.
+            if (_status.value?.state == TransportState.PLAYING) {
+                _status.value = _status.value?.copy(state = TransportState.STOPPED)
+                publish()
+            }
+            return
+        }
         // The last report says stopped, not playing.
         _status.value = _status.value?.copy(state = TransportState.STOPPED, ended = false)
         _error.value = null

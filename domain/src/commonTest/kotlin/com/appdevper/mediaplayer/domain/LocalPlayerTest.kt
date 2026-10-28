@@ -4,6 +4,7 @@ import com.appdevper.mediaplayer.testing.FakeEngine
 import com.appdevper.mediaplayer.testing.FakeSubtitles
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.domain.model.SubtitleChoice
 import com.appdevper.mediaplayer.domain.model.SubtitleState
@@ -271,7 +272,7 @@ class LocalPlayerTest {
     }
 
     @Test
-    fun aPhotoEmptiesThePlayerAndTheLastReportSaysStopped() = runTest {
+    fun aPhotoEmptiesThePlayerAndIsReportedAsShown() = runTest {
         val engine = FakeEngine()
         val player = player(engine)
         player.setVolume(40)
@@ -281,7 +282,8 @@ class LocalPlayerTest {
         player.load(photo, autoPlay = true, startPositionMs = 0)
         runCurrent()
         assertNull(player.loaded.value)
-        assertEquals(TransportState.STOPPED, player.status.value?.state)
+        // Shown (by the photo viewer), as a sender that cast it expects to hear.
+        assertEquals(RendererStatus(TransportState.PLAYING, 0, 0), player.status.value)
         assertEquals("unload", engine.calls.last())
 
         // Nothing loaded: commands do nothing.
@@ -290,6 +292,11 @@ class LocalPlayerTest {
         player.seek(5_000)
         runCurrent()
         assertEquals(emptyList(), engine.calls)
+
+        // Playing on a TV now: no longer shown here.
+        player.unload()
+        runCurrent()
+        assertEquals(TransportState.STOPPED, player.status.value?.state)
     }
 
     @Test

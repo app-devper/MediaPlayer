@@ -1,14 +1,11 @@
 package com.appdevper.mediaplayer.domain.session
 
 import com.appdevper.mediaplayer.domain.model.CastCommand
-import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.Receiver
 import com.appdevper.mediaplayer.domain.model.ReceiverLink
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
-import com.appdevper.mediaplayer.domain.model.RendererStatus
-import com.appdevper.mediaplayer.domain.model.TransportState
 
 /**
  * [receiver]'s line to this session: what another device cast through it plays on the local player.
@@ -51,11 +48,5 @@ internal fun PlaybackSession.link(receiver: Receiver, openPlayer: () -> Unit): R
 /** Local playback as reported back to the sending device. */
 internal fun PlaybackState.receiverPlayback(): ReceiverPlayback {
     val entry = current.takeIf { target == PlaybackTarget.Local }
-    val status = when {
-        entry == null -> null
-        // Photos are shown by the photo viewer, which has nothing to report.
-        entry.kind == MediaKind.IMAGE -> RendererStatus(TransportState.PLAYING, 0, 0)
-        else -> playback.status
-    }
-    return ReceiverPlayback(entry, status, playback.volume ?: 100, playback.muted)
+    return ReceiverPlayback(entry, playback.status.takeIf { entry != null }, playback.volume ?: 100, playback.muted)
 }
