@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -151,7 +153,8 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                 }
                 if (state.queue.size > 1) {
                     item { SectionLabel("Up next") }
-                    itemsIndexed(state.queue, key = { _, e -> e.id }) { i, e -> QueueRow(e, i == state.index) { vm.playAt(i) } }
+                    // In the order they play (shuffled or not).
+                    items(state.order, key = { state.queue[it].id }) { i -> QueueRow(state.queue[i], i == state.index) { vm.playAt(i) } }
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
@@ -280,7 +283,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
             GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
             Spacer(Modifier.size(44.dp))
         }
-        Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(state, vm) }
+        if (!state.casted && item.kind != MediaKind.IMAGE) Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(state, vm) }
 
         state.remote.volume?.let { vol ->
             var local by remember(vol) { mutableFloatStateOf(vol.toFloat()) }
@@ -324,21 +327,22 @@ private fun QueueModes(state: PlaybackState, vm: PlayerViewModel) {
     if (state.casted) return
     val c = AppTheme.colors
     if (state.queue.size > 1) {
-        GhostIconButton(
-            AppIcons.Shuffle, "Shuffle", vm::toggleShuffle,
-            modifier = Modifier.semantics { stateDescription = if (state.shuffle) "On" else "Off" },
-            tint = if (state.shuffle) c.textPrimary else c.textTertiary,
-        )
+        ModeButton(AppIcons.Shuffle, "Shuffle", if (state.shuffle) "On" else "Off", on = state.shuffle, vm::toggleShuffle)
     }
-    GhostIconButton(
-        if (state.repeat == RepeatMode.ONE) AppIcons.RepeatOne else AppIcons.Repeat, "Repeat", vm::cycleRepeat,
-        modifier = Modifier.semantics {
-            stateDescription = when (state.repeat) {
-                RepeatMode.OFF -> "Off"
-                RepeatMode.ALL -> "All"
-                RepeatMode.ONE -> "One"
-            }
-        },
-        tint = if (state.repeat == RepeatMode.OFF) c.textTertiary else c.textPrimary,
-    )
+    val repeat = when (state.repeat) {
+        RepeatMode.OFF -> "Off"
+        RepeatMode.ALL -> "All"
+        RepeatMode.ONE -> "One"
+    }
+    ModeButton(if (state.repeat == RepeatMode.ONE) AppIcons.RepeatOne else AppIcons.Repeat, "Repeat", repeat, on = state.repeat != RepeatMode.OFF, vm::cycleRepeat)
+}
+
+/** A mode button: lit, with a dot under it, while on (not by color alone); says its state. */
+@Composable
+private fun ModeButton(icon: ImageVector, name: String, state: String, on: Boolean, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    Box(contentAlignment = Alignment.BottomCenter) {
+        GhostIconButton(icon, name, onClick, modifier = Modifier.semantics { stateDescription = state }, tint = if (on) c.textPrimary else c.textTertiary)
+        if (on) Box(Modifier.padding(bottom = 2.dp).size(4.dp).clip(CircleShape).background(c.textPrimary))
+    }
 }

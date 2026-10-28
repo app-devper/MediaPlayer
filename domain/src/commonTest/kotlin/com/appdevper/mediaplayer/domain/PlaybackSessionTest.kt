@@ -225,6 +225,9 @@ class PlaybackSessionTest {
         advanceTimeBy(300)
         assertEquals("a1", session.state.value.current?.id)
         assertEquals(listOf("load:a1@0"), engine.calls.filter { it.startsWith("load") }) // the same song again
+        engine.finish()
+        advanceTimeBy(300)
+        assertEquals(listOf("load:a1@0", "load:a1@0"), engine.calls.filter { it.startsWith("load") }) // and again
         // Next and previous still move on (only repeat all goes round).
         assertFalse(session.next())
         assertTrue(session.previous())
@@ -250,11 +253,31 @@ class PlaybackSessionTest {
         assertTrue(session.previous())
         assertEquals(order[4], session.state.value.index)
 
+        // Picked in the list while shuffled: the order starts again from it, so the rest still plays.
+        session.playAt(order.last())
+        assertEquals(order.last(), session.state.value.order.first())
+        assertEquals((0..5).toList(), session.state.value.order.sorted())
+        assertTrue(session.state.value.hasNext)
+
         // A new queue while shuffled is shuffled too, from the item picked.
         session.play(songs[0], songs)
         assertEquals(0, session.state.value.order.first())
         session.setShuffle(false)
         assertEquals((0..5).toList(), session.state.value.order)
+    }
+
+    @Test
+    fun repeatAllOnOneItemPlaysItAgain() = runTest {
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), backgroundScope, engine)
+        session.setRepeat(RepeatMode.ALL)
+        session.play(folder[3], listOf(folder[3]))
+        runCurrent()
+        engine.finish()
+        advanceTimeBy(300)
+        assertEquals(listOf("load:a1@0", "load:a1@0"), engine.calls.filter { it.startsWith("load") })
+        session.setShuffle(true) // nothing else to mix with
+        assertEquals(listOf(0), session.state.value.order)
     }
 
     @Test

@@ -104,8 +104,11 @@ class PlaybackSession(
     }
 
     /** Shuffled: the current item first, then the rest in a random order. Else in turn. */
-    private fun order(size: Int, first: Int, shuffle: Boolean): List<Int> =
-        if (shuffle) listOf(first) + (0 until size).filter { it != first }.shuffled(random) else (0 until size).toList()
+    private fun order(size: Int, first: Int, shuffle: Boolean): List<Int> = when {
+        size == 0 -> emptyList()
+        shuffle -> listOf(first) + (0 until size).filter { it != first }.shuffled(random)
+        else -> (0 until size).toList()
+    }
 
     fun setShuffle(shuffle: Boolean) =
         _state.update { it.copy(shuffle = shuffle, order = order(it.queue.size, it.index.coerceAtLeast(0), shuffle)) }
@@ -113,10 +116,17 @@ class PlaybackSession(
     fun setRepeat(repeat: RepeatMode) = _state.update { it.copy(repeat = repeat) }
 
     /** Off → all → one → off. */
-    fun cycleRepeat() = setRepeat(RepeatMode.entries[(_state.value.repeat.ordinal + 1) % RepeatMode.entries.size])
+    fun cycleRepeat() = _state.update { it.copy(repeat = RepeatMode.entries[(it.repeat.ordinal + 1) % RepeatMode.entries.size]) }
 
+    /** The user picked [index] in the queue. Shuffled, the order starts again from it, so the rest still plays. */
     fun playAt(index: Int) {
         if (index !in _state.value.queue.indices) return
+        _state.update { if (it.shuffle) it.copy(order = order(it.queue.size, index, shuffle = true)) else it }
+        moveTo(index)
+    }
+
+    /** To [index] within the current order (next, previous, the end). */
+    private fun moveTo(index: Int) {
         _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0, local = null) }
         loadCurrent()
     }
@@ -135,20 +145,20 @@ class PlaybackSession(
 
     private fun skipTo(index: Int?): Boolean {
         if (index == null) return false
-        playAt(index)
+        moveTo(index)
         return true
     }
 
     /** The current item ended by itself: the same again with repeat one, else the next one. */
     private fun onEnded() {
         val s = _state.value
-        if (s.effectiveRepeat == RepeatMode.ONE) playAt(s.index) else skipTo(s.nextIndex)
+        if (s.effectiveRepeat == RepeatMode.ONE) moveTo(s.index) else skipTo(s.nextIndex)
     }
 
     /**
      * Like other players: back to the start once it has played [RESTART_MS], else the previous item
-     * (or the sender's previous, see [senderSkip]). At the first item it goes back to the start and
-     * returns false.
+     * in the order (or the sender's previous, see [senderSkip]); before the first, the last with
+     * repeat all. With nothing before it, back to the start, and false.
      */
     fun previous(): Boolean {
         if (senderSkip?.invoke(false) == true) return true
