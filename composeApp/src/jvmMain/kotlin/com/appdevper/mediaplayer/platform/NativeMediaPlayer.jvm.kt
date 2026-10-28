@@ -43,6 +43,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -61,6 +64,7 @@ import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
+import java.awt.GraphicsEnvironment
 import java.awt.Point
 import java.awt.Toolkit
 import java.awt.image.BufferedImage
@@ -187,7 +191,8 @@ actual fun NativeMediaPlayer(
     // ← / →: back or on by SEEK_STEP_MS, within the video.
     fun seekBy(deltaMs: Long) {
         val to = (status.positionMs + deltaMs).coerceAtLeast(0)
-        player.seek(if (status.durationMs > 0) to.coerceAtMost(status.durationMs) else to)
+        // Not right onto the end: that would finish it and a held key would go on in the next item.
+        player.seek(if (status.durationMs > 0) to.coerceAtMost((status.durationMs - SEEK_END_MARGIN_MS).coerceAtLeast(0)) else to)
     }
 
     fun togglePlay() {
@@ -284,6 +289,8 @@ actual fun NativeMediaPlayer(
                 when {
                     e.type == KeyEventType.KeyUp && e.key == Key.Spacebar -> togglePlay()
                     e.type != KeyEventType.KeyDown -> return@onKeyEvent false
+                    // Cmd/Ctrl/Alt combinations belong to the app and the system (Cmd+F, Ctrl+M…).
+                    e.isMetaPressed || e.isCtrlPressed || e.isAltPressed -> return@onKeyEvent false
                     e.key == Key.DirectionLeft -> seekBy(-SEEK_STEP_MS)
                     e.key == Key.DirectionRight -> seekBy(SEEK_STEP_MS)
                     e.key == Key.F && onToggleFullscreen != null -> onToggleFullscreen()
@@ -344,7 +351,13 @@ actual fun NativeMediaPlayer(
 private const val CONTROLS_HIDE_MS = 2_500L
 private const val SEEK_STEP_MS = 5_000L
 
-/** An empty cursor: AWT has no "none", so a 1×1 transparent image. */
-private val HiddenPointer = PointerIcon(
-    Toolkit.getDefaultToolkit().createCustomCursor(BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB), Point(0, 0), "hidden"),
-)
+private const val SEEK_END_MARGIN_MS = 1_000L
+
+/** An empty cursor: AWT has no "none", so a 1×1 transparent image. Made when first needed (not headless). */
+private val HiddenPointer: PointerIcon by lazy {
+    if (GraphicsEnvironment.isHeadless()) {
+        PointerIcon.Default
+    } else {
+        PointerIcon(Toolkit.getDefaultToolkit().createCustomCursor(BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB), Point(0, 0), "hidden"))
+    }
+}
