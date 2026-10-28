@@ -147,20 +147,56 @@ class LocalPlayerTest {
         player.load(movie, autoPlay = true, startPositionMs = 0)
         runCurrent()
         val thai = TextTrack("2:0", "Thai", "th")
-        engine.facts = engine.facts.copy(textTracks = listOf(thai))
+        // The file's default track was on: off until picked.
+        engine.facts = engine.facts.copy(textTracks = listOf(thai), selectedTextTrack = thai.id)
         advanceTimeBy(150)
         assertEquals(listOf(thai), player.textTracks.value)
+        assertEquals("track:null", engine.calls.last())
+        assertNull(player.selectedTextTrack.value)
 
         player.selectTextTrack(thai.id)
         engine.facts = engine.facts.copy(subtitleText = "สวัสดี")
         advanceTimeBy(150)
         assertEquals("track:2:0", engine.calls.last())
+        assertEquals("2:0", player.selectedTextTrack.value)
         assertEquals("สวัสดี", player.subtitleText.value)
+
+        // The same item again (repeat one): the engine starts over, the track comes back once it's known.
+        player.load(movie, autoPlay = true, startPositionMs = 0)
+        runCurrent()
+        engine.facts = engine.facts.copy(textTracks = listOf(thai))
+        advanceTimeBy(150)
+        assertEquals("track:2:0", engine.calls.last())
+        assertEquals("2:0", player.selectedTextTrack.value)
+
+        // Changed by the platform's own controls (AVKit's menu): that's the choice now.
+        engine.facts = engine.facts.copy(selectedTextTrack = null)
+        advanceTimeBy(150)
+        assertNull(player.selectedTextTrack.value)
 
         player.load(photo, autoPlay = true, startPositionMs = 0) // nothing loaded: none
         runCurrent()
         assertEquals(emptyList(), player.textTracks.value)
         assertNull(player.subtitleText.value)
+    }
+
+    @Test
+    fun anotherItemStartsWithNoTrack() = runTest {
+        val engine = FakeEngine()
+        val player = player(engine)
+        val track = TextTrack("0", "English", "en")
+        player.load(movie, autoPlay = true, startPositionMs = 0)
+        runCurrent()
+        engine.facts = engine.facts.copy(textTracks = listOf(track))
+        advanceTimeBy(150)
+        player.selectTextTrack("0")
+        runCurrent()
+        player.load(movie.copy(id = "v2", streamUrl = "http://h/v2.mp4"), autoPlay = true, startPositionMs = 0)
+        runCurrent()
+        engine.facts = engine.facts.copy(textTracks = listOf(track))
+        advanceTimeBy(150)
+        assertNull(player.selectedTextTrack.value)
+        assertEquals("track:null", engine.calls.last())
     }
 
     @Test

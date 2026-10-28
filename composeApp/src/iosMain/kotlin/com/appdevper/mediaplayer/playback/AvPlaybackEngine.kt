@@ -19,6 +19,8 @@ import platform.AVFoundation.AVPlayerItemStatusFailed
 import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
 import platform.AVFoundation.appliesMediaSelectionCriteriaAutomatically
 import platform.AVFoundation.asset
+import platform.AVFoundation.currentMediaSelection
+import platform.AVFoundation.playable
 import platform.AVFoundation.mediaSelectionGroupForMediaCharacteristic
 import platform.AVFoundation.selectMediaOption
 import platform.AVFoundation.AVPlayerTimeControlStatusPaused
@@ -102,6 +104,8 @@ class AvPlaybackEngine : PlaybackEngine {
 
     override fun unload() {
         url = null
+        legible = null
+        legibleOf = null
         badUrl = false
         ended = false
         player.pause()
@@ -136,7 +140,7 @@ class AvPlaybackEngine : PlaybackEngine {
             if (item.status != AVPlayerItemStatusReadyToPlay) return null
             legibleOf = item
             legible = item.asset.mediaSelectionGroupForMediaCharacteristic(AVMediaCharacteristicLegible)?.let { group ->
-                group to group.options.filterIsInstance<AVMediaSelectionOption>()
+                group to group.options.filterIsInstance<AVMediaSelectionOption>().filter { it.playable }
             }
         }
         return legible
@@ -164,6 +168,11 @@ class AvPlaybackEngine : PlaybackEngine {
             textTracks = legibleOptions()?.second.orEmpty().mapIndexed { i, option ->
                 val language = option.extendedLanguageTag
                 TextTrack(i.toString(), option.displayName.ifEmpty { SubtitleFiles.label(language, "Track ${i + 1}") }, language)
+            },
+            // AVKit's own subtitle menu can change it too.
+            selectedTextTrack = legibleOptions()?.let { (group, options) ->
+                item?.currentMediaSelection?.selectedMediaOptionInMediaSelectionGroup(group)
+                    ?.let { selected -> options.indexOfFirst { it == selected }.takeIf { it >= 0 }?.toString() }
             },
         )
     }

@@ -13,7 +13,7 @@ A single Compose Multiplatform app that merges
 | Play on a TV / speaker (AVTransport + volume) | ✅ | ✅ | ✅ |
 | **AirPlay** (Apple TV, AirPlay speakers/TVs) | — | ✅ native | — |
 | Subtitles: sidecar .srt / .vtt next to a video (Thai TIS-620 too) | ✅ | ✅ | ✅ |
-| Subtitles inside the file (text tracks: SRT, ASS, mov_text, WebVTT) | ExoPlayer | AVKit | FFmpeg |
+| Subtitles inside the file (text tracks) | ExoPlayer: MKV/MP4 SRT, ASS, WebVTT, mov_text | AVKit: MP4 mov_text, HLS WebVTT | FFmpeg: SRT, ASS, mov_text, WebVTT |
 | Built-in DLNA media server (share this device) | MediaStore | Documents folder | chosen folders |
 | Receive casts: DLNA renderer (other apps "Play to" this device) ³ | ✅ | ✅ | ✅ |
 | **Receive AirPlay**: screen mirroring, AirPlay video (YouTube…) and audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ |

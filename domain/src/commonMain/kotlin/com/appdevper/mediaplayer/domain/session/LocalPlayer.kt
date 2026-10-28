@@ -48,6 +48,17 @@ class LocalPlayer(
     /** Subtitle tracks inside the loaded file. */
     val textTracks: StateFlow<List<TextTrack>> = _textTracks.asStateFlow()
 
+    private val _selectedTextTrack = MutableStateFlow<String?>(null)
+
+    /**
+     * The track inside the file that shows, or none: what was picked ([selectTextTrack]), or what the
+     * platform's own controls picked (AVKit's menu). It stays through a reload of the same item.
+     */
+    val selectedTextTrack: StateFlow<String?> = _selectedTextTrack.asStateFlow()
+
+    // The engine loses the choice on every load: until the tracks are known, it isn't applied yet.
+    private var trackApplied = false
+
     private val _subtitleText = MutableStateFlow<String?>(null)
 
     /** The selected track's text on screen now, when we draw it ([selectTextTrack]). */
@@ -69,6 +80,9 @@ class LocalPlayer(
         if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) return@onPlayer unloadNow()
         pausedInBackground = false
         stopped = !autoPlay
+        // Another item: its tracks are others, so none. The same one again keeps its track.
+        if (_loaded.value?.let { it.id != entry.id || it.streamUrl != entry.streamUrl } != false) _selectedTextTrack.value = null
+        trackApplied = false
         _loaded.value = entry
         _status.value = null
         engine.load(entry, url, autoPlay, startPositionMs.coerceAtLeast(0))
@@ -96,6 +110,7 @@ class LocalPlayer(
         _error.value = null
         _textTracks.value = emptyList()
         _subtitleText.value = null
+        _selectedTextTrack.value = null
         stopped = true
         pausedInBackground = false
         engine.unload()
@@ -104,7 +119,10 @@ class LocalPlayer(
     override fun play() = whenLoaded {
         val facts = engine.facts()
         when {
-            facts.error != null -> engine.reload(facts.positionMs)
+            facts.error != null -> {
+                engine.reload(facts.positionMs)
+                trackApplied = false
+            }
             facts.ended -> engine.seekTo(0)
         }
         stopped = false
@@ -124,11 +142,29 @@ class LocalPlayer(
         engine.seekTo(positionMs.coerceAtLeast(0))
     }
 
-    /** Shows a subtitle track inside the file ([textTracks]), or none. */
+    /** Shows a subtitle track inside the file ([textTracks]), or none; kept through reloads of the item. */
     fun selectTextTrack(id: String?) = onPlayer {
         if (_loaded.value == null) return@onPlayer
-        engine.selectTextTrack(id)
+        _selectedTextTrack.value = id
+        trackApplied = false
         refresh()
+    }
+
+    /**
+     * Once the engine knows the tracks: applies our choice (none, unless picked; a file's default
+     * doesn't show by itself). After that, a different track showing was picked by the platform's own
+     * controls, and becomes the choice.
+     */
+    private fun syncTextTrack(facts: EngineFacts): EngineFacts {
+        val wanted = _selectedTextTrack.value
+        if (!trackApplied) {
+            if (facts.textTracks.isEmpty()) return facts
+            engine.selectTextTrack(wanted?.takeIf { id -> facts.textTracks.any { it.id == id } })
+            trackApplied = true
+            return engine.facts()
+        }
+        if (facts.selectedTextTrack != wanted) _selectedTextTrack.value = facts.selectedTextTrack
+        return facts
     }
 
     /** 0..1. */
@@ -178,6 +214,7 @@ class LocalPlayer(
         // Started by itself (e.g. after a phone call) or by the system's controls: no longer stopped.
         if (facts.playing && !facts.ended) stopped = false
         _error.value = facts.error
+        facts = syncTextTrack(facts)
         _textTracks.value = facts.textTracks
         _subtitleText.value = facts.subtitleText
         _status.value = RendererStatus(

@@ -313,7 +313,9 @@ class FfmpegPlayerTest {
     @Test
     fun readsTheTextSubtitleTrackInsideAnMkv() = runBlocking<Unit> {
         writeMkvWithSubtitles()
+        // Only a picked stream is read (ids are stream indexes, so it can be picked before it's open, as the engine does).
         val p = FfmpegPlayer("http://127.0.0.1:${server.address.port}/movie.mkv", autoPlay = false, output = RealTimeOutput()).also { player = it }
+        p.selectSubtitleStream("1")
         val tracks = withTimeout(10_000) { p.textTracks.first { it.isNotEmpty() } }
         assertEquals(listOf(TextTrack("1", "Thai", "tha")), tracks)
         // Cues are read ahead of playback, as the file is read.

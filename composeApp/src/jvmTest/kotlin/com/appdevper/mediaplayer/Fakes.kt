@@ -135,7 +135,10 @@ class FakeEngine : PlaybackEngine {
     override fun seekTo(positionMs: Long) { facts = facts.copy(positionMs = positionMs, ended = false) }
     override fun setVolume(volume: Float) {}
     override fun reload(positionMs: Long) {}
-    override fun selectTextTrack(id: String?) { calls += "track:$id" }
+    override fun selectTextTrack(id: String?) {
+        calls += "track:$id"
+        facts = facts.copy(selectedTextTrack = id)
+    }
     override fun facts() = facts
 }
 

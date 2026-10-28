@@ -32,6 +32,7 @@ class FfmpegPlaybackEngine : PlaybackEngine {
         _player.value?.release()
         _player.value = FfmpegPlayer(url, playWhenReady).apply {
             setVolume(gain)
+            selectSubtitleStream(textTrack)
             if (startPositionMs > 0) seek(startPositionMs)
         }
     }
@@ -39,6 +40,7 @@ class FfmpegPlaybackEngine : PlaybackEngine {
     /** We draw it: [EngineFacts.subtitleText] from the player's cues of that stream. */
     override fun selectTextTrack(id: String?) {
         textTrack = id
+        _player.value?.selectSubtitleStream(id)
     }
 
     override fun unload() {
@@ -81,6 +83,7 @@ class FfmpegPlaybackEngine : PlaybackEngine {
             error = status.error,
             textTracks = player.textTracks.value,
             subtitleText = textTrack?.let { player.subtitleText(it, status.positionMs) },
+            selectedTextTrack = textTrack,
         )
     }
 }

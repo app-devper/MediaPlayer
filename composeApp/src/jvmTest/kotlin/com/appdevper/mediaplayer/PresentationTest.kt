@@ -363,6 +363,7 @@ class PresentationTest {
 
         // A track inside the video: the player shows it; picking a file turns the track off.
         val inside = TextTrack("2", "English", "eng")
+        engine.facts = engine.facts.copy(textTracks = listOf(inside)) // the player has read the file's tracks
         vm.selectTrack(inside)
         assertEquals(SubtitleState(track = inside), vm.subtitles.value)
         assertEquals("track:2", engine.calls.last())

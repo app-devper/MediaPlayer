@@ -45,6 +45,7 @@ class FakeEngine : PlaybackEngine {
 
     override fun selectTextTrack(id: String?) {
         calls += "track:$id"
+        facts = facts.copy(selectedTextTrack = id)
     }
 
     override fun reload(positionMs: Long) {

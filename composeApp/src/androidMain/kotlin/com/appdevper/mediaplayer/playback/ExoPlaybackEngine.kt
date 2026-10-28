@@ -119,7 +119,19 @@ class ExoPlaybackEngine(context: Context) : PlaybackEngine {
         error = player.playerError?.let { it.message ?: it.errorCodeName },
         textTracks = textTracks(),
         subtitleText = cueText,
+        selectedTextTrack = selectedTextTrack(),
     )
+
+    /** The track asked for (parameters apply a moment later, so not what currentTracks says yet). */
+    private fun selectedTextTrack(): String? {
+        val params = player.trackSelectionParameters
+        if (C.TRACK_TYPE_TEXT in params.disabledTrackTypes) return null
+        player.currentTracks.groups.forEachIndexed { g, group ->
+            val override = params.overrides[group.mediaTrackGroup] ?: return@forEachIndexed
+            if (group.type == C.TRACK_TYPE_TEXT) override.trackIndices.firstOrNull()?.let { return "$g:$it" }
+        }
+        return null
+    }
 
     private fun audioAttributes(kind: MediaKind) = AudioAttributes.Builder()
         .setUsage(C.USAGE_MEDIA)

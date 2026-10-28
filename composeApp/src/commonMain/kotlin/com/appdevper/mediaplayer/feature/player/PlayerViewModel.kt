@@ -16,6 +16,7 @@ import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -59,6 +60,17 @@ class PlayerViewModel(
     init {
         // Another item: subtitles off again (its files are others).
         viewModelScope.launch { session.state.map { it.current }.distinctUntilChanged().collect { selectSubtitle(null) } }
+        // The track that actually shows (kept through reloads; or picked in AVKit's own menu, which
+        // replaces a file's subtitles).
+        viewModelScope.launch {
+            combine(session.local.selectedTextTrack, session.local.textTracks) { id, tracks -> id to tracks.firstOrNull { it.id == id } }
+                .distinctUntilChanged()
+                .collect { (id, track) ->
+                    if (id != null && track == null) return@collect // not listed yet
+                    val s = _subtitles.value
+                    if (track != s.track) _subtitles.value = if (track != null) SubtitleState(track = track) else s.copy(track = null)
+                }
+        }
     }
 
     /** Subtitle tracks inside the playing file. */
