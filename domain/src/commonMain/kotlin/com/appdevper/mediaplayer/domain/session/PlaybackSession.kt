@@ -5,6 +5,7 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RemotePlayback
+import com.appdevper.mediaplayer.domain.model.RepeatMode
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.concurrent.Volatile
+import kotlin.random.Random
 
 /**
  * App-wide playback session: the queue, the current item and where it plays. Every command (play,
@@ -28,6 +30,7 @@ class PlaybackSession(
     val local: LocalPlayer,
     private val scope: CoroutineScope,
     private val pollIntervalMs: Long = 1_000,
+    private val random: Random = Random,
 ) {
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
@@ -48,7 +51,7 @@ class PlaybackSession(
             local.status.collect { status ->
                 _state.update { it.copy(local = status) }
                 val ended = status?.ended == true
-                if (ended && !wasEnded && transport === local) advance()
+                if (ended && !wasEnded && transport === local) onEnded()
                 wasEnded = ended
             }
         }
@@ -73,7 +76,7 @@ class PlaybackSession(
             remote.playback.collect { playback ->
                 _state.update { it.copy(remote = playback) }
                 val ended = playback.status?.ended == true
-                if (ended && !wasEnded) advance()
+                if (ended && !wasEnded) onEnded()
                 wasEnded = ended
             }
         }
@@ -82,16 +85,35 @@ class PlaybackSession(
     /**
      * Starts playing [entry]; the queue becomes the playable siblings of the same family
      * (photos with photos, audio/video with audio/video) — same as the old QueueHelper.
-     * With [autoPlay] false the local player loads paused and waits for [play].
+     * With [autoPlay] false the local player loads paused and waits for [play]. [casted]: another
+     * device sent it, so it ends as the sender expects (no repeat).
      */
-    fun play(entry: MediaEntry, siblings: List<MediaEntry>, autoPlay: Boolean = true, startPositionMs: Long = 0) {
+    fun play(entry: MediaEntry, siblings: List<MediaEntry>, autoPlay: Boolean = true, startPositionMs: Long = 0, casted: Boolean = false) {
         val photos = entry.kind == MediaKind.IMAGE
         val queue = siblings.filter { it == entry || (it.isPlayable && (it.kind == MediaKind.IMAGE) == photos) }
             .ifEmpty { listOf(entry) }
+        val index = queue.indexOf(entry).coerceAtLeast(0)
         // local = null: a controller casting here mustn't see the previous item's status meanwhile.
-        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, startPositionMs = startPositionMs, local = null) }
+        _state.update {
+            it.copy(
+                queue = queue, index = index, order = order(queue.size, index, it.shuffle), casted = casted,
+                autoPlay = autoPlay, startPositionMs = startPositionMs, local = null,
+            )
+        }
         loadCurrent()
     }
+
+    /** Shuffled: the current item first, then the rest in a random order. Else in turn. */
+    private fun order(size: Int, first: Int, shuffle: Boolean): List<Int> =
+        if (shuffle) listOf(first) + (0 until size).filter { it != first }.shuffled(random) else (0 until size).toList()
+
+    fun setShuffle(shuffle: Boolean) =
+        _state.update { it.copy(shuffle = shuffle, order = order(it.queue.size, it.index.coerceAtLeast(0), shuffle)) }
+
+    fun setRepeat(repeat: RepeatMode) = _state.update { it.copy(repeat = repeat) }
+
+    /** Off → all → one → off. */
+    fun cycleRepeat() = setRepeat(RepeatMode.entries[(_state.value.repeat.ordinal + 1) % RepeatMode.entries.size])
 
     fun playAt(index: Int) {
         if (index !in _state.value.queue.indices) return
@@ -105,14 +127,22 @@ class PlaybackSession(
         transport.load(item, s.autoPlay, s.startPositionMs)
     }
 
-    /** The next item, or the sender's next when an AirPlay sender decides ([senderSkip]). False when there's none. */
-    fun next(): Boolean = senderSkip?.invoke(true) == true || advance()
+    /**
+     * The next item in [PlaybackState.order] (the first again after the last, with repeat all), or the
+     * sender's next when an AirPlay sender decides ([senderSkip]). False when there's none.
+     */
+    fun next(): Boolean = senderSkip?.invoke(true) == true || skipTo(_state.value.nextIndex)
 
-    private fun advance(): Boolean {
-        val s = _state.value
-        if (!s.hasNext) return false
-        playAt(s.index + 1)
+    private fun skipTo(index: Int?): Boolean {
+        if (index == null) return false
+        playAt(index)
         return true
+    }
+
+    /** The current item ended by itself: the same again with repeat one, else the next one. */
+    private fun onEnded() {
+        val s = _state.value
+        if (s.effectiveRepeat == RepeatMode.ONE) playAt(s.index) else skipTo(s.nextIndex)
     }
 
     /**
@@ -130,11 +160,10 @@ class PlaybackSession(
             seek(0)
             return true
         }
-        if (!s.hasPrevious) {
+        if (!skipTo(s.previousIndex)) {
             seek(0)
             return false
         }
-        playAt(s.index - 1)
         return true
     }
 

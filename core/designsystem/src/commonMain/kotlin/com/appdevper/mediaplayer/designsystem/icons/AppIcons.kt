@@ -121,6 +121,17 @@ object AppIcons {
     val Stop = filled("stop", "M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z")
     val SkipNext = filled("skip_next", "M4 5.6v12.8c0 .8.9 1.3 1.6.8L14.4 13c.6-.4.6-1.3 0-1.7L5.6 4.8C4.9 4.3 4 4.8 4 5.6z", "M18 4a1 1 0 0 1 1 1v14a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1z")
     val SkipPrevious = filled("skip_prev", "M20 5.6v12.8c0 .8-.9 1.3-1.6.8L9.6 13c-.6-.4-.6-1.3 0-1.7l8.8-6.5c.7-.5 1.6 0 1.6.8z", "M6 4a1 1 0 0 1 1 1v14a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1z")
+    // Lucide shuffle, repeat, repeat-1.
+    val Shuffle = outline(
+        "shuffle",
+        "M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22", "m18 2 4 4-4 4",
+        "M2 6h1.9c1.5 0 2.9.9 3.6 2.2", "M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8", "m18 14 4 4-4 4",
+    )
+    val Repeat = outline("repeat", "m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3")
+    val RepeatOne = outline(
+        "repeat_one",
+        "m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3", "M11 10h1v4",
+    )
     // endregion
 
     /** App mark: a play button between broadcast waves — "play anything, anywhere on the network". */

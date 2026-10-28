@@ -5,6 +5,7 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.RepeatMode
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
@@ -196,6 +197,78 @@ class PlaybackSessionTest {
         runCurrent()
         assertEquals("v1", session.state.value.current?.id)
         assertEquals(listOf("load:a1", "load:v1"), fake.calls.filter { it.startsWith("load") })
+    }
+
+    @Test
+    fun repeatAllGoesRoundAndRepeatOnePlaysTheSameAgain() = runTest {
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), backgroundScope, engine)
+        session.play(folder[3], folder) // a1, the last of v1, a1
+        runCurrent()
+        assertFalse(session.state.value.hasNext)
+        engine.finish()
+        advanceTimeBy(300)
+        assertEquals("a1", session.state.value.current?.id) // off: it stops there
+
+        session.cycleRepeat()
+        assertEquals(RepeatMode.ALL, session.state.value.repeat)
+        assertTrue(session.next())
+        assertEquals("v1", session.state.value.current?.id) // after the last, the first
+        assertTrue(session.previous())
+        assertEquals("a1", session.state.value.current?.id) // before the first, the last
+
+        session.cycleRepeat()
+        assertEquals(RepeatMode.ONE, session.state.value.repeat)
+        runCurrent()
+        engine.calls.clear()
+        engine.finish()
+        advanceTimeBy(300)
+        assertEquals("a1", session.state.value.current?.id)
+        assertEquals(listOf("load:a1@0"), engine.calls.filter { it.startsWith("load") }) // the same song again
+        // Next and previous still move on (only repeat all goes round).
+        assertFalse(session.next())
+        assertTrue(session.previous())
+        assertEquals("v1", session.state.value.current?.id)
+
+        session.cycleRepeat()
+        assertEquals(RepeatMode.OFF, session.state.value.repeat)
+    }
+
+    @Test
+    fun shufflePlaysEveryItemOnceStartingWithTheCurrentOne() = runTest {
+        val songs = (1..6).map { entry("s$it", MediaKind.AUDIO) }
+        val session = playbackSession(FakeRenderer(), backgroundScope)
+        session.play(songs[2], songs)
+        session.setShuffle(true)
+        val order = session.state.value.order
+        assertEquals(2, order.first())
+        assertEquals((0..5).toList(), order.sorted())
+
+        val played = mutableListOf(session.state.value.index)
+        while (session.next()) played += session.state.value.index
+        assertEquals(order, played)
+        assertTrue(session.previous())
+        assertEquals(order[4], session.state.value.index)
+
+        // A new queue while shuffled is shuffled too, from the item picked.
+        session.play(songs[0], songs)
+        assertEquals(0, session.state.value.order.first())
+        session.setShuffle(false)
+        assertEquals((0..5).toList(), session.state.value.order)
+    }
+
+    @Test
+    fun somethingCastHereEndsWithoutRepeat() = runTest {
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), backgroundScope, engine)
+        session.setRepeat(RepeatMode.ONE)
+        session.play(folder[1], listOf(folder[1]), casted = true)
+        runCurrent()
+        engine.calls.clear()
+        engine.finish()
+        advanceTimeBy(300)
+        assertEquals(emptyList(), engine.calls.filter { it.startsWith("load") }) // the sender decides what comes next
+        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
     }
 
     @Test

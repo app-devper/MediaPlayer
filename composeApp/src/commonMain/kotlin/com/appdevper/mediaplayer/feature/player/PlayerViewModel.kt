@@ -38,6 +38,8 @@ class PlayerViewModel(private val session: PlaybackSession, private val airPlayS
     }
 
     fun playAt(index: Int) = session.playAt(index)
+    fun toggleShuffle() = session.setShuffle(!session.state.value.shuffle)
+    fun cycleRepeat() = session.cycleRepeat()
     fun togglePause() = session.togglePause()
     fun stop() = session.stop()
     fun seek(positionMs: Long) = session.seek(positionMs)

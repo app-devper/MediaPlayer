@@ -44,6 +44,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,6 +67,7 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
+import com.appdevper.mediaplayer.domain.model.RepeatMode
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.drives
 import com.appdevper.mediaplayer.ui.LocalFullscreen
@@ -141,6 +144,7 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                             Text(item.title, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
                         }
+                        if (!senderSkips) QueueModes(state, vm)
                         GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, tint = c.textPrimary)
                         GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = senderSkips || state.hasNext, tint = c.textPrimary)
                     }
@@ -276,6 +280,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
             GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
             Spacer(Modifier.size(44.dp))
         }
+        Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(state, vm) }
 
         state.remote.volume?.let { vol ->
             var local by remember(vol) { mutableFloatStateOf(vol.toFloat()) }
@@ -312,3 +317,28 @@ private fun TransportState.label(): String? = when (this) {
 }
 
 private fun MediaEntry.subtitleLine(): String? = joinDetails(artist, album, durationMs?.let(::formatClock))
+
+/** Shuffle (with more than one item) and repeat (off → all → one), lit while on. Not for something cast here. */
+@Composable
+private fun QueueModes(state: PlaybackState, vm: PlayerViewModel) {
+    if (state.casted) return
+    val c = AppTheme.colors
+    if (state.queue.size > 1) {
+        GhostIconButton(
+            AppIcons.Shuffle, "Shuffle", vm::toggleShuffle,
+            modifier = Modifier.semantics { stateDescription = if (state.shuffle) "On" else "Off" },
+            tint = if (state.shuffle) c.textPrimary else c.textTertiary,
+        )
+    }
+    GhostIconButton(
+        if (state.repeat == RepeatMode.ONE) AppIcons.RepeatOne else AppIcons.Repeat, "Repeat", vm::cycleRepeat,
+        modifier = Modifier.semantics {
+            stateDescription = when (state.repeat) {
+                RepeatMode.OFF -> "Off"
+                RepeatMode.ALL -> "All"
+                RepeatMode.ONE -> "One"
+            }
+        },
+        tint = if (state.repeat == RepeatMode.OFF) c.textTertiary else c.textPrimary,
+    )
+}
