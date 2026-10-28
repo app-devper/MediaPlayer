@@ -217,6 +217,23 @@ class LocalPlayerTest {
     }
 
     @Test
+    fun theSubtitleComesBackWhenTheItemDoesAfterATv() = runTest {
+        val engine = FakeEngine()
+        val player = player(engine)
+        val file = Subtitle("http://h/v1.th.srt", "Thai", "th")
+        player.load(movie, autoPlay = true, startPositionMs = 0)
+        player.selectSubtitle(SubtitleChoice.File(file))
+        runCurrent()
+        player.unload() // cast to a TV: nothing here meanwhile
+        runCurrent()
+        assertNull(player.subtitleText.value)
+        player.load(movie, autoPlay = true, startPositionMs = 1_500) // "Play here"
+        runCurrent()
+        assertEquals(SubtitleChoice.File(file), player.subtitles.value.choice)
+        assertEquals("สวัสดี", player.subtitleText.value)
+    }
+
+    @Test
     fun aFileThatCantBeReadSaysSo() = runTest {
         val engine = FakeEngine()
         val player = player(engine)

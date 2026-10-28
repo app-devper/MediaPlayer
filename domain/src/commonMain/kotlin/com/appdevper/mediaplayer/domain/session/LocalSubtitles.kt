@@ -72,9 +72,10 @@ internal class LocalSubtitles(
         if (sameItem) trackApplied = false else pick(SubtitleChoice.Off)
     }
 
-    fun clear() {
-        pick(SubtitleChoice.Off)
+    /** Nothing in the player (a photo, or playing on a renderer): no line; the choice waits for the item to come back. */
+    fun onUnload() {
         text.value = null
+        trackApplied = false
     }
 
     /**

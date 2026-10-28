@@ -79,12 +79,19 @@ class LocalPlayer(
     private var volume = 1f
     private var poll: Job? = null
 
+    // The last item asked for (kept while nothing is loaded, e.g. playing on a TV meanwhile): the same one
+    // again keeps its subtitles.
+    private var lastItem: Pair<String, String?>? = null
+
     override fun load(entry: MediaEntry, autoPlay: Boolean, startPositionMs: Long) = onPlayer {
+        val item = entry.id to entry.streamUrl
+        val sameItem = lastItem == item
+        lastItem = item
         val url = entry.streamUrl
         if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) return@onPlayer unloadNow()
         pausedInBackground = false
         stopped = !autoPlay
-        subtitlesOfItem.onLoad(sameItem = _loaded.value?.let { it.id == entry.id && it.streamUrl == entry.streamUrl } == true)
+        subtitlesOfItem.onLoad(sameItem)
         _loaded.value = entry
         _status.value = null
         engine.load(entry, url, autoPlay, startPositionMs.coerceAtLeast(0))
@@ -111,7 +118,7 @@ class LocalPlayer(
         _loaded.value = null
         _error.value = null
         _textTracks.value = emptyList()
-        subtitlesOfItem.clear()
+        subtitlesOfItem.onUnload()
         stopped = true
         pausedInBackground = false
         engine.unload()
