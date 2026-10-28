@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.getAndUpdate
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -124,8 +126,7 @@ class ControlPoint(
      */
     suspend fun forget(address: String) {
         val text = address.trim()
-        addresses.update { list -> list.filterNot { it.equals(text, ignoreCase = true) } }
-        store.save(addresses.value)
+        store.save(addresses.updateAndGet { list -> list.filterNot { it.equals(text, ignoreCase = true) } })
         val target = ServerAddress.parse(text) ?: return
         mutex.withLock {
             // A probe of it still under way mustn't put it back: its late answers are ignored a while.
@@ -142,9 +143,9 @@ class ControlPoint(
 
     /** Asks [address] directly from now on, and keeps it (once, whatever its letter case). */
     private fun keep(address: String) {
-        if (addresses.value.any { it.equals(address, ignoreCase = true) }) return
-        addresses.update { it + address }
-        store.save(addresses.value)
+        // In one update, so two searches of the same address at once keep it once.
+        val before = addresses.getAndUpdate { list -> if (list.any { it.equals(address, ignoreCase = true) }) list else list + address }
+        if (before.none { it.equals(address, ignoreCase = true) }) store.save(addresses.value)
     }
 
     /**
