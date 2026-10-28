@@ -6,7 +6,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ComposeUiTest
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsOff
@@ -138,7 +141,19 @@ class DesignShots {
     }
     @Test fun songLocalPhoneLight() = shot("11-song-local-phone-light", 400, 860, dark = false, setup = { s ->
         s.play(song, listOf(song, song2), autoPlay = false)
-    }, start = PlayerRoute)
+    }, start = PlayerRoute, always = true) {
+        // Shuffle and repeat say what they're set to; repeat goes off → all → one.
+        fun state(name: String, value: String) =
+            onNodeWithContentDescription(name).assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, value))
+        state("Shuffle", "Off")
+        state("Repeat", "Off")
+        onNodeWithContentDescription("Shuffle").performClick()
+        onNodeWithContentDescription("Repeat").performClick()
+        state("Shuffle", "On")
+        state("Repeat", "All")
+        onNodeWithContentDescription("Repeat").performClick()
+        state("Repeat", "One")
+    }
 
     @Test fun homePhoneLight() = shot("1-home-phone-light", 400, 860, dark = false)
     @Test fun homeDesktopDark() = shot("2-home-desktop-dark", 1280, 800, dark = true)

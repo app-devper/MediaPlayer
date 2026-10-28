@@ -18,7 +18,7 @@ internal fun PlaybackSession.apply(command: CastCommand, openPlayer: () -> Unit)
     when (command) {
         is CastCommand.Load -> {
             setTarget(PlaybackTarget.Local)
-            play(command.entry, listOf(command.entry), autoPlay = command.autoPlay, startPositionMs = command.startPositionMs)
+            play(command.entry, listOf(command.entry), autoPlay = command.autoPlay, startPositionMs = command.startPositionMs, casted = true)
             openPlayer()
         }
         CastCommand.Play -> {

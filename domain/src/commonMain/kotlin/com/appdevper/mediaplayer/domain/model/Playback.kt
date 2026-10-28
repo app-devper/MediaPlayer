@@ -37,8 +37,40 @@ data class PlaybackState(
     val local: RendererStatus? = null,
     val localVolume: Int = 100,
     val localMuted: Boolean = false,
+    /** Plays the queue in a random order ([order]). */
+    val shuffle: Boolean = false,
+    val repeat: RepeatMode = RepeatMode.OFF,
+    /** The queue's indices in the order they play: in turn, or shuffled with the item that started first. */
+    val order: List<Int> = emptyList(),
+    /** Another device cast this (a one-item queue): it ends as the sender expects, without repeat. */
+    val casted: Boolean = false,
 ) {
     val current: MediaEntry? get() = queue.getOrNull(index)
-    val hasNext: Boolean get() = index < queue.lastIndex
-    val hasPrevious: Boolean get() = index > 0
+
+    /** Repeat as it applies to this queue. */
+    val effectiveRepeat: RepeatMode get() = if (casted) RepeatMode.OFF else repeat
+
+    /** The item after this one in [order]; after the last, the first again with [RepeatMode.ALL]. */
+    val nextIndex: Int? get() = step(+1)
+
+    /** The item before this one in [order]; before the first, the last with [RepeatMode.ALL]. */
+    val previousIndex: Int? get() = step(-1)
+
+    val hasNext: Boolean get() = nextIndex != null
+    val hasPrevious: Boolean get() = previousIndex != null
+
+    private fun step(by: Int): Int? {
+        val at = order.indexOf(index)
+        if (at < 0) return null
+        return order.getOrNull(at + by) ?: order.takeIf { effectiveRepeat == RepeatMode.ALL }?.let { it[(at + by).mod(it.size)] }
+    }
+}
+
+/** What happens at the end of the queue, or of each item. */
+enum class RepeatMode {
+    OFF,
+    /** The whole queue, over and over. */
+    ALL,
+    /** The current item, over and over (next and previous still move on). */
+    ONE,
 }

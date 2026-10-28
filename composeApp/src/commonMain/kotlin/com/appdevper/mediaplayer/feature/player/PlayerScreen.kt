@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -44,6 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,6 +69,7 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
+import com.appdevper.mediaplayer.domain.model.RepeatMode
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.drives
 import com.appdevper.mediaplayer.ui.LocalFullscreen
@@ -141,13 +146,15 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                             Text(item.title, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
                         }
+                        if (!senderSkips) QueueModes(state, vm)
                         GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, tint = c.textPrimary)
                         GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = senderSkips || state.hasNext, tint = c.textPrimary)
                     }
                 }
                 if (state.queue.size > 1) {
                     item { SectionLabel("Up next") }
-                    itemsIndexed(state.queue, key = { _, e -> e.id }) { i, e -> QueueRow(e, i == state.index) { vm.playAt(i) } }
+                    // In the order they play (shuffled or not).
+                    items(state.order, key = { state.queue[it].id }) { i -> QueueRow(state.queue[i], i == state.index) { vm.playAt(i) } }
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
@@ -276,6 +283,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
             GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
             Spacer(Modifier.size(44.dp))
         }
+        if (!state.casted && item.kind != MediaKind.IMAGE) Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(state, vm) }
 
         state.remote.volume?.let { vol ->
             var local by remember(vol) { mutableFloatStateOf(vol.toFloat()) }
@@ -312,3 +320,29 @@ private fun TransportState.label(): String? = when (this) {
 }
 
 private fun MediaEntry.subtitleLine(): String? = joinDetails(artist, album, durationMs?.let(::formatClock))
+
+/** Shuffle (with more than one item) and repeat (off → all → one), lit while on. Not for something cast here. */
+@Composable
+private fun QueueModes(state: PlaybackState, vm: PlayerViewModel) {
+    if (state.casted) return
+    val c = AppTheme.colors
+    if (state.queue.size > 1) {
+        ModeButton(AppIcons.Shuffle, "Shuffle", if (state.shuffle) "On" else "Off", on = state.shuffle, vm::toggleShuffle)
+    }
+    val repeat = when (state.repeat) {
+        RepeatMode.OFF -> "Off"
+        RepeatMode.ALL -> "All"
+        RepeatMode.ONE -> "One"
+    }
+    ModeButton(if (state.repeat == RepeatMode.ONE) AppIcons.RepeatOne else AppIcons.Repeat, "Repeat", repeat, on = state.repeat != RepeatMode.OFF, vm::cycleRepeat)
+}
+
+/** A mode button: lit, with a dot under it, while on (not by color alone); says its state. */
+@Composable
+private fun ModeButton(icon: ImageVector, name: String, state: String, on: Boolean, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    Box(contentAlignment = Alignment.BottomCenter) {
+        GhostIconButton(icon, name, onClick, modifier = Modifier.semantics { stateDescription = state }, tint = if (on) c.textPrimary else c.textTertiary)
+        if (on) Box(Modifier.padding(bottom = 2.dp).size(4.dp).clip(CircleShape).background(c.textPrimary))
+    }
+}
