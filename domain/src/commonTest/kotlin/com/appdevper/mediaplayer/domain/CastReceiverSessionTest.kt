@@ -11,8 +11,8 @@ import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
-import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.session.CastReceiverSession
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository

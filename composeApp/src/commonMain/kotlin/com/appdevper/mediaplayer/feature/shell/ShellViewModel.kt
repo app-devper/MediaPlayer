@@ -9,9 +9,9 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
-import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
-import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.CastReceiverSession
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase

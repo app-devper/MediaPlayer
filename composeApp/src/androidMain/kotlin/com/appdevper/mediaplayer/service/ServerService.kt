@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer
+package com.appdevper.mediaplayer.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -13,6 +13,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import com.appdevper.mediaplayer.MainActivity
+import com.appdevper.mediaplayer.R
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerSettingsUseCase
 import com.appdevper.mediaplayer.domain.usecase.StopMediaServerUseCase
 import kotlinx.coroutines.CoroutineScope

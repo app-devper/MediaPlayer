@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
 import com.appdevper.mediaplayer.domain.usecase.GetDeviceUseCase

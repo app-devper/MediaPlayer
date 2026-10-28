@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.domain.playback
+package com.appdevper.mediaplayer.domain.session
 
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository

@@ -32,6 +32,7 @@ import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.playback.IosBackgroundPlayer
+import com.appdevper.mediaplayer.ui.player.PlayerControlBar
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.delay

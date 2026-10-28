@@ -25,9 +25,9 @@ import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.model.SenderCommand
-import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
-import com.appdevper.mediaplayer.domain.playback.PlaybackSession
-import com.appdevper.mediaplayer.domain.playback.drives
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
+import com.appdevper.mediaplayer.domain.session.drives
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay

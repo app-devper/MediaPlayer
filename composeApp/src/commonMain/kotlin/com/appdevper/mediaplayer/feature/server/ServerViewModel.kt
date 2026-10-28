@@ -7,8 +7,8 @@ import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerCapabilities
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.ServerStatus
-import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
-import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.CastReceiverSession
 import com.appdevper.mediaplayer.domain.usecase.GetServerCapabilitiesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerSettingsUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase

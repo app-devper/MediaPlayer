@@ -12,8 +12,8 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
-import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository

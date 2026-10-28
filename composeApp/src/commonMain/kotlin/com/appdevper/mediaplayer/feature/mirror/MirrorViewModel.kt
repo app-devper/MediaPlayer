@@ -6,7 +6,7 @@ import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.airplay.VideoSize
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
-import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine

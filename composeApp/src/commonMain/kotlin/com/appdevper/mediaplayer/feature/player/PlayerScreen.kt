@@ -66,7 +66,7 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.playback.drives
+import com.appdevper.mediaplayer.domain.session.drives
 import com.appdevper.mediaplayer.platform.NativeMediaPlayer
 import com.appdevper.mediaplayer.ui.LocalFullscreen
 import com.appdevper.mediaplayer.ui.formatClock

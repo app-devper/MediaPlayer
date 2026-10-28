@@ -44,7 +44,7 @@
         </activity>
 
         <service
-            android:name=".ServerService"
+            android:name=".service.ServerService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
