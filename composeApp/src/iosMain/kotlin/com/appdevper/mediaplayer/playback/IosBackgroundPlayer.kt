@@ -50,7 +50,7 @@ class IosBackgroundPlayer(private val session: PlaybackSession) {
     private var playingBeforeInterruption = false
 
     private val isPlaying: Boolean
-        get() = local.status.value?.state.let { it == TransportState.PLAYING || it == TransportState.TRANSITIONING }
+        get() = local.status.value?.state?.playing == true
 
     init {
         NSNotificationCenter.defaultCenter.addObserverForName(UIApplicationDidEnterBackgroundNotification, null, NSOperationQueue.mainQueue) { _ ->

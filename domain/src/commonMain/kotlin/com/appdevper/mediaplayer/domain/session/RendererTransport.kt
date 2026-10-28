@@ -115,7 +115,7 @@ internal class RendererTransport(
                     val ended = wasPlaying && status.state == TransportState.STOPPED && !photo
                     _playback.update { it.copy(status = status.copy(ended = ended)) }
                     if (ended) return@launch
-                    wasPlaying = status.state == TransportState.PLAYING || status.state == TransportState.TRANSITIONING
+                    wasPlaying = status.state.playing
                 }
                 delay(pollIntervalMs)
             }

@@ -14,6 +14,24 @@ sealed interface CastCommand {
     data class SetMute(val muted: Boolean) : CastCommand
 }
 
+/** This device's receivers: DLNA ("Play to" from other apps) and AirPlay. */
+enum class Receiver { DLNA, AIRPLAY }
+
+/**
+ * A receiver's line to the playback session, given to it before it starts. Commands apply at once,
+ * so the receiver knows right away whether this device plays what it loaded.
+ */
+interface ReceiverLink {
+    /**
+     * Applies [command]. A load always plays here. Volume and mute apply while this device plays; the
+     * rest only while [owns]. False when it's refused.
+     */
+    fun send(command: CastCommand): Boolean
+
+    /** This device plays what the receiver loaded last, not something picked or cast since. */
+    val owns: Boolean
+}
+
 /** Local playback as reported back to the sending device. [status] is null when nothing is loaded. */
 data class ReceiverPlayback(
     val entry: MediaEntry? = null,

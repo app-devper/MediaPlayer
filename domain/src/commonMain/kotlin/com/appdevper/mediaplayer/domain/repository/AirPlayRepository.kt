@@ -2,19 +2,19 @@ package com.appdevper.mediaplayer.domain.repository
 
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
-import com.appdevper.mediaplayer.domain.model.CastCommand
+import com.appdevper.mediaplayer.domain.model.ReceiverLink
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.SenderCommand
-import kotlinx.coroutines.flow.Flow
+import com.appdevper.mediaplayer.domain.model.SenderControl
 import kotlinx.coroutines.flow.StateFlow
 
 /** This device as an AirPlay receiver (screen mirroring and audio). */
-interface AirPlayRepository {
+interface AirPlayRepository : SenderControl {
     val status: StateFlow<AirPlayStatus>
-    val activity: StateFlow<AirPlayActivity>
+    override val activity: StateFlow<AirPlayActivity>
 
-    /** AirPlay video (YouTube, Safari…): what the sender asks the local player to do. */
-    val commands: Flow<CastCommand>
+    /** Where AirPlay video (YouTube, Safari…) asks the local player to play; set before [start]. */
+    fun connect(link: ReceiverLink)
 
     /** Starts advertising as [name], or restarts with new settings. */
     suspend fun start(name: String, requirePin: Boolean)
@@ -23,6 +23,5 @@ interface AirPlayRepository {
     /** Latest local playback, for the sender's progress bar. */
     fun publish(playback: ReceiverPlayback)
 
-    /** Asks the sender to skip or play/pause ([AirPlayActivity.canControlSender]); false if it didn't. */
-    suspend fun sendToSender(command: SenderCommand): Boolean
+    override suspend fun sendToSender(command: SenderCommand): Boolean
 }

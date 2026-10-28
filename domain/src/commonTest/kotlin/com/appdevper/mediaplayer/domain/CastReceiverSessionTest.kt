@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.domain
 
+import com.appdevper.mediaplayer.testing.FakeAirPlay
 import com.appdevper.mediaplayer.testing.FakeEngine
 import com.appdevper.mediaplayer.testing.FakeReceiver
 import com.appdevper.mediaplayer.testing.FakeRenderer
@@ -13,6 +14,7 @@ import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.session.CastReceiverSession
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,6 +27,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -70,12 +73,12 @@ class CastReceiverSessionTest {
         val opened = backgroundScope.launch { session.openPlayer.first() }
         runCurrent()
 
-        receiver.commands.emit(CastCommand.Load(clip, autoPlay = false))
-        receiver.commands.emit(CastCommand.Play)
-        receiver.commands.emit(CastCommand.Seek(42_000))
-        receiver.commands.emit(CastCommand.SetVolume(30))
-        receiver.commands.emit(CastCommand.SetMute(true))
-        receiver.commands.emit(CastCommand.Stop)
+        receiver.send(CastCommand.Load(clip, autoPlay = false))
+        receiver.send(CastCommand.Play)
+        receiver.send(CastCommand.Seek(42_000))
+        receiver.send(CastCommand.SetVolume(30))
+        receiver.send(CastCommand.SetMute(true))
+        receiver.send(CastCommand.Stop)
         runCurrent()
 
         val s = playback.state.value
@@ -88,7 +91,7 @@ class CastReceiverSessionTest {
         assertTrue(opened.isCompleted)
         val reopened = backgroundScope.launch { session.openPlayer.first() }
         runCurrent()
-        receiver.commands.emit(CastCommand.Play) // player closed meanwhile → Play brings it back
+        receiver.send(CastCommand.Play) // player closed meanwhile → Play brings it back
         runCurrent()
         assertTrue(reopened.isCompleted)
         assertTrue("stop" in renderer.calls) // the TV we were casting to is released
@@ -104,13 +107,14 @@ class CastReceiverSessionTest {
         val playback = playbackSession(renderer, backgroundScope, engine)
         CastReceiverSession(receiver, ReceiverSettings(enabled = true), playback, backgroundScope).start()
         runCurrent()
-        receiver.commands.emit(CastCommand.Load(clip, autoPlay = true))
+        receiver.send(CastCommand.Load(clip, autoPlay = true))
         runCurrent()
         playback.setTarget(PlaybackTarget.Renderer(MediaDevice("uuid:tv", "TV", "", "", "h", null, false, true)))
         runCurrent()
         engine.calls.clear()
-        receiver.commands.emit(CastCommand.Pause)
-        receiver.commands.emit(CastCommand.SetVolume(5))
+        assertFalse(receiver.send(CastCommand.Pause))
+        assertFalse(receiver.send(CastCommand.SetVolume(5)))
+        assertFalse(receiver.link!!.owns)
         runCurrent()
         assertEquals(emptyList(), engine.calls)
         assertEquals(50, playback.state.value.playback.volume) // the TV's own volume, untouched
@@ -126,8 +130,8 @@ class CastReceiverSessionTest {
         runCurrent()
         assertNull(receiver.published.last().entry)
 
-        receiver.commands.emit(CastCommand.Load(clip, autoPlay = true))
-        receiver.commands.emit(CastCommand.SetVolume(70))
+        receiver.send(CastCommand.Load(clip, autoPlay = true))
+        receiver.send(CastCommand.SetVolume(70))
         runCurrent()
         engine.facts = engine.facts.copy(positionMs = 5_000)
         advanceTimeBy(300) // the player's next poll
@@ -135,8 +139,44 @@ class CastReceiverSessionTest {
         assertEquals(ReceiverPlayback(clip, RendererStatus(TransportState.PLAYING, 5_000, 60_000), 70, false), receiver.published.last())
 
         // Photos have no player behind them: shown means playing.
-        receiver.commands.emit(CastCommand.Load(photo, autoPlay = true))
+        receiver.send(CastCommand.Load(photo, autoPlay = true))
         runCurrent()
         assertEquals(RendererStatus(TransportState.PLAYING, 0, 0), receiver.published.last().status)
+    }
+
+    @Test
+    fun aReceiverOwnsThePlayerUntilSomethingElsePlaysThere() = runTest {
+        val receiver = FakeReceiver()
+        val airPlay = FakeAirPlay()
+        val engine = FakeEngine()
+        val playback = playbackSession(FakeRenderer(), backgroundScope, engine)
+        CastReceiverSession(receiver, ReceiverSettings(enabled = true), playback, backgroundScope).start()
+        AirPlayReceiverSession(airPlay, ReceiverSettings(enabled = true), playback, backgroundScope).start()
+        runCurrent()
+        assertFalse(receiver.link!!.owns)
+
+        // Owned as soon as its load is taken: nothing to wait for.
+        assertTrue(receiver.send(CastCommand.Load(clip, autoPlay = true)))
+        assertTrue(receiver.link!!.owns)
+        assertTrue(receiver.send(CastCommand.Pause))
+
+        // AirPlay cast something since: its commands go there, the DLNA controller's are refused.
+        assertTrue(airPlay.send(CastCommand.Load(clip.copy(id = "yt"), autoPlay = true)))
+        assertFalse(receiver.link!!.owns)
+        assertTrue(airPlay.link!!.owns)
+        assertFalse(receiver.send(CastCommand.Seek(1_000)))
+        // Volume is this device's: whoever asks while it plays here.
+        assertTrue(receiver.send(CastCommand.SetVolume(40)))
+
+        // The user picked their own: nobody's.
+        playback.play(photo.copy(id = "own", kind = MediaKind.VIDEO), emptyList())
+        assertFalse(airPlay.link!!.owns)
+        assertFalse(airPlay.send(CastCommand.Play))
+
+        // A new load always plays.
+        assertTrue(receiver.send(CastCommand.Load(clip, autoPlay = false)))
+        assertTrue(receiver.link!!.owns)
+        runCurrent()
+        assertEquals("load:cast@0", engine.calls.last())
     }
 }

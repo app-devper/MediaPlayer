@@ -10,10 +10,12 @@ import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.ServerCapabilities
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.MediaEntry
+import com.appdevper.mediaplayer.domain.model.ReceiverLink
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.SenderCommand
+import com.appdevper.mediaplayer.domain.model.SenderControl
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
@@ -25,7 +27,6 @@ import com.appdevper.mediaplayer.domain.session.PlaybackEngine
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /** A platform player that does what it's told at once; [facts] can be set to anything. */
@@ -102,12 +103,18 @@ class FakeRenderer(
     override suspend fun setVolume(device: MediaDevice, volume: Int) { calls += "volume:$volume" }
 }
 
-/** The DLNA receiver: [commands] come in as a controller would send them; what it's told is kept. */
+/** The DLNA receiver: [send] as a controller would; what it's told is kept. */
 class FakeReceiver : CastReceiverRepository {
     val calls = mutableListOf<String>()
     val published = mutableListOf<ReceiverPlayback>()
     override val status = MutableStateFlow<ReceiverStatus>(ReceiverStatus.Stopped)
-    override val commands = MutableSharedFlow<CastCommand>()
+
+    /** The playback session's line, once connected. */
+    var link: ReceiverLink? = null
+    override fun connect(link: ReceiverLink) { this.link = link }
+
+    /** What a controller asks for; false when it's refused. */
+    fun send(command: CastCommand): Boolean = link!!.send(command)
     override suspend fun start(name: String) {
         calls += "start:$name"
         status.value = ReceiverStatus.Running(name)
@@ -126,7 +133,13 @@ class FakeAirPlay(status: AirPlayStatus = AirPlayStatus.Stopped) : AirPlayReposi
     val sentToSender = mutableListOf<SenderCommand>()
     override val status = MutableStateFlow(status)
     override val activity = MutableStateFlow(AirPlayActivity())
-    override val commands = MutableSharedFlow<CastCommand>()
+
+    /** The playback session's line, once connected. */
+    var link: ReceiverLink? = null
+    override fun connect(link: ReceiverLink) { this.link = link }
+
+    /** What the sender's AirPlay video asks for; false when it's refused. */
+    fun send(command: CastCommand): Boolean = link!!.send(command)
     override fun publish(playback: ReceiverPlayback) { published += playback }
     override suspend fun sendToSender(command: SenderCommand): Boolean {
         sentToSender += command
@@ -169,4 +182,8 @@ fun playbackSession(
     scope: CoroutineScope,
     engine: FakeEngine = FakeEngine(),
     pollIntervalMs: Long = 1_000,
-) = PlaybackSession(renderer, LocalPlayer(engine, scope, subtitleFiles = FakeSubtitles(), subtitleParsing = Dispatchers.Unconfined), scope, pollIntervalMs)
+    sender: SenderControl = SenderControl.None,
+) = PlaybackSession(
+    renderer, LocalPlayer(engine, scope, subtitleFiles = FakeSubtitles(), subtitleParsing = Dispatchers.Unconfined), scope,
+    sender = sender, pollIntervalMs = pollIntervalMs,
+)

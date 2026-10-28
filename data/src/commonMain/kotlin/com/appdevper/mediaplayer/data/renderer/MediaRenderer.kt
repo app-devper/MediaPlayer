@@ -18,6 +18,7 @@ import com.appdevper.mediaplayer.data.upnp.parseUpnpTime
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.ReceiverLink
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
@@ -25,11 +26,8 @@ import io.ktor.client.HttpClient
 import io.ktor.http.Url
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -44,8 +42,8 @@ data class RendererConfig(val name: String, val udn: String)
 
 /**
  * DLNA Digital Media Renderer (DMR): lets other devices play on this one. Implements AVTransport,
- * RenderingControl and ConnectionManager, emits what controllers ask for on [commands] and answers
- * status queries from the playback the app reports through [publish].
+ * RenderingControl and ConnectionManager, sends what controllers ask for to the playback session
+ * ([connect]) and answers status queries from the playback the app reports through [publish].
  */
 class MediaRenderer(
     ssdp: SsdpEngine,
@@ -55,8 +53,15 @@ class MediaRenderer(
     private val _state = MutableStateFlow<ReceiverStatus>(ReceiverStatus.Stopped)
     val state: StateFlow<ReceiverStatus> = _state.asStateFlow()
 
-    private val _commands = MutableSharedFlow<CastCommand>(extraBufferCapacity = 64)
-    val commands: SharedFlow<CastCommand> = _commands.asSharedFlow()
+    // What controllers ask for goes here (see connect).
+    private var link: ReceiverLink? = null
+
+    /** Where what controllers ask for goes; set before [start]. */
+    fun connect(link: ReceiverLink) {
+        this.link = link
+    }
+
+    private fun send(command: CastCommand) = link?.send(command) == true
 
     /** Everything the SOAP answers are built from. */
     private data class Model(
@@ -67,12 +72,10 @@ class MediaRenderer(
         /** State a controller just asked for, reported until the player catches up (or [EXPECT_FOR] passes). */
         val expected: TransportState? = null,
         val expectedAt: TimeSource.Monotonic.ValueTimeMark? = null,
-        /** A Load was emitted and the app hasn't published that item yet. */
-        val pendingLoad: Boolean = false,
-    ) {
-        /** The app is playing what was cast (not something the user picked since), or is about to. */
-        val current: Boolean get() = uri != null && (pendingLoad || playback.entry?.streamUrl == uri)
-    }
+    )
+
+    /** This device plays what was cast here last (not something picked or cast since). */
+    private val Model.current: Boolean get() = uri != null && link?.owns == true
 
     private val model = MutableStateFlow(Model())
 
@@ -84,7 +87,7 @@ class MediaRenderer(
     val location: String? get() = device.location
 
     fun publish(playback: ReceiverPlayback) = model.update {
-        it.copy(playback = playback, pendingLoad = it.pendingLoad && playback.entry?.streamUrl != it.uri)
+        it.copy(playback = playback)
     }
 
     suspend fun start(config: RendererConfig) = mutex.withLock {
@@ -140,7 +143,7 @@ class MediaRenderer(
     private fun forInstance(request: SoapRequest): SoapReply? =
         if ((request.args["InstanceID"] ?: "0") != "0") SoapReply.Fault(718, "Invalid InstanceID") else null
 
-    private suspend fun avTransport(req: SoapRequest): SoapReply {
+    private fun avTransport(req: SoapRequest): SoapReply {
         val m = model.value
         return when (req.action) {
             "SetAVTransportURI" -> {
@@ -151,20 +154,15 @@ class MediaRenderer(
                 }
                 val metadata = req.args["CurrentURIMetaData"].orEmpty()
                 val entry = entryFor(uri, metadata) ?: return SoapReply.Fault(716, "Resource not found")
-                model.update { it.copy(uri = uri, metadata = metadata, entry = entry, pendingLoad = true).expect(TransportState.STOPPED) }
-                _commands.emit(CastCommand.Load(entry, autoPlay = false))
+                model.update { it.copy(uri = uri, metadata = metadata, entry = entry).expect(TransportState.STOPPED) }
+                send(CastCommand.Load(entry, autoPlay = false))
                 SoapReply.Ok()
             }
             "Play" -> {
                 val entry = m.entry ?: return SoapReply.Fault(701, "Transition not available")
-                if (m.current) {
-                    _commands.emit(CastCommand.Play)
-                    model.update { it.expect(TransportState.PLAYING) }
-                } else {
-                    // The user played something else here since: bring the cast item back.
-                    _commands.emit(CastCommand.Load(entry, autoPlay = true))
-                    model.update { it.copy(pendingLoad = true).expect(TransportState.PLAYING) }
-                }
+                // The user played something else here since: bring the cast item back.
+                if (!send(CastCommand.Play)) send(CastCommand.Load(entry, autoPlay = true))
+                model.update { it.expect(TransportState.PLAYING) }
                 SoapReply.Ok()
             }
             "Pause" -> command(CastCommand.Pause, TransportState.PAUSED)
@@ -173,7 +171,7 @@ class MediaRenderer(
                 if (!m.current) return SoapReply.Fault(701, "Transition not available")
                 if (req.args["Unit"] !in setOf("REL_TIME", "ABS_TIME")) return SoapReply.Fault(710, "Seek mode not supported")
                 val target = req.args["Target"]?.let(::parseUpnpTime) ?: return SoapReply.Fault(711, "Illegal seek target")
-                _commands.emit(CastCommand.Seek(target))
+                send(CastCommand.Seek(target))
                 SoapReply.Ok()
             }
             "Next", "Previous" -> SoapReply.Fault(701, "Transition not available")
@@ -221,14 +219,13 @@ class MediaRenderer(
         }
     }
 
-    private suspend fun command(command: CastCommand, expected: TransportState): SoapReply {
-        if (!model.value.current) return SoapReply.Fault(701, "Transition not available")
-        _commands.emit(command)
+    private fun command(command: CastCommand, expected: TransportState): SoapReply {
+        if (!send(command)) return SoapReply.Fault(701, "Transition not available")
         model.update { it.expect(expected) }
         return SoapReply.Ok()
     }
 
-    private suspend fun renderingControl(req: SoapRequest): SoapReply {
+    private fun renderingControl(req: SoapRequest): SoapReply {
         val playback = model.value.playback
         return when (req.action) {
             "GetVolume" -> SoapReply.Ok(listOf("CurrentVolume" to playback.volume.toString()))
@@ -236,7 +233,7 @@ class MediaRenderer(
                 val volume = req.args["DesiredVolume"]?.toIntOrNull()?.takeIf { it in 0..100 }
                     ?: return SoapReply.Fault(402, "Invalid Args")
                 model.update { it.copy(playback = it.playback.copy(volume = volume)) }
-                _commands.emit(CastCommand.SetVolume(volume))
+                send(CastCommand.SetVolume(volume))
                 SoapReply.Ok()
             }
             "GetMute" -> SoapReply.Ok(listOf("CurrentMute" to if (playback.muted) "1" else "0"))
@@ -247,7 +244,7 @@ class MediaRenderer(
                     else -> return SoapReply.Fault(402, "Invalid Args")
                 }
                 model.update { it.copy(playback = it.playback.copy(muted = muted)) }
-                _commands.emit(CastCommand.SetMute(muted))
+                send(CastCommand.SetMute(muted))
                 SoapReply.Ok()
             }
             "ListPresets" -> SoapReply.Ok(listOf("CurrentPresetNameList" to "FactoryDefaults"))

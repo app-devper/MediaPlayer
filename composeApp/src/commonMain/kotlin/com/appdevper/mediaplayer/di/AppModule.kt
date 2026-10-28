@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.factoryOf
+import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.KoinAppDeclaration
@@ -32,7 +33,7 @@ import org.koin.mp.KoinPlatform
 val domainModule = module {
     // The platform's PlaybackEngine (platformAppModule) runs on the main thread.
     single { LocalPlayer(get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate), subtitleFiles = get()) }
-    single { PlaybackSession(get(), get(), get(AppScope)) }
+    single { PlaybackSession(get(), get(), get(AppScope), sender = get<AirPlayRepository>()) }
     single { CastReceiverSession(get(), get(), get(), get(AppScope)) }
     single { AirPlayReceiverSession(get(), get(), get(), get(AppScope)) }
     single { MediaServerSession(get(), get(), get(AppScope)) }

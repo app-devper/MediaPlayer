@@ -42,8 +42,8 @@ import com.appdevper.mediaplayer.designsystem.components.IconTile
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
-import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayNowPlaying
+import com.appdevper.mediaplayer.domain.model.NowPlaying
 import com.appdevper.mediaplayer.ui.formatClock
 import com.appdevper.mediaplayer.ui.joinDetails
 import kotlinx.coroutines.delay
@@ -51,13 +51,13 @@ import kotlinx.coroutines.delay
 /** What an iPhone/iPad/Mac plays through AirPlay audio (Music, YouTube Music, Spotify…): shown like our own songs. */
 @Composable
 internal fun AirPlayAudio(
-    activity: AirPlayActivity,
+    audio: NowPlaying.SenderAudio,
     onPrevious: () -> Unit = {},
     onPlayPause: () -> Unit = {},
     onNext: () -> Unit = {},
 ) {
     val c = AppTheme.colors
-    val song = activity.nowPlaying ?: AirPlayNowPlaying()
+    val song = audio.song ?: AirPlayNowPlaying()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -82,7 +82,7 @@ internal fun AirPlayAudio(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(AppIcons.Cast, null, Modifier.size(14.dp), tint = c.success)
-            Text("Playing from ${activity.client ?: "AirPlay"}", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+            Text("Playing from ${audio.sender ?: "AirPlay"}", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
         }
         if (song.durationMs > 0) {
             // The sender reports progress now and then; in between it advances with the clock.
@@ -109,23 +109,22 @@ internal fun AirPlayAudio(
                 }
             }
         }
-        if (activity.canControlSender) {
+        if (audio.controllable) {
             // Sent to the sender's app (it plays the music; we only hear it). The sender doesn't tell us
-            // whether it's paused, so the icon follows our own taps and resets with each new song.
-            var paused by remember(song.title, song.artist) { mutableStateOf(false) }
+            // whether it's paused, so the icon follows the taps (here, the mini player, the lock screen).
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 GhostIconButton(AppIcons.SkipPrevious, "Previous", onPrevious, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
                 CircleButton(
-                    if (paused) AppIcons.Play else AppIcons.Pause,
-                    if (paused) "Play" else "Pause",
-                    { paused = !paused; onPlayPause() },
+                    if (audio.paused) AppIcons.Play else AppIcons.Pause,
+                    if (audio.paused) "Play" else "Pause",
+                    onPlayPause,
                     size = 64.dp,
                 )
                 GhostIconButton(AppIcons.SkipNext, "Next", onNext, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
             }
         } else {
             Text(
-                "Use the controls on ${activity.client ?: "the sending device"} to pause or skip.",
+                "Use the controls on ${audio.sender ?: "the sending device"} to pause or skip.",
                 style = MaterialTheme.typography.bodySmall,
                 color = c.textTertiary,
                 textAlign = TextAlign.Center,
