@@ -1,5 +1,10 @@
 package com.appdevper.mediaplayer
 
+import com.appdevper.mediaplayer.testing.FakeEngine
+import com.appdevper.mediaplayer.testing.FakeRenderer
+import com.appdevper.mediaplayer.testing.FakeAirPlay
+import com.appdevper.mediaplayer.testing.FakeReceiver
+import com.appdevper.mediaplayer.testing.FakeSubtitles
 import com.appdevper.mediaplayer.domain.model.SubtitleState
 import com.appdevper.mediaplayer.domain.model.SubtitleChoice
 import com.appdevper.mediaplayer.domain.model.TextTrack
@@ -304,7 +309,7 @@ class PresentationTest {
         assertEquals(true, vm.uiState.value.localPlaying)
         vm.togglePause()
         assertEquals(false, vm.uiState.value.localPlaying)
-        assertEquals(listOf("load:a1", "play", "pause"), engine.calls)
+        assertEquals(listOf("load:a1@0", "play", "pause"), engine.calls)
 
         // Playing on a TV: that's the renderer's play/pause, not ours.
         vm.selectTarget(PlaybackTarget.Renderer(fakeTv))

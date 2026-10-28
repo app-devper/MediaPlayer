@@ -52,6 +52,8 @@ core:designsystem                  PlaybackSession
   with BoringSSL and libplist, built by CMake for Android (NDK) and for the desktop build machine,
   behind a small JNI API (`AirPlayReceiver`). `AirPlayPlayer` plays what it receives: MediaCodec on
   Android, FFmpeg (bytedeco) on the desktop; ALAC is decoded natively with Apple's decoder.
+* **`:core:testing`**: test fakes for the domain's interfaces (engine, renderer, receivers,
+  subtitle files), shared by the tests of every module. Never a main dependency.
 * **`:core:designsystem`**: Compose-only building blocks with no app or domain code: design
   tokens, the icon set and reusable components.
 

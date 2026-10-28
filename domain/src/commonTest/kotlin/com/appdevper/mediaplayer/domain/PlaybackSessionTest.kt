@@ -1,14 +1,15 @@
 package com.appdevper.mediaplayer.domain
 
+import com.appdevper.mediaplayer.testing.FakeEngine
+import com.appdevper.mediaplayer.testing.FakeRenderer
+import com.appdevper.mediaplayer.testing.playbackSession
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
-import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.RepeatMode
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
 import com.appdevper.mediaplayer.domain.usecase.UpdateServerSettingsUseCase
@@ -23,20 +24,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-
-private class FakeRenderer : RendererRepository {
-    val calls = mutableListOf<String>()
-    var state = TransportState.PLAYING
-    var position = 1_000L
-    override suspend fun load(device: MediaDevice, entry: MediaEntry) { calls += "load:${entry.id}"; state = TransportState.PLAYING }
-    override suspend fun play(device: MediaDevice) { calls += "play" }
-    override suspend fun pause(device: MediaDevice) { calls += "pause" }
-    override suspend fun stop(device: MediaDevice) { calls += "stop" }
-    override suspend fun seek(device: MediaDevice, positionMs: Long) { calls += "seek:$positionMs" }
-    override suspend fun status(device: MediaDevice) = RendererStatus(state, position, 60_000)
-    override suspend fun volume(device: MediaDevice) = 30
-    override suspend fun setVolume(device: MediaDevice, volume: Int) { calls += "volume:$volume" }
-}
 
 private fun entry(id: String, kind: MediaKind) =
     MediaEntry(id = id, parentId = "0", title = id, kind = kind, streamUrl = if (kind == MediaKind.FOLDER) null else "http://h/$id")

@@ -1,8 +1,11 @@
 package com.appdevper.mediaplayer
 
+import com.appdevper.mediaplayer.testing.FakeRenderer
+import com.appdevper.mediaplayer.testing.FakeAirPlay
+import com.appdevper.mediaplayer.testing.FakeReceiver
+import com.appdevper.mediaplayer.testing.FakeSubtitles
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.ComposeUiTest
@@ -26,10 +29,6 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.LifecycleRegistry
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.di.domainModule
@@ -96,7 +95,7 @@ class DesignShots {
                     single<CoroutineScope>(named("appScope")) { CoroutineScope(SupervisorJob() + Dispatchers.Unconfined) }
                     single<DeviceRepository> { FakeDevices() }
                     single<LibraryRepository> { FakeLibrary() }
-                    single<RendererRepository> { FakeRenderer() }
+                    single<RendererRepository> { FakeRenderer(position = 83_000, duration = 245_000, volume = 35) }
                     single<SettingsRepository> { FakeSettings().apply { update { it.copy(receiverEnabled = true, airPlayEnabled = true) } } }
                     single<MediaServerRepository> { server }
                     single<CastReceiverRepository> { FakeReceiver().apply { status.value = ReceiverStatus.Running("Worawit's MacBook") } }

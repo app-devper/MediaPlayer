@@ -1,12 +1,13 @@
 package com.appdevper.mediaplayer.domain
 
+import com.appdevper.mediaplayer.testing.FakeEngine
+import com.appdevper.mediaplayer.testing.FakeSubtitles
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.domain.model.SubtitleChoice
 import com.appdevper.mediaplayer.domain.model.SubtitleState
 import com.appdevper.mediaplayer.domain.model.TextTrack
-import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import kotlinx.coroutines.Dispatchers
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
@@ -28,7 +29,7 @@ private val photo = MediaEntry("p1", "0", "Photo", MediaKind.IMAGE, streamUrl = 
 class LocalPlayerTest {
 
     private fun TestScope.player(engine: FakeEngine) =
-        LocalPlayer(engine, backgroundScope, pollIntervalMs = 100, subtitleFiles = FakeSubtitleFiles, subtitleParsing = Dispatchers.Unconfined)
+        LocalPlayer(engine, backgroundScope, pollIntervalMs = 100, subtitleFiles = FakeSubtitles(), subtitleParsing = Dispatchers.Unconfined)
 
     @Test
     fun loadedPausedReportsStoppedUntilItPlays() = runTest {
@@ -292,11 +293,3 @@ class LocalPlayerTest {
     }
 }
 
-/** One Thai line from 1 s to 2 s; "broken" fails, "empty" has no cues. */
-private object FakeSubtitleFiles : SubtitleRepository {
-    override suspend fun fetch(url: String): ByteArray = when {
-        "broken" in url -> throw IllegalStateException("404")
-        "empty" in url -> "nothing here".encodeToByteArray()
-        else -> "1\n00:00:01,000 --> 00:00:02,000\nสวัสดี\n".encodeToByteArray()
-    }
-}

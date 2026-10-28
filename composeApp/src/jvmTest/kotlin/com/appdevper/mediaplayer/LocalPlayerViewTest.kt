@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer
 
+import com.appdevper.mediaplayer.testing.FakeEngine
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -59,7 +60,7 @@ class LocalPlayerViewTest {
             onNodeWithContentDescription("Pause").performClick()
             waitForIdle()
             onNodeWithContentDescription("Play").assertExists()
-            assertEquals(listOf("load:a1", "play", "pause"), engine.calls)
+            assertEquals(listOf("load:a1@0", "play", "pause"), engine.calls)
 
             // Desktop's bar has a mute button (phones use their volume keys).
             onNodeWithContentDescription("Mute (M)").performClick()
@@ -91,7 +92,7 @@ class LocalPlayerViewTest {
                         mainClock.advanceTimeBy(500) // past a double-click
                         waitForIdle()
                     }
-                    assertEquals(listOf("load:v1", "pause", "play"), engine.calls)
+                    assertEquals(listOf("load:v1@0", "pause", "play"), engine.calls)
                 } finally {
                     scope.cancel()
                 }
