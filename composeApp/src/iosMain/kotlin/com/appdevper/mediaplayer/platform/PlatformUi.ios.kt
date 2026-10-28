@@ -30,10 +30,7 @@ actual val supportsAirPlay: Boolean = true
  * [tint] overrides the idle color (e.g. on the song page's bar).
  */
 @Composable
-actual fun AirPlayButton(modifier: Modifier) = AirPlayButton(modifier, tint = null)
-
-@Composable
-fun AirPlayButton(modifier: Modifier, tint: Color?) {
+actual fun AirPlayButton(modifier: Modifier, tint: Color?) {
     val c = AppTheme.colors
     val idle = (tint ?: c.textSecondary).toUIColor()
     val active = c.success.toUIColor()

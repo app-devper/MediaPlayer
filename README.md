@@ -71,8 +71,8 @@ composeApp/src/<platform>Main/kotlin/com/appdevper/mediaplayer/
   di/          Koin modules + initKoin()
   feature/     home · browse · player · mirror · server · shell  (Screen + ViewModel)
   ui/          domain → UI helpers;  shell/ = routes, nav host, sidebar, top bar, mini player;
-               player/ = PlayerControlBar (our players' bar)
-  platform/    expect/actual UI: native player views, AirPlay button and mirror view,
+               player/ = LocalPlayerView (the local player on screen, every platform) + PlayerControlBar
+  platform/    expect/actual UI: the video surface, AirPlay button and mirror view,
                full screen, permissions
   playback/    the PlaybackEngine per platform: ExoPlaybackEngine (Android), AvPlaybackEngine (iOS),
                FfmpegPlaybackEngine + FfmpegPlayer (desktop); BackgroundPlayer + PlaybackService
