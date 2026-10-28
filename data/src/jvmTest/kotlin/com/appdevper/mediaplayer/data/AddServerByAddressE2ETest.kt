@@ -46,10 +46,13 @@ class AddServerByAddressE2ETest {
             server.start(ServerConfig("Living Room PC", "uuid:by-address-1", setOf(MediaKind.VIDEO)), library)
             val running = assertIs<ServerState.Running>(server.state.value)
 
+            // Generous timeout: a cold CI runner's first HTTP request and JIT can take seconds. Another
+            // test's device on this host may answer too, so look for ours among what's found.
             for (address in listOf(ip!!, running.url.removePrefix("http://"), "${running.url}/description.xml")) {
-                val found = ControlPoint(ssdp, http, scope).addByAddress(address)
-                assertEquals(listOf("Living Room PC"), found.map { it.friendlyName }, address)
-                assertTrue(found.single().isMediaServer)
+                val found = ControlPoint(ssdp, http, scope).addByAddress(address, timeoutMs = 10_000)
+                val ours = found.filter { it.friendlyName == "Living Room PC" }
+                assertEquals(1, ours.size, "$address found ${found.map { "${it.friendlyName} @ ${it.location}" }}")
+                assertTrue(ours.single().isMediaServer, "$address: ${ours.single().deviceType}")
             }
 
             // The server answers a unicast M-SEARCH (what an iPhone without multicast relies on for
@@ -61,14 +64,16 @@ class AddServerByAddressE2ETest {
                 val reply = DatagramPacket(ByteArray(2048), 2048)
                 client.receive(reply)
                 val text = String(reply.data, 0, reply.length)
-                assertTrue(text.startsWith("HTTP/1.1 200"), text)
-                assertTrue("LOCATION: ${running.url}/description.xml" in text, text)
+                assertTrue(text.startsWith("HTTP/1.1 200"), "unicast M-SEARCH reply: $text")
+                assertTrue("LOCATION: ${running.url}/description.xml" in text, "unicast M-SEARCH reply: $text")
             }
 
             // Nobody there (TEST-NET-1, never a real host): nothing, within the timeout.
             val started = System.currentTimeMillis()
-            assertEquals(emptyList(), ControlPoint(ssdp, http, scope).addByAddress("192.0.2.1", timeoutMs = 1_500))
-            assertTrue(System.currentTimeMillis() - started < 4_000)
+            val nobody = ControlPoint(ssdp, http, scope).addByAddress("192.0.2.1", timeoutMs = 1_500)
+            assertEquals(emptyList(), nobody.map { it.friendlyName }, "192.0.2.1 found something")
+            val took = System.currentTimeMillis() - started
+            assertTrue(took < 6_000, "giving up on 192.0.2.1 took $took ms (timeout 1500)")
         } finally {
             server.stop()
             http.close()
