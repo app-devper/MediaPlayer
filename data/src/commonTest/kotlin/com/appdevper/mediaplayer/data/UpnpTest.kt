@@ -107,6 +107,25 @@ class UpnpTest {
         assertEquals(movie.subtitles, again.subtitles)
         assertEquals(movie.url, again.url)
         assertTrue("sec:CaptionInfoEx" in Didl.generate(listOf(movie)))
+        // For a renderer: CaptionInfoEx only, one res.
+        val forTv = Didl.generate(listOf(movie), subtitleResources = false)
+        assertEquals(1, Regex("<res ").findAll(forTv).count())
+        assertTrue("sec:CaptionInfoEx" in forTv)
+    }
+
+    @Test
+    fun captionTypesSomeServersUseAreNeverPlayed() {
+        val didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
+            <item id="8" parentID="1"><dc:title>Show</dc:title><upnp:class>object.item.videoItem</upnp:class>
+            <res protocolInfo="http-get:*:smi/caption:*">http://nas/sub/Show.smi</res>
+            <res protocolInfo="http-get:*:smi/caption:*">HTTP://nas/sub/Show.th.srt</res>
+            <res protocolInfo="http-get:*:text/plain:*">http://nas/sub/Show.en.vtt</res>
+            <res protocolInfo="http-get:*:video/mp4:*">http://nas/v/Show.mp4</res>
+            </item></DIDL-Lite>"""
+        val show = Didl.parse(didl).single()
+        assertEquals("http://nas/v/Show.mp4", show.url)
+        assertEquals(listOf("srt" to "HTTP://nas/sub/Show.th.srt", "vtt" to "http://nas/sub/Show.en.vtt"), show.subtitles.map { it.type to it.uri })
     }
 
     @Test

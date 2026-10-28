@@ -16,6 +16,20 @@ object Didl {
         "text/vtt" to "vtt",
     )
 
+    /** Types some servers give any caption file (Samsung's smi/caption, text/plain): what it is shows in the URL. */
+    private val genericCaptionTypes = setOf("smi/caption", "text/plain")
+
+    /** srt / vtt for a subtitle res, "" for another caption type we can't read, null for not a subtitle. */
+    private fun subtitleType(r: DidlResource): String? {
+        val mime = r.mimeType.lowercase()
+        subtitleTypes[mime]?.let { return it }
+        if (mime !in genericCaptionTypes) return null
+        val ext = r.uri.substringBefore('?').substringAfterLast('.').lowercase()
+        return if (ext == "srt" || ext == "vtt") ext else if (mime == "smi/caption") "" else null
+    }
+
+    private fun isWebAddress(uri: String) = uri.lowercase().let { it.startsWith("http://") || it.startsWith("https://") }
+
     fun parse(didl: String): List<DidlObject> {
         if (didl.isBlank()) return emptyList()
         val root = Xml.parse(didl)
@@ -37,12 +51,12 @@ object Didl {
                 duration = r.attr("duration"),
                 resolution = r.attr("resolution"),
             )
-        }.partition { it.mimeType.lowercase() in subtitleTypes }
-        // Kept apart from the media's own resources, so a subtitle is never what plays.
+        }.partition { subtitleType(it) != null }
+        // Kept apart from the media's own resources, so a subtitle is never what plays; only types we read.
         val subtitles = (
-            subtitleRes.map { DidlSubtitle(it.uri, subtitleTypes.getValue(it.mimeType.lowercase())) } +
+            subtitleRes.map { DidlSubtitle(it.uri, subtitleType(it).orEmpty()) } +
                 (el.children("CaptionInfoEx") + el.children("CaptionInfo")).map { DidlSubtitle(it.text.trim(), it.attr("type")?.lowercase() ?: "srt") }
-            ).filter { it.uri.startsWith("http://") || it.uri.startsWith("https://") }.distinctBy { it.uri }
+            ).filter { (it.type == "srt" || it.type == "vtt") && isWebAddress(it.uri) }.distinctBy { it.uri }
         return DidlObject(
             id = el.attr("id").orEmpty(),
             parentId = el.attr("parentID").orEmpty(),
@@ -58,14 +72,18 @@ object Didl {
         )
     }
 
-    /** Builds a DIDL-Lite document for the given objects (unescaped XML). */
-    fun generate(objects: List<DidlObject>): String = buildString {
+    /**
+     * Builds a DIDL-Lite document for the given objects (unescaped XML). [subtitleResources]: list
+     * subtitles as res too (for Browse); metadata for a renderer has only sec:CaptionInfoEx, since a
+     * strict renderer may refuse an item with more than one res.
+     */
+    fun generate(objects: List<DidlObject>, subtitleResources: Boolean = true): String = buildString {
         append(HEADER)
-        for (o in objects) appendObject(o)
+        for (o in objects) appendObject(o, subtitleResources)
         append("</DIDL-Lite>")
     }
 
-    private fun StringBuilder.appendObject(o: DidlObject) {
+    private fun StringBuilder.appendObject(o: DidlObject, subtitleResources: Boolean) {
         val tag = if (o.isContainer) "container" else "item"
         append('<').append(tag)
         append(" id=\"").append(Xml.escape(o.id)).append('"')
@@ -93,8 +111,10 @@ object Didl {
         }
         // Both ways DLNA players look for subtitles: a res of a subtitle type, and Samsung's CaptionInfoEx.
         for (s in o.subtitles) {
-            append("<res protocolInfo=\"http-get:*:").append(if (s.type == "vtt") "text/vtt" else "text/srt").append(":*\">")
-            append(Xml.escape(s.uri)).append("</res>")
+            if (subtitleResources) {
+                append("<res protocolInfo=\"http-get:*:").append(if (s.type == "vtt") "text/vtt" else "text/srt").append(":*\">")
+                append(Xml.escape(s.uri)).append("</res>")
+            }
             append("<sec:CaptionInfoEx sec:type=\"").append(Xml.escape(s.type)).append("\">").append(Xml.escape(s.uri)).append("</sec:CaptionInfoEx>")
         }
         append("</").append(tag).append('>')

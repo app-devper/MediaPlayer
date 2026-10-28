@@ -12,20 +12,14 @@ data class Subtitle(
 /** One line (or a few) on screen from [startMs] until [endMs]. */
 data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String)
 
-/** The cue on screen at [positionMs], if any. [cues] are sorted by start. */
-fun List<SubtitleCue>.at(positionMs: Long): SubtitleCue? {
+/** The text on screen at [positionMs]: every cue on then (overlapping ones too), in order; null for none. */
+fun List<SubtitleCue>.textAt(positionMs: Long): String? {
+    // Cues are sorted by start: only those that started by now can be on.
     var low = 0
-    var high = lastIndex
-    var found: SubtitleCue? = null
-    // The last cue that started by now, then whether it's still on.
-    while (low <= high) {
+    var high = size
+    while (low < high) {
         val mid = (low + high) / 2
-        if (this[mid].startMs <= positionMs) {
-            found = this[mid]
-            low = mid + 1
-        } else {
-            high = mid - 1
-        }
+        if (this[mid].startMs <= positionMs) low = mid + 1 else high = mid
     }
-    return found?.takeIf { positionMs < it.endMs }
+    return subList(0, low).filter { positionMs < it.endMs }.takeIf { it.isNotEmpty() }?.joinToString("\n") { it.text }
 }

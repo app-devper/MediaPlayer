@@ -66,7 +66,10 @@ class PlayerViewModel(
         _subtitles.value = SubtitleState(selected = subtitle, loading = subtitle != null)
         if (subtitle == null) return
         subtitleJob = viewModelScope.launch {
-            _subtitles.value = loadSubtitles(subtitle).fold(
+            val result = loadSubtitles(subtitle)
+            // Only for the pick still on screen (not one replaced, or turned off with another item).
+            if (_subtitles.value.selected != subtitle) return@launch
+            _subtitles.value = result.fold(
                 onSuccess = { SubtitleState(selected = subtitle, cues = it) },
                 onFailure = { SubtitleState(error = "Couldn't load the subtitles (${subtitle.label})") },
             )

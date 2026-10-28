@@ -349,13 +349,16 @@ class PresentationTest {
         session.play(movie, listOf(movie, next))
         assertEquals(SubtitleState(), vm.subtitles.value) // off until picked
 
+        // Read off the main thread: wait for it.
         vm.selectSubtitle(thai)
-        assertEquals(thai, vm.subtitles.value.selected)
-        assertEquals(listOf(SubtitleCue(1_000, 2_000, "สวัสดี")), vm.subtitles.value.cues)
+        val loaded = vm.subtitles.first { !it.loading }
+        assertEquals(thai, loaded.selected)
+        assertEquals(listOf(SubtitleCue(1_000, 2_000, "สวัสดี")), loaded.cues)
 
         vm.selectSubtitle(broken)
-        assertEquals(null, vm.subtitles.value.selected)
-        assertEquals("Couldn't load the subtitles (broken)", vm.subtitles.value.error)
+        val failed = vm.subtitles.first { !it.loading }
+        assertEquals(null, failed.selected)
+        assertEquals("Couldn't load the subtitles (broken)", failed.error)
 
         vm.selectSubtitle(thai)
         session.next() // another video: its own files, so off again

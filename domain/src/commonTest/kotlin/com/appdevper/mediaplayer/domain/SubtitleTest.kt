@@ -2,7 +2,7 @@ package com.appdevper.mediaplayer.domain
 
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.domain.model.SubtitleCue
-import com.appdevper.mediaplayer.domain.model.at
+import com.appdevper.mediaplayer.domain.model.textAt
 import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleParser
@@ -44,17 +44,61 @@ class SubtitleTest {
         // TIS-620: one byte per Thai letter, U+0E01 = 0xA1.
         val tis620 = text.map { c -> if (c.code in 0x0E01..0x0E5B) (c.code - 0x0D60).toByte() else c.code.toByte() }.toByteArray()
         assertEquals(expected, SubtitleParser.parse(tis620))
+        // UTF-16 without a BOM, little-endian.
+        assertEquals(expected, SubtitleParser.parse(utf16.copyOfRange(2, utf16.size)))
     }
 
     @Test
-    fun findsTheCueOnScreen() {
-        val cues = listOf(SubtitleCue(1_000, 2_000, "a"), SubtitleCue(3_000, 5_000, "b"), SubtitleCue(4_000, 4_500, "c"))
-        assertNull(cues.at(500))
-        assertEquals("a", cues.at(1_000)?.text)
-        assertNull(cues.at(2_500)) // between cues
-        assertEquals("b", cues.at(3_999)?.text)
-        assertEquals("c", cues.at(4_200)?.text)
-        assertNull(emptyList<SubtitleCue>().at(0))
+    fun otherLegacyFilesAreWindows1252NotThai() {
+        // "Café déjà vu" in Windows-1252: é is 0xE9, which would be a Thai letter in TIS-620.
+        val bytes = "1\n00:00:01,000 --> 00:00:02,000\nCaf".encodeToByteArray() + byteArrayOf(0xE9.toByte()) +
+            " d".encodeToByteArray() + byteArrayOf(0xE9.toByte()) + "j".encodeToByteArray() + byteArrayOf(0xE0.toByte()) + " vu \u0093ok\u0094\n".encodeToByteArray().filter { it.toInt() != 0xC2.toByte().toInt() }.toByteArray()
+        assertEquals("Café déjà vu “ok”", SubtitleParser.parse(bytes).single().text)
+    }
+
+    @Test
+    fun findsEveryCueOnScreen() {
+        val cues = listOf(SubtitleCue(1_000, 2_000, "a"), SubtitleCue(3_000, 10_000, "b"), SubtitleCue(4_000, 4_500, "c"), SubtitleCue(4_000, 4_500, "d"))
+        assertNull(cues.textAt(500))
+        assertEquals("a", cues.textAt(1_000))
+        assertNull(cues.textAt(2_500)) // between cues
+        assertEquals("b\nc\nd", cues.textAt(4_200)) // overlapping: all of them
+        assertEquals("b", cues.textAt(5_000)) // the long one is still on after the short ones
+        assertNull(emptyList<SubtitleCue>().textAt(0))
+    }
+
+    @Test
+    fun cuesWithoutABlankLineBetweenThemStayApart() {
+        val srt = "1\n00:00:01,000 --> 00:00:02,000\nFirst\n2\n00:00:03,000 --> 00:00:04,000\nSecond\n3\n00:00:05,000 --> 00:00:06,000\nThird"
+        assertEquals(listOf("First", "Second", "Third"), SubtitleParser.parse(srt).map { it.text })
+    }
+
+    @Test
+    fun textThatOnlyLooksLikeMarkupStays() {
+        val srt = "1\n00:00:01,000 --> 00:00:02,000\na < b > c &amp;lt;tag&amp;gt;\n"
+        assertEquals("a < b > c &lt;tag&gt;", SubtitleParser.parse(srt).single().text)
+    }
+
+    @Test
+    fun hostileFilesDontHang() {
+        val digits = "1".repeat(2_000_000)
+        val brackets = "<".repeat(200_000)
+        val start = kotlin.time.TimeSource.Monotonic.markNow()
+        assertEquals(emptyList(), SubtitleParser.parse(digits))
+        assertEquals(emptyList(), SubtitleParser.parse("1\n00:00:01,000 --> 00:00:02,000\n$brackets x").map { it.startMs }.drop(1))
+        assertTrue(start.elapsedNow().inWholeSeconds < 5, "took ${start.elapsedNow()}")
+    }
+
+    @Test
+    fun aSubtitleGoesToTheVideoItNamesMostClosely() {
+        val files = listOf("Movie.mkv", "Movie.2020.mkv", "Movie.2020.th.srt", "Movie.HD.srt", "Movie.en.forced.srt", "Movie.a.b.srt")
+        assertEquals(
+            listOf(SubtitleFiles.Sidecar("Movie.en.forced.srt", "en"), SubtitleFiles.Sidecar("Movie.HD.srt", "HD")),
+            SubtitleFiles.sidecars("Movie.mkv", files),
+        )
+        assertEquals(listOf(SubtitleFiles.Sidecar("Movie.2020.th.srt", "th")), SubtitleFiles.sidecars("Movie.2020.mkv", files))
+        assertNull(SubtitleFiles.languageOf("http://h/Movie.HD.srt")) // not a language
+        assertEquals("English", SubtitleFiles.languageOf("http://h/Movie.English.forced.srt")?.let { SubtitleFiles.label(it, "") })
     }
 
     @Test

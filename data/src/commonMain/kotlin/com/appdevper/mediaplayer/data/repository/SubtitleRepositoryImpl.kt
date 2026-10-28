@@ -12,7 +12,7 @@ import kotlinx.io.readByteArray
 /** Fetches subtitle files over HTTP, up to [MAX_BYTES] (a subtitle file is far smaller). */
 class SubtitleRepositoryImpl(private val http: HttpClient) : SubtitleRepository {
     override suspend fun fetch(url: String): ByteArray {
-        require(url.startsWith("http://") || url.startsWith("https://")) { "Not a web address: $url" }
+        require(url.lowercase().let { it.startsWith("http://") || it.startsWith("https://") }) { "Not a web address: $url" }
         return http.prepareGet(url).execute { response ->
             if (!response.status.isSuccess()) throw IOException("The server answered ${response.status.value}")
             val body = response.bodyAsChannel().readRemaining(MAX_BYTES + 1).readByteArray()

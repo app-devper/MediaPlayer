@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,7 +67,7 @@ import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.SubtitleCue
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.model.at
+import com.appdevper.mediaplayer.domain.model.textAt
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.platform.AirPlayButton
 import com.appdevper.mediaplayer.platform.VideoSurface
@@ -346,9 +347,11 @@ internal fun LocalPlayerView(
 private fun SubtitleLine(player: LocalPlayer, cues: List<SubtitleCue>, large: Boolean, modifier: Modifier) {
     if (cues.isEmpty()) return
     val status by player.status.collectAsStateWithLifecycle()
-    val text = status?.let { cues.at(it.positionMs)?.text } ?: return
+    // Recomposes when the text changes, not on every position update.
+    val text by remember(cues) { derivedStateOf { status?.let { cues.textAt(it.positionMs) } } }
+    val line = text ?: return
     Text(
-        text,
+        line,
         color = Color.White,
         fontSize = if (large) 26.sp else 17.sp,
         lineHeight = if (large) 32.sp else 22.sp,
