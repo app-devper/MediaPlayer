@@ -1,44 +1,26 @@
 package com.appdevper.mediaplayer.platform
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.focusable
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.text.style.TextOverflow
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.onStart
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import com.appdevper.mediaplayer.designsystem.components.ThinSlider
-import com.appdevper.mediaplayer.designsystem.theme.AppTheme
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,22 +34,46 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.appdevper.mediaplayer.designsystem.components.ThinSlider
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
+import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
+import java.awt.Point
+import java.awt.Toolkit
+import java.awt.image.BufferedImage
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.onStart
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
-import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.Image as SkiaImage
+import org.jetbrains.skia.ImageInfo
 
 /** Desktop player on FFmpeg ([FfmpegPlayer]): plays from DLNA servers, http(s) URLs and HLS. */
 @Composable
@@ -167,6 +173,23 @@ actual fun NativeMediaPlayer(
             controlsVisible = false
         }
     }
+    // M or the speaker icon: mute, and back to the volume it had.
+    var volumeBeforeMute by remember { mutableFloatStateOf(100f) }
+    fun toggleMute() {
+        if (sliderVolume > 0f) {
+            volumeBeforeMute = sliderVolume
+            sliderVolume = 0f
+        } else {
+            sliderVolume = volumeBeforeMute.takeIf { it > 0f } ?: 100f
+        }
+        player.setVolume(sliderVolume / 100f)
+    }
+    // ← / →: back or on by SEEK_STEP_MS, within the video.
+    fun seekBy(deltaMs: Long) {
+        val to = (status.positionMs + deltaMs).coerceAtLeast(0)
+        player.seek(if (status.durationMs > 0) to.coerceAtMost(status.durationMs) else to)
+    }
+
     fun togglePlay() {
         if (status.playing) {
             player.pause()
@@ -203,7 +226,15 @@ actual fun NativeMediaPlayer(
             fullscreen = fullscreen,
             onToggleFullscreen = onToggleFullscreen,
         ) {
-            Icon(AppIcons.Volume, null, Modifier.size(18.dp), tint = content.copy(alpha = 0.85f))
+            IconButton(onClick = ::toggleMute) {
+                val muted = sliderVolume <= 0f
+                Icon(
+                    if (muted) AppIcons.VolumeOff else AppIcons.Volume,
+                    if (muted) "Unmute (M)" else "Mute (M)",
+                    Modifier.size(18.dp),
+                    tint = content.copy(alpha = 0.85f),
+                )
+            }
             ThinSlider(
                 value = sliderVolume,
                 onValueChange = {
@@ -213,7 +244,7 @@ actual fun NativeMediaPlayer(
                 valueRange = 0f..100f,
                 activeColor = content,
                 inactiveColor = content.copy(alpha = 0.3f),
-                modifier = Modifier.padding(start = 6.dp).width(110.dp),
+                modifier = Modifier.width(110.dp),
             )
         }
     }
@@ -247,10 +278,22 @@ actual fun NativeMediaPlayer(
             .onPreviewKeyEvent { activity.tryEmit(Unit); false }
             .focusRequester(videoFocus)
             .focusable()
-            // Space on the video area: play/pause, like clicking it.
+            // Keys on the video area: Space play/pause (like clicking it), ← → seek (held: repeats),
+            // F full screen, M mute.
             .onKeyEvent { e ->
-                if (e.type == KeyEventType.KeyUp && e.key == Key.Spacebar) { togglePlay(); true } else false
+                when {
+                    e.type == KeyEventType.KeyUp && e.key == Key.Spacebar -> togglePlay()
+                    e.type != KeyEventType.KeyDown -> return@onKeyEvent false
+                    e.key == Key.DirectionLeft -> seekBy(-SEEK_STEP_MS)
+                    e.key == Key.DirectionRight -> seekBy(SEEK_STEP_MS)
+                    e.key == Key.F && onToggleFullscreen != null -> onToggleFullscreen()
+                    e.key == Key.M -> toggleMute()
+                    else -> return@onKeyEvent false
+                }
+                true
             }
+            // The pointer hides with the bar while the video plays (moving it brings both back).
+            .pointerHoverIcon(if (controlsVisible) PointerIcon.Default else HiddenPointer)
             .pointerInput(onToggleFullscreen) {
                 detectTapGestures(
                     onTap = {
@@ -299,3 +342,9 @@ actual fun NativeMediaPlayer(
 }
 
 private const val CONTROLS_HIDE_MS = 2_500L
+private const val SEEK_STEP_MS = 5_000L
+
+/** An empty cursor: AWT has no "none", so a 1×1 transparent image. */
+private val HiddenPointer = PointerIcon(
+    Toolkit.getDefaultToolkit().createCustomCursor(BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB), Point(0, 0), "hidden"),
+)
