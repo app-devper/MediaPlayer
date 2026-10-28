@@ -23,6 +23,8 @@ import com.appdevper.mediaplayer.domain.repository.LibraryRepository
 import com.appdevper.mediaplayer.domain.repository.MediaServerRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
+import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
+import com.appdevper.mediaplayer.data.repository.SubtitleRepositoryImpl
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import kotlinx.coroutines.CoroutineScope
@@ -81,6 +83,7 @@ val dataModule = module {
     single<RendererRepository> { RendererRepositoryImpl(get(), get()) }
     single<MediaServerRepository> { MediaServerRepositoryImpl(get(), get(), get(), get(), get(AppScope)) }
     single<CastReceiverRepository> { CastReceiverRepositoryImpl(get(), get()) }
+    single<SubtitleRepository> { SubtitleRepositoryImpl(get()) }
 
     // AirPlay receiver (null on iOS); the player is also what the UI draws mirroring with.
     single { AirPlayPlayer() }

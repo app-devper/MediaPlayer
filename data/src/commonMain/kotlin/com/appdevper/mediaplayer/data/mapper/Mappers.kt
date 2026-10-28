@@ -3,6 +3,7 @@ package com.appdevper.mediaplayer.data.mapper
 import com.appdevper.mediaplayer.data.upnp.Didl
 import com.appdevper.mediaplayer.data.upnp.DidlObject
 import com.appdevper.mediaplayer.data.upnp.DidlResource
+import com.appdevper.mediaplayer.data.upnp.DidlSubtitle
 import com.appdevper.mediaplayer.data.upnp.TransportStatus
 import com.appdevper.mediaplayer.data.upnp.UpnpDevice
 import com.appdevper.mediaplayer.data.upnp.formatUpnpTime
@@ -10,6 +11,9 @@ import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.Subtitle
+import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
+import io.ktor.http.decodeURLPart
 import com.appdevper.mediaplayer.domain.model.TransportState
 
 internal fun UpnpDevice.toDomain() = MediaDevice(
@@ -36,7 +40,17 @@ internal fun DidlObject.toDomain() = MediaEntry(
     mimeType = primaryResource?.mimeType?.takeIf { it.isNotEmpty() },
     sizeBytes = primaryResource?.size,
     durationMs = durationMs,
+    subtitles = subtitles.map { it.toDomain() },
 )
+
+/** Labelled by the language in its file name, else the file name itself. */
+internal fun DidlSubtitle.toDomain(): Subtitle {
+    val fileName = uri.substringBefore('?').substringAfterLast('/').decodeUrlPath()
+    val language = SubtitleFiles.languageOf(fileName)
+    return Subtitle(url = uri, label = SubtitleFiles.label(language, fileName), language = language)
+}
+
+private fun String.decodeUrlPath(): String = runCatching { decodeURLPart() }.getOrDefault(this)
 
 /** Rebuilds DIDL-Lite metadata for SetAVTransportURI (some TVs refuse a URI without it). */
 internal fun MediaEntry.toDidl(): DidlObject {
@@ -67,6 +81,8 @@ internal fun MediaEntry.toDidl(): DidlObject {
                 DidlResource(it, Didl.protocolInfo(mime), sizeBytes, durationMs?.let { d -> formatUpnpTime(d, withMillis = true) }, null)
             },
         ),
+        // TVs that show subtitles (Samsung, LG…) find them here.
+        subtitles = subtitles.map { DidlSubtitle(it.url, if (it.url.substringBefore('?').endsWith(".vtt", ignoreCase = true)) "vtt" else "srt") },
     )
 }
 

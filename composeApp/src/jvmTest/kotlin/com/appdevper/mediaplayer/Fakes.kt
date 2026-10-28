@@ -16,6 +16,7 @@ import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.EngineFacts
 import com.appdevper.mediaplayer.domain.session.PlaybackEngine
+import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
@@ -135,4 +136,10 @@ class FakeEngine : PlaybackEngine {
     override fun setVolume(volume: Float) {}
     override fun reload(positionMs: Long) {}
     override fun facts() = facts
+}
+
+/** Subtitle files: one Thai line, or a failure for a URL with "broken" in it. */
+class FakeSubtitles : SubtitleRepository {
+    override suspend fun fetch(url: String): ByteArray =
+        if ("broken" in url) throw IllegalStateException("404") else "1\n00:00:01,000 --> 00:00:02,000\nสวัสดี\n".encodeToByteArray()
 }

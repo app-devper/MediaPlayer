@@ -3,6 +3,7 @@
 package com.appdevper.mediaplayer.data.platform
 
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
 import com.appdevper.mediaplayer.domain.model.ServerCapabilities
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.addressOf
@@ -50,6 +51,7 @@ private class DocumentsLibrary : MediaLibrary {
         fun walk(dir: Path, depth: Int) {
             if (depth > 8) return
             val children = runCatching { SystemFileSystem.list(dir) }.getOrDefault(emptyList())
+            val names = children.map { it.name }
             for (p in children) {
                 if (p.name.startsWith(".")) continue
                 val meta = SystemFileSystem.metadataOrNull(p) ?: continue
@@ -71,6 +73,11 @@ private class DocumentsLibrary : MediaLibrary {
                     durationMs = null,
                     resolution = null,
                     source = p.toString(),
+                    subtitles = if (kind == MediaKind.VIDEO) {
+                        SubtitleFiles.sidecars(p.name, names).map { LocalSubtitle(it.fileName, it.language, Path(dir, it.fileName).toString()) }
+                    } else {
+                        emptyList()
+                    },
                 )
             }
         }
@@ -79,6 +86,8 @@ private class DocumentsLibrary : MediaLibrary {
     }
 
     override fun open(media: LocalMedia, offset: Long): RawSource = PosixFileSource(media.source, offset)
+
+    override fun openSubtitle(subtitle: LocalSubtitle): RawSource = PosixFileSource(subtitle.source, 0)
 }
 
 /** RawSource over stdio with an initial seek (kotlinx-io has no seekable source yet). */

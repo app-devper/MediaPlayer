@@ -30,6 +30,8 @@ data class MediaEntry(
     val mimeType: String? = null,
     val sizeBytes: Long? = null,
     val durationMs: Long? = null,
+    /** Subtitle files that go with a video (sidecar .srt / .vtt). */
+    val subtitles: List<Subtitle> = emptyList(),
 ) {
     val isFolder: Boolean get() = kind == MediaKind.FOLDER
     val isPlayable: Boolean get() = streamUrl != null && kind in setOf(MediaKind.VIDEO, MediaKind.AUDIO, MediaKind.IMAGE)

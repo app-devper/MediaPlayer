@@ -12,6 +12,7 @@ A single Compose Multiplatform app that merges
 | Play video / music / photos on this device | ExoPlayer | AVPlayer | FFmpeg (bytedeco) |
 | Play on a TV / speaker (AVTransport + volume) | ✅ | ✅ | ✅ |
 | **AirPlay** (Apple TV, AirPlay speakers/TVs) | — | ✅ native | — |
+| Subtitles: sidecar .srt / .vtt next to a video (Thai TIS-620 too) | ✅ | ✅ | ✅ |
 | Built-in DLNA media server (share this device) | MediaStore | Documents folder | chosen folders |
 | Receive casts: DLNA renderer (other apps "Play to" this device) ³ | ✅ | ✅ | ✅ |
 | **Receive AirPlay**: screen mirroring, AirPlay video (YouTube…) and audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ |

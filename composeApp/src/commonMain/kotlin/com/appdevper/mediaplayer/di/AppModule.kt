@@ -14,6 +14,7 @@ import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.GetDeviceUseCase
 import com.appdevper.mediaplayer.domain.usecase.GetServerCapabilitiesUseCase
+import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerSettingsUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase
@@ -51,6 +52,7 @@ val domainModule = module {
     factoryOf(::ForgetServerAddressUseCase)
     factoryOf(::GetDeviceUseCase)
     factoryOf(::BrowseFolderUseCase)
+    factoryOf(::LoadSubtitlesUseCase)
     factoryOf(::FilterEntriesUseCase)
     factoryOf(::ObserveServerStatusUseCase)
     factoryOf(::ObserveServerSettingsUseCase)

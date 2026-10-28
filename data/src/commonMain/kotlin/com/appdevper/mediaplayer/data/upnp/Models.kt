@@ -52,6 +52,9 @@ data class DidlResource(
     val mimeType: String get() = protocolInfo.split(':').getOrNull(2).orEmpty()
 }
 
+/** A subtitle file: its URL and type (`srt`, `vtt`). */
+data class DidlSubtitle(val uri: String, val type: String)
+
 data class DidlObject(
     val id: String,
     val parentId: String,
@@ -63,6 +66,8 @@ data class DidlObject(
     val album: String?,
     val albumArtUri: String?,
     val resources: List<DidlResource>,
+    /** Subtitle files for a video (res with a subtitle type, or Samsung's sec:CaptionInfoEx). */
+    val subtitles: List<DidlSubtitle> = emptyList(),
 ) {
     val kind: MediaKind
         get() {

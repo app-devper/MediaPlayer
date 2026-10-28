@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.data
 
+import com.appdevper.mediaplayer.data.mapper.toDomain
 import com.appdevper.mediaplayer.data.server.MediaServer
 import com.appdevper.mediaplayer.data.upnp.DeviceDescription
 import com.appdevper.mediaplayer.data.upnp.Didl
@@ -81,6 +82,31 @@ class UpnpTest {
 
         val again = Didl.parse(Didl.generate(objs))
         assertEquals(objs, again)
+    }
+
+    @Test
+    fun subtitlesFromOtherServersAndOurs() {
+        // A subtitle res listed first (some servers do) and Samsung's CaptionInfoEx; the video still plays.
+        val didl = """<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/"
+            xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:sec="http://www.sec.co.kr/">
+            <item id="7" parentID="1"><dc:title>Movie</dc:title><upnp:class>object.item.videoItem</upnp:class>
+            <res protocolInfo="http-get:*:text/srt:*">http://nas/sub/Movie.en.srt</res>
+            <res protocolInfo="http-get:*:video/x-matroska:*">http://nas/v/Movie.mkv</res>
+            <sec:CaptionInfoEx sec:type="srt">http://nas/sub/Movie.th.srt</sec:CaptionInfoEx>
+            <sec:CaptionInfoEx sec:type="srt">http://nas/sub/Movie.en.srt</sec:CaptionInfoEx>
+            <sec:CaptionInfo sec:type="srt">file:///etc/passwd</sec:CaptionInfo>
+            </item></DIDL-Lite>"""
+        val movie = Didl.parse(didl).single()
+        assertEquals("http://nas/v/Movie.mkv", movie.url)
+        assertEquals(MediaKind.VIDEO, movie.kind)
+        assertEquals(listOf("http://nas/sub/Movie.en.srt", "http://nas/sub/Movie.th.srt"), movie.subtitles.map { it.uri }) // web addresses only, once each
+        assertEquals(listOf("English", "Thai"), movie.toDomain().subtitles.map { it.label })
+
+        // What our server writes, both ways, reads back the same.
+        val again = Didl.parse(Didl.generate(listOf(movie))).single()
+        assertEquals(movie.subtitles, again.subtitles)
+        assertEquals(movie.url, again.url)
+        assertTrue("sec:CaptionInfoEx" in Didl.generate(listOf(movie)))
     }
 
     @Test

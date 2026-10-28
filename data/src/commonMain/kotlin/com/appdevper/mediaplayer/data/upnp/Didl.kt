@@ -7,7 +7,14 @@ object Didl {
         "<DIDL-Lite xmlns=\"urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/\" " +
             "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" " +
             "xmlns:upnp=\"urn:schemas-upnp-org:metadata-1-0/upnp/\" " +
-            "xmlns:dlna=\"urn:schemas-dlna-org:metadata-1-0/\">"
+            "xmlns:dlna=\"urn:schemas-dlna-org:metadata-1-0/\" " +
+            "xmlns:sec=\"http://www.sec.co.kr/\">"
+
+    /** Subtitle MIME types (in res protocolInfo) → the type we keep. */
+    private val subtitleTypes = mapOf(
+        "text/srt" to "srt", "application/x-subrip" to "srt", "text/x-srt" to "srt", "application/srt" to "srt",
+        "text/vtt" to "vtt",
+    )
 
     fun parse(didl: String): List<DidlObject> {
         if (didl.isBlank()) return emptyList()
@@ -22,7 +29,7 @@ object Didl {
     }
 
     private fun parseObject(el: XmlElement, isContainer: Boolean): DidlObject {
-        val resources = el.children("res").map { r ->
+        val (subtitleRes, resources) = el.children("res").map { r ->
             DidlResource(
                 uri = r.text.trim(),
                 protocolInfo = r.attr("protocolInfo").orEmpty(),
@@ -30,7 +37,12 @@ object Didl {
                 duration = r.attr("duration"),
                 resolution = r.attr("resolution"),
             )
-        }
+        }.partition { it.mimeType.lowercase() in subtitleTypes }
+        // Kept apart from the media's own resources, so a subtitle is never what plays.
+        val subtitles = (
+            subtitleRes.map { DidlSubtitle(it.uri, subtitleTypes.getValue(it.mimeType.lowercase())) } +
+                (el.children("CaptionInfoEx") + el.children("CaptionInfo")).map { DidlSubtitle(it.text.trim(), it.attr("type")?.lowercase() ?: "srt") }
+            ).filter { it.uri.startsWith("http://") || it.uri.startsWith("https://") }.distinctBy { it.uri }
         return DidlObject(
             id = el.attr("id").orEmpty(),
             parentId = el.attr("parentID").orEmpty(),
@@ -42,6 +54,7 @@ object Didl {
             album = el.childText("album"),
             albumArtUri = el.childText("albumArtURI")?.takeIf { it.isNotEmpty() },
             resources = resources,
+            subtitles = subtitles,
         )
     }
 
@@ -77,6 +90,12 @@ object Didl {
             r.duration?.let { append(" duration=\"").append(Xml.escape(it)).append('"') }
             r.resolution?.let { append(" resolution=\"").append(Xml.escape(it)).append('"') }
             append('>').append(Xml.escape(r.uri)).append("</res>")
+        }
+        // Both ways DLNA players look for subtitles: a res of a subtitle type, and Samsung's CaptionInfoEx.
+        for (s in o.subtitles) {
+            append("<res protocolInfo=\"http-get:*:").append(if (s.type == "vtt") "text/vtt" else "text/srt").append(":*\">")
+            append(Xml.escape(s.uri)).append("</res>")
+            append("<sec:CaptionInfoEx sec:type=\"").append(Xml.escape(s.type)).append("\">").append(Xml.escape(s.uri)).append("</sec:CaptionInfoEx>")
         }
         append("</").append(tag).append('>')
     }

@@ -27,6 +27,7 @@ import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.request.header
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.head
@@ -45,6 +46,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.io.Buffer
+import kotlinx.io.RawSource
 import kotlinx.io.readByteArray
 import kotlin.random.Random
 
@@ -149,6 +151,7 @@ class MediaServer(
             route(path, HttpMethod("UNSUBSCRIBE")) { handle { call.respond(HttpStatusCode.OK, "") } }
         }
         get("/media/{file}") { serveMedia(call, headOnly = false) }
+        get("/subtitle/{id}/{n}/{name}") { serveSubtitle(call) }
         head("/media/{file}") { serveMedia(call, headOnly = true) }
     }
 
@@ -236,6 +239,25 @@ class MediaServer(
         call.respond(MediaContent(lib, media, start, length, contentType, status, headers))
     }
 
+    /** A video's sidecar subtitle file, by its place in the item (only files the scan found). */
+    private suspend fun serveSubtitle(call: ApplicationCall) {
+        val lib = library
+        val n = call.parameters["n"]?.toIntOrNull()
+        val subtitle = call.parameters["id"]?.let { id -> n?.let { tree?.subtitle(id, it) } }
+        if (lib == null || subtitle == null) return call.respond(HttpStatusCode.NotFound)
+        val bytes = withContext(Dispatchers.IO) { runCatching { readSubtitle(lib.openSubtitle(subtitle)) }.getOrNull() }
+            ?: return call.respond(HttpStatusCode.NotFound)
+        val type = if (subtitle.fileName.endsWith(".vtt", ignoreCase = true)) "text/vtt" else "text/srt"
+        call.respondBytes(bytes, ContentType.parse(type))
+    }
+
+    /** The whole file, or null when it's larger than any subtitle file should be. */
+    private fun readSubtitle(source: RawSource): ByteArray? = source.use {
+        val buffer = Buffer()
+        while (it.readAtMostTo(buffer, CHUNK) > 0) if (buffer.size > MAX_SUBTITLE_BYTES) return null
+        buffer.readByteArray()
+    }
+
     private class MediaContent(
         private val library: MediaLibrary,
         private val media: LocalMedia,
@@ -270,6 +292,7 @@ class MediaServer(
     companion object {
         private val PORTS = listOf(8191, 8192, 8193, 8194, 0)
         private const val CHUNK = 64L * 1024
+        private const val MAX_SUBTITLE_BYTES = 4L * 1024 * 1024
 
         private val SOURCE_PROTOCOLS = listOf(
             "video/mp4", "video/x-matroska", "video/mpeg", "video/quicktime", "video/x-msvideo", "video/webm", "video/mp2t",

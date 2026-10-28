@@ -1,5 +1,9 @@
 package com.appdevper.mediaplayer
 
+import com.appdevper.mediaplayer.feature.player.SubtitleState
+import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
+import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.data.di.dataModule
 import com.appdevper.mediaplayer.data.di.platformDataModule
 import com.appdevper.mediaplayer.di.domainModule
@@ -310,7 +314,7 @@ class PresentationTest {
     @Test
     fun nextAndPreviousGoToTheSenderForItsAirPlayVideo() = runTest {
         val airPlay = FakeAirPlay(AirPlayStatus.Running("Mac"))
-        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay))
+        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay), LoadSubtitlesUseCase(FakeSubtitles()))
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
         val song2 = MediaEntry("a2", "0", "Lam Phloen", MediaKind.AUDIO, streamUrl = "http://h/a2.mp3")
 
@@ -334,4 +338,28 @@ class PresentationTest {
         vm.next()
         assertEquals(2, airPlay.sentToSender.size)
     }
+
+    @Test
+    fun subtitlesArePickedPerVideoAndOffForTheNext() = runTest {
+        val vm = PlayerViewModel(session, airPlaySession(), LoadSubtitlesUseCase(FakeSubtitles()))
+        val thai = Subtitle("http://h/Movie.th.srt", "Thai", "th")
+        val broken = Subtitle("http://h/Movie.broken.srt", "broken")
+        val movie = MediaEntry("v1", "0", "Movie", MediaKind.VIDEO, streamUrl = "http://h/v1.mp4", subtitles = listOf(thai, broken))
+        val next = MediaEntry("v2", "0", "Next", MediaKind.VIDEO, streamUrl = "http://h/v2.mp4")
+        session.play(movie, listOf(movie, next))
+        assertEquals(SubtitleState(), vm.subtitles.value) // off until picked
+
+        vm.selectSubtitle(thai)
+        assertEquals(thai, vm.subtitles.value.selected)
+        assertEquals(listOf(SubtitleCue(1_000, 2_000, "สวัสดี")), vm.subtitles.value.cues)
+
+        vm.selectSubtitle(broken)
+        assertEquals(null, vm.subtitles.value.selected)
+        assertEquals("Couldn't load the subtitles (broken)", vm.subtitles.value.error)
+
+        vm.selectSubtitle(thai)
+        session.next() // another video: its own files, so off again
+        assertEquals(SubtitleState(), vm.subtitles.value)
+    }
 }
+

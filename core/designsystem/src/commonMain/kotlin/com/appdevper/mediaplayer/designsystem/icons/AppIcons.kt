@@ -121,6 +121,11 @@ object AppIcons {
     val Stop = filled("stop", "M7 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z")
     val SkipNext = filled("skip_next", "M4 5.6v12.8c0 .8.9 1.3 1.6.8L14.4 13c.6-.4.6-1.3 0-1.7L5.6 4.8C4.9 4.3 4 4.8 4 5.6z", "M18 4a1 1 0 0 1 1 1v14a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1z")
     val SkipPrevious = filled("skip_prev", "M20 5.6v12.8c0 .8-.9 1.3-1.6.8L9.6 13c-.6-.4-.6-1.3 0-1.7l8.8-6.5c.7-.5 1.6 0 1.6.8z", "M6 4a1 1 0 0 1 1 1v14a1 1 0 0 1-2 0V5a1 1 0 0 1 1-1z")
+    // Lucide captions.
+    val Captions = outline(
+        "captions",
+        "M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z", "M7 15h4", "M15 15h2", "M7 11h2", "M13 11h4",
+    )
     // Lucide shuffle, repeat, repeat-1.
     val Shuffle = outline(
         "shuffle",
