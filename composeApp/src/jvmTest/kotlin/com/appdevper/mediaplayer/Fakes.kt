@@ -52,8 +52,11 @@ class FakeDevices : DeviceRepository {
 
     override val savedAddresses = MutableStateFlow(emptyList<String>())
     override suspend fun forgetAddress(address: String) {
-        savedAddresses.value -= address
-        devices.value = devices.value.filterNot { it.host == byAddress[address]?.host }
+        // As the real one: trimmed, whatever the case.
+        val text = address.trim()
+        savedAddresses.value = savedAddresses.value.filterNot { it.equals(text, ignoreCase = true) }
+        val host = byAddress.entries.firstOrNull { it.key.equals(text, ignoreCase = true) }?.value?.host
+        devices.value = devices.value.filterNot { it.host == host }
     }
 }
 

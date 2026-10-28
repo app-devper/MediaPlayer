@@ -113,8 +113,18 @@ class ControlPoint(
         val text = address.trim()
         addresses.update { set -> set.filterNot { it.equals(text, ignoreCase = true) }.toSet() }
         val target = ServerAddress.parse(text) ?: return
-        mutex.withLock { if (entries.values.removeAll { target.matches(it.device.location) }) publish() }
+        mutex.withLock {
+            // A probe of it still under way mustn't put it back: its late answers are ignored a while.
+            forgotten[target] = TimeSource.Monotonic.markNow() + FORGOTTEN_IGNORE_SECONDS.seconds
+            if (entries.values.removeAll { target.matches(it.device.location) }) publish()
+        }
+        // Another saved address on the same host (e.g. host and host:port) still wants its devices.
+        addresses.value.filter { other -> ServerAddress.parse(other)?.let { target.sameHost(it) } == true }
+            .forEach { scope.launch { probe(it) } }
     }
+
+    // Just-forgotten addresses, until when their late answers are ignored (under mutex).
+    private val forgotten = HashMap<ServerAddress, TimeSource.Monotonic.ValueTimeMark>()
 
     /** Addresses to ask directly from now on (e.g. ones saved from earlier sessions). */
     fun remember(addresses: Collection<String>) {
@@ -131,6 +141,8 @@ class ControlPoint(
      */
     suspend fun addByAddress(address: String, timeoutMs: Long = 4_000): List<UpnpDevice> {
         val target = ServerAddress.parse(address) ?: return emptyList()
+        // Added again right after being removed: its answers count again.
+        mutex.withLock { forgotten.keys.removeAll { it.sameHost(target) } }
         start() // replies to the unicast search come in with the other SSDP messages
         val found = withTimeoutOrNull(timeoutMs) {
             probe(target.text)
@@ -230,6 +242,8 @@ class ControlPoint(
             val devices = DeviceDescription.parse(resp.bodyAsText(), location)
                 .filter { it.isMediaServer || it.isRenderer }
             mutex.withLock {
+                forgotten.values.removeAll { it.hasPassedNow() }
+                if (forgotten.keys.any { it.matches(location) }) return
                 val expires = TimeSource.Monotonic.markNow() + ttl.seconds
                 devices.forEach { d -> entries[d.udn] = Entry(d, expires) }
                 if (devices.isNotEmpty()) publish()
@@ -256,6 +270,7 @@ class ControlPoint(
         const val ADDRESS_RECHECK_TICKS = 10 // × 30 s
         const val PROBE_HTTP_TIMEOUT_MS = 3_000L
         const val DIRECT_TTL_SECONDS = 1800
+        const val FORGOTTEN_IGNORE_SECONDS = 10
     }
 }
 
@@ -271,6 +286,10 @@ internal class ServerAddress private constructor(val text: String, val host: Str
      * fetched over HTTP, where LOCATION keeps the name.
      */
     val searchHost: String? get() = host?.takeIf(::isIpv4)
+
+    /** Both are on the same host (case-insensitive), whatever their ports. */
+    fun sameHost(other: ServerAddress): Boolean =
+        (host ?: hostOf(text)).equals(other.host ?: hostOf(other.text), ignoreCase = true)
 
     /** A device found at [location] is this address's. */
     fun matches(location: String): Boolean =

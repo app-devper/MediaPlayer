@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -281,10 +282,12 @@ private fun SavedAddresses(addresses: List<String>, onForget: (String) -> Unit) 
     Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Text("Added by address", style = MaterialTheme.typography.labelMedium, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp))
         addresses.forEach { address ->
-            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(AppIcons.Server, null, Modifier.padding(start = 4.dp).size(16.dp), tint = c.textSecondary)
-                Text(address, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                GhostIconButton(AppIcons.Close, "Remove $address", { onForget(address) }, iconSize = 16.dp)
+            key(address) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(AppIcons.Server, null, Modifier.padding(start = 4.dp).size(16.dp), tint = c.textSecondary)
+                    Text(address, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    GhostIconButton(AppIcons.Close, "Remove $address", { onForget(address) }, iconSize = 16.dp)
+                }
             }
         }
     }

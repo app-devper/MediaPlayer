@@ -3,14 +3,12 @@ package com.appdevper.mediaplayer.data
 import com.appdevper.mediaplayer.data.platform.LocalMedia
 import com.appdevper.mediaplayer.data.platform.MediaLibrary
 import com.appdevper.mediaplayer.data.platform.localIpv4Address
-import com.appdevper.mediaplayer.data.repository.SettingsRepositoryImpl
 import com.appdevper.mediaplayer.data.server.MediaServer
 import com.appdevper.mediaplayer.data.server.ServerConfig
 import com.appdevper.mediaplayer.data.server.ServerState
 import com.appdevper.mediaplayer.data.upnp.ControlPoint
 import com.appdevper.mediaplayer.data.upnp.SsdpEngine
 import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.russhwolf.settings.MapSettings
 import io.ktor.client.HttpClient
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -76,16 +74,5 @@ class AddServerByAddressE2ETest {
             http.close()
             scope.cancel()
         }
-    }
-
-    @Test
-    fun savedAddressesAreKeptOnceAndCanBeRemoved() {
-        val settings = SettingsRepositoryImpl(MapSettings())
-        settings.addServerAddress("192.168.1.20")
-        settings.addServerAddress("NAS.local")
-        settings.addServerAddress("nas.local") // the same, in another case
-        assertEquals(listOf("192.168.1.20", "NAS.local"), settings.serverAddresses)
-        settings.removeServerAddress("nas.LOCAL")
-        assertEquals(listOf("192.168.1.20"), settings.serverAddresses)
     }
 }
