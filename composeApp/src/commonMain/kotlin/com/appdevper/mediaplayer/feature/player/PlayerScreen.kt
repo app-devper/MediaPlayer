@@ -1,6 +1,8 @@
 package com.appdevper.mediaplayer.feature.player
 
 import com.appdevper.mediaplayer.domain.model.Subtitle
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
+import com.appdevper.mediaplayer.domain.model.SubtitleState
 import com.appdevper.mediaplayer.domain.model.TextTrack
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.DpOffset
@@ -142,7 +144,6 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                     modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
                     fullscreen = fullscreen,
                     onToggleFullscreen = if (isAudio) null else fullscreenState::toggle,
-                    cues = subtitles.cues,
                 )
             }
         }
@@ -363,11 +364,14 @@ private fun SubtitleMenu(files: List<Subtitle>, tracks: List<TextTrack>, state: 
     val c = AppTheme.colors
     var open by remember { mutableStateOf(false) }
     Box {
+        val choice = state.choice
         val shown = when {
             state.loading -> "Loading"
-            else -> state.selected?.label ?: state.track?.label ?: "Off"
+            choice is SubtitleChoice.File -> choice.subtitle.label
+            choice is SubtitleChoice.Track -> choice.track.label
+            else -> "Off"
         }
-        ModeButton(AppIcons.Captions, "Subtitles", shown, on = state.selected != null || state.track != null) { open = true }
+        ModeButton(AppIcons.Captions, "Subtitles", shown, on = choice != SubtitleChoice.Off) { open = true }
         DropdownMenu(
             expanded = open,
             onDismissRequest = { open = false },
@@ -390,9 +394,23 @@ private fun SubtitleMenu(files: List<Subtitle>, tracks: List<TextTrack>, state: 
                 modifier = Modifier.padding(horizontal = 6.dp),
                 trailing = { if (selected) Icon(AppIcons.Check, "Showing", Modifier.size(18.dp), tint = c.textPrimary) },
             )
-            option("Off", null, state.selected == null && state.track == null) { vm.selectSubtitle(null) }
-            files.forEach { f -> option(f.label, "File", state.selected == f) { vm.selectSubtitle(f) } }
-            tracks.forEach { t -> option(t.label, "In the video", state.track == t) { vm.selectTrack(t) } }
+            @Composable
+            fun pick(c: SubtitleChoice) = option(
+                when (c) {
+                    SubtitleChoice.Off -> "Off"
+                    is SubtitleChoice.File -> c.subtitle.label
+                    is SubtitleChoice.Track -> c.track.label
+                },
+                when (c) {
+                    SubtitleChoice.Off -> null
+                    is SubtitleChoice.File -> "File"
+                    is SubtitleChoice.Track -> "In the video"
+                },
+                choice == c,
+            ) { vm.selectSubtitle(c) }
+            pick(SubtitleChoice.Off)
+            files.forEach { pick(SubtitleChoice.File(it)) }
+            tracks.forEach { pick(SubtitleChoice.Track(it)) }
         }
     }
 }

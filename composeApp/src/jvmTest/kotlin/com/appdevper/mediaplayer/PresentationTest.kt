@@ -1,8 +1,7 @@
 package com.appdevper.mediaplayer
 
-import com.appdevper.mediaplayer.feature.player.SubtitleState
-import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
-import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.domain.model.SubtitleState
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
 import com.appdevper.mediaplayer.domain.model.TextTrack
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.data.di.dataModule
@@ -85,7 +84,7 @@ class PresentationTest {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private val engine = FakeEngine()
-    private val session = PlaybackSession(FakeRenderer(), LocalPlayer(engine, appScope), appScope)
+    private val session = PlaybackSession(FakeRenderer(), LocalPlayer(engine, appScope, subtitleFiles = FakeSubtitles()), appScope)
 
     private fun receiverSession(settings: FakeSettings = FakeSettings(), receiver: FakeReceiver = FakeReceiver()) =
         CastReceiverSession(receiver, settings, session, appScope)
@@ -315,7 +314,7 @@ class PresentationTest {
     @Test
     fun nextAndPreviousGoToTheSenderForItsAirPlayVideo() = runTest {
         val airPlay = FakeAirPlay(AirPlayStatus.Running("Mac"))
-        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay), LoadSubtitlesUseCase(FakeSubtitles()))
+        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay))
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
         val song2 = MediaEntry("a2", "0", "Lam Phloen", MediaKind.AUDIO, streamUrl = "http://h/a2.mp3")
 
@@ -341,8 +340,8 @@ class PresentationTest {
     }
 
     @Test
-    fun subtitlesArePickedPerVideoAndOffForTheNext() = runTest {
-        val vm = PlayerViewModel(session, airPlaySession(), LoadSubtitlesUseCase(FakeSubtitles()))
+    fun subtitlesArePickedPerVideoAndKeptWhenThePlayerScreenComesBack() = runTest {
+        val vm = PlayerViewModel(session, airPlaySession())
         val thai = Subtitle("http://h/Movie.th.srt", "Thai", "th")
         val broken = Subtitle("http://h/Movie.broken.srt", "broken")
         val movie = MediaEntry("v1", "0", "Movie", MediaKind.VIDEO, streamUrl = "http://h/v1.mp4", subtitles = listOf(thai, broken))
@@ -351,27 +350,24 @@ class PresentationTest {
         assertEquals(SubtitleState(), vm.subtitles.value) // off until picked
 
         // Read off the main thread: wait for it.
-        vm.selectSubtitle(thai)
-        val loaded = vm.subtitles.first { !it.loading }
-        assertEquals(thai, loaded.selected)
-        assertEquals(listOf(SubtitleCue(1_000, 2_000, "สวัสดี")), loaded.cues)
+        vm.selectSubtitle(SubtitleChoice.File(broken))
+        assertEquals("Couldn't load the subtitles (broken)", vm.subtitles.first { !it.loading }.error)
+        vm.selectSubtitle(SubtitleChoice.File(thai))
+        assertEquals(SubtitleState(SubtitleChoice.File(thai)), vm.subtitles.first { !it.loading })
 
-        vm.selectSubtitle(broken)
-        val failed = vm.subtitles.first { !it.loading }
-        assertEquals(null, failed.selected)
-        assertEquals("Couldn't load the subtitles (broken)", failed.error)
+        // The player screen closed and opened again: a new ViewModel, the same subtitles.
+        val again = PlayerViewModel(session, airPlaySession())
+        assertEquals(SubtitleChoice.File(thai), again.subtitles.value.choice)
 
-        // A track inside the video: the player shows it; picking a file turns the track off.
+        // A track inside the video: the player shows it, and the file goes.
         val inside = TextTrack("2", "English", "eng")
         engine.facts = engine.facts.copy(textTracks = listOf(inside)) // the player has read the file's tracks
-        vm.selectTrack(inside)
-        assertEquals(SubtitleState(track = inside), vm.subtitles.value)
+        again.selectSubtitle(SubtitleChoice.Track(inside))
+        assertEquals(SubtitleState(SubtitleChoice.Track(inside)), again.subtitles.value)
         assertEquals("track:2", engine.calls.last())
-        vm.selectSubtitle(thai)
-        assertEquals("track:null", engine.calls.last())
 
         session.next() // another video: its own files, so off again
-        assertEquals(SubtitleState(), vm.subtitles.value)
+        assertEquals(SubtitleState(), again.subtitles.value)
     }
 }
 

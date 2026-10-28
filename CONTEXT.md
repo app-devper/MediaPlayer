@@ -27,6 +27,11 @@ stopped. It is reported as `STOPPED`, and it rewinds before it plays again.
 **Ended**: an item played to its end by itself (`RendererStatus.ended`). This, and only this, moves
 the queue on. Stopping an item or leaving the player screen does not.
 
+**Subtitle choice** (`SubtitleChoice`): what the local player shows under a video: **Off**, a
+**File** next to the video (`Movie.th.srt`), or a **Track** inside the file. The local player owns it
+(`LocalPlayer.subtitles`): it is kept when the same item loads again, starts off for another item,
+and follows a track picked in the platform's own controls (AVKit's menu).
+
 **Receiver**: this device taking playback from another device. The DLNA receiver
 (`CastReceiverSession`) takes "Play to" from other apps. The AirPlay receiver
 (`AirPlayReceiverSession`) takes mirroring, video and audio. Both play through the playback session

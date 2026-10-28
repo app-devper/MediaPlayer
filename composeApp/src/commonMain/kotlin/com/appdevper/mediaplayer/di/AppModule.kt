@@ -14,7 +14,6 @@ import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.GetDeviceUseCase
 import com.appdevper.mediaplayer.domain.usecase.GetServerCapabilitiesUseCase
-import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerSettingsUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase
@@ -42,7 +41,7 @@ import org.koin.mp.KoinPlatform
 /** Use cases + the app-wide playback session (domain layer wiring). */
 val domainModule = module {
     // The platform's PlaybackEngine (platformAppModule) runs on the main thread.
-    single { LocalPlayer(get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
+    single { LocalPlayer(get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate), subtitleFiles = get()) }
     single { PlaybackSession(get(), get(), get(AppScope)) }
     single { CastReceiverSession(get(), get(), get(), get(AppScope)) }
     single { AirPlayReceiverSession(get(), get(), get(), get(AppScope)) }
@@ -52,7 +51,6 @@ val domainModule = module {
     factoryOf(::ForgetServerAddressUseCase)
     factoryOf(::GetDeviceUseCase)
     factoryOf(::BrowseFolderUseCase)
-    factoryOf(::LoadSubtitlesUseCase)
     factoryOf(::FilterEntriesUseCase)
     factoryOf(::ObserveServerStatusUseCase)
     factoryOf(::ObserveServerSettingsUseCase)

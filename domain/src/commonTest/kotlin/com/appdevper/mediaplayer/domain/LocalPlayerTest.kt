@@ -2,7 +2,12 @@ package com.appdevper.mediaplayer.domain
 
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.Subtitle
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
+import com.appdevper.mediaplayer.domain.model.SubtitleState
 import com.appdevper.mediaplayer.domain.model.TextTrack
+import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
+import kotlinx.coroutines.Dispatchers
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -22,7 +27,8 @@ private val photo = MediaEntry("p1", "0", "Photo", MediaKind.IMAGE, streamUrl = 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LocalPlayerTest {
 
-    private fun TestScope.player(engine: FakeEngine) = LocalPlayer(engine, backgroundScope, pollIntervalMs = 100)
+    private fun TestScope.player(engine: FakeEngine) =
+        LocalPlayer(engine, backgroundScope, pollIntervalMs = 100, subtitleFiles = FakeSubtitleFiles, subtitleParsing = Dispatchers.Unconfined)
 
     @Test
     fun loadedPausedReportsStoppedUntilItPlays() = runTest {
@@ -141,7 +147,7 @@ class LocalPlayerTest {
     }
 
     @Test
-    fun subtitleTracksInTheFileComeFromTheEngine() = runTest {
+    fun aTrackInTheFileIsOffUntilPickedAndKeptThroughAReload() = runTest {
         val engine = FakeEngine()
         val player = player(engine)
         player.load(movie, autoPlay = true, startPositionMs = 0)
@@ -152,13 +158,12 @@ class LocalPlayerTest {
         advanceTimeBy(150)
         assertEquals(listOf(thai), player.textTracks.value)
         assertEquals("track:null", engine.calls.last())
-        assertNull(player.selectedTextTrack.value)
+        assertEquals(SubtitleState(), player.subtitles.value)
 
-        player.selectTextTrack(thai.id)
+        player.selectSubtitle(SubtitleChoice.Track(thai))
         engine.facts = engine.facts.copy(subtitleText = "สวัสดี")
         advanceTimeBy(150)
         assertEquals("track:2:0", engine.calls.last())
-        assertEquals("2:0", player.selectedTextTrack.value)
         assertEquals("สวัสดี", player.subtitleText.value)
 
         // The same item again (repeat one): the engine starts over, the track comes back once it's known.
@@ -167,12 +172,12 @@ class LocalPlayerTest {
         engine.facts = engine.facts.copy(textTracks = listOf(thai))
         advanceTimeBy(150)
         assertEquals("track:2:0", engine.calls.last())
-        assertEquals("2:0", player.selectedTextTrack.value)
+        assertEquals(SubtitleChoice.Track(thai), player.subtitles.value.choice)
 
-        // Changed by the platform's own controls (AVKit's menu): that's the choice now.
+        // Turned off in the platform's own controls (AVKit's menu): that's the choice now.
         engine.facts = engine.facts.copy(selectedTextTrack = null)
         advanceTimeBy(150)
-        assertNull(player.selectedTextTrack.value)
+        assertEquals(SubtitleChoice.Off, player.subtitles.value.choice)
 
         player.load(photo, autoPlay = true, startPositionMs = 0) // nothing loaded: none
         runCurrent()
@@ -181,22 +186,60 @@ class LocalPlayerTest {
     }
 
     @Test
-    fun anotherItemStartsWithNoTrack() = runTest {
+    fun aFilesLinesFollowThePositionAndStayThroughAReload() = runTest {
         val engine = FakeEngine()
         val player = player(engine)
-        val track = TextTrack("0", "English", "en")
         player.load(movie, autoPlay = true, startPositionMs = 0)
         runCurrent()
-        engine.facts = engine.facts.copy(textTracks = listOf(track))
+        val file = Subtitle("http://h/v1.th.srt", "Thai", "th")
+        player.selectSubtitle(SubtitleChoice.File(file))
+        runCurrent()
+        assertEquals(SubtitleState(SubtitleChoice.File(file)), player.subtitles.value)
+        engine.facts = engine.facts.copy(positionMs = 1_500)
         advanceTimeBy(150)
-        player.selectTextTrack("0")
+        assertEquals("สวัสดี", player.subtitleText.value)
+        engine.facts = engine.facts.copy(positionMs = 2_500)
+        advanceTimeBy(100)
+        assertNull(player.subtitleText.value)
+
+        player.load(movie, autoPlay = true, startPositionMs = 1_200) // repeat one, or back from a TV
+        runCurrent()
+        assertEquals(SubtitleChoice.File(file), player.subtitles.value.choice)
+        assertEquals("สวัสดี", player.subtitleText.value)
+
+        // A track picked in AVKit's own menu replaces the file.
+        val inFile = TextTrack("0", "English", "en")
+        engine.facts = engine.facts.copy(textTracks = listOf(inFile))
+        advanceTimeBy(150)
+        engine.facts = engine.facts.copy(selectedTextTrack = "0", subtitleText = null)
+        advanceTimeBy(150)
+        assertEquals(SubtitleChoice.Track(inFile), player.subtitles.value.choice)
+    }
+
+    @Test
+    fun aFileThatCantBeReadSaysSo() = runTest {
+        val engine = FakeEngine()
+        val player = player(engine)
+        player.load(movie, autoPlay = true, startPositionMs = 0)
+        player.selectSubtitle(SubtitleChoice.File(Subtitle("http://h/broken.srt", "broken")))
+        runCurrent()
+        assertEquals(SubtitleState(error = "Couldn't load the subtitles (broken)"), player.subtitles.value)
+        player.selectSubtitle(SubtitleChoice.File(Subtitle("http://h/empty.srt", "empty"))) // no cues in it
+        runCurrent()
+        assertEquals(SubtitleState(error = "Couldn't load the subtitles (empty)"), player.subtitles.value)
+    }
+
+    @Test
+    fun anotherItemStartsWithNoSubtitle() = runTest {
+        val engine = FakeEngine()
+        val player = player(engine)
+        player.load(movie, autoPlay = true, startPositionMs = 0)
+        runCurrent()
+        player.selectSubtitle(SubtitleChoice.File(Subtitle("http://h/v1.th.srt", "Thai", "th")))
         runCurrent()
         player.load(movie.copy(id = "v2", streamUrl = "http://h/v2.mp4"), autoPlay = true, startPositionMs = 0)
         runCurrent()
-        engine.facts = engine.facts.copy(textTracks = listOf(track))
-        advanceTimeBy(150)
-        assertNull(player.selectedTextTrack.value)
-        assertEquals("track:null", engine.calls.last())
+        assertEquals(SubtitleState(), player.subtitles.value)
     }
 
     @Test
@@ -229,5 +272,14 @@ class LocalPlayerTest {
         player.seek(5_000)
         runCurrent()
         assertEquals(emptyList(), engine.calls)
+    }
+}
+
+/** One Thai line from 1 s to 2 s; "broken" fails, "empty" has no cues. */
+private object FakeSubtitleFiles : SubtitleRepository {
+    override suspend fun fetch(url: String): ByteArray = when {
+        "broken" in url -> throw IllegalStateException("404")
+        "empty" in url -> "nothing here".encodeToByteArray()
+        else -> "1\n00:00:01,000 --> 00:00:02,000\nสวัสดี\n".encodeToByteArray()
     }
 }

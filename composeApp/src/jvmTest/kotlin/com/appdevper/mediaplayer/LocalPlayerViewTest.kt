@@ -9,7 +9,10 @@ import androidx.compose.ui.test.runComposeUiTest
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.domain.model.Subtitle
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
+import com.appdevper.mediaplayer.domain.model.TextTrack
+import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.playback.FfmpegPlaybackEngine
 import com.appdevper.mediaplayer.ui.player.LocalPlayerView
@@ -99,26 +102,30 @@ class LocalPlayerViewTest {
     }
 
     @Test
-    fun theSubtitleLineOnScreenFollowsThePosition() {
+    fun aSubtitleFilesLineFollowsThePosition() {
         startKoin { modules(module { single { FfmpegPlaybackEngine() } }) }
         try {
             runComposeUiTest {
                 val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
                 val engine = FakeEngine()
-                val player = LocalPlayer(engine, scope)
+                val files = object : SubtitleRepository {
+                    override suspend fun fetch(url: String) =
+                        "1\n00:00:01,000 --> 00:00:02,000\nHello there\n\n2\n00:00:05,000 --> 00:00:06,000\nLater\n".encodeToByteArray()
+                }
+                val player = LocalPlayer(engine, scope, pollIntervalMs = 50, subtitleFiles = files)
                 try {
                     player.load(clip, autoPlay = false, startPositionMs = 1_500)
-                    val cues = listOf(SubtitleCue(1_000, 2_000, "Hello there"), SubtitleCue(5_000, 6_000, "Later"))
+                    player.selectSubtitle(SubtitleChoice.File(Subtitle("http://h/v1.srt", "v1.srt")))
                     setContent {
                         AppTheme {
-                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {}, cues = cues)
+                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
                         }
                     }
+                    waitUntil(timeoutMillis = 2_000) { onAllNodesWithText("Hello there").fetchSemanticsNodes().isNotEmpty() }
                     onNodeWithText("Hello there").assertExists()
                     onNodeWithText("Later").assertDoesNotExist()
                     player.seek(5_500)
-                    waitForIdle()
-                    onNodeWithText("Later").assertExists()
+                    waitUntil(timeoutMillis = 2_000) { onAllNodesWithText("Later").fetchSemanticsNodes().isNotEmpty() }
                     onNodeWithText("Hello there").assertDoesNotExist()
                 } finally {
                     scope.cancel()
@@ -144,6 +151,9 @@ class LocalPlayerViewTest {
                             LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
                         }
                     }
+                    val english = TextTrack("0", "English", "en")
+                    engine.facts = engine.facts.copy(textTracks = listOf(english))
+                    player.selectSubtitle(SubtitleChoice.Track(english))
                     engine.facts = engine.facts.copy(subtitleText = "From the file")
                     waitUntil(timeoutMillis = 2_000) { onAllNodesWithText("From the file").fetchSemanticsNodes().isNotEmpty() }
                 } finally {

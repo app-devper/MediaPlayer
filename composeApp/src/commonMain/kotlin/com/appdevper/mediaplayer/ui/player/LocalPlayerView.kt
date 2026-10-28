@@ -24,7 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,9 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appdevper.mediaplayer.designsystem.components.ThinSlider
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
-import com.appdevper.mediaplayer.domain.model.SubtitleCue
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.model.textAt
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.platform.AirPlayButton
 import com.appdevper.mediaplayer.platform.VideoSurface
@@ -104,14 +101,12 @@ internal fun LocalPlayerView(
     modifier: Modifier = Modifier,
     fullscreen: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
-    /** The picked subtitle's lines, shown over a video. */
-    cues: List<SubtitleCue> = emptyList(),
 ) {
     if (!isAudio && videoSurfaceHasControls) {
         Box(modifier.fillMaxSize()) {
             VideoSurface(title, Modifier.fillMaxSize())
             // Above AVKit's own controls.
-            SubtitleLine(player, cues, fullscreen, Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = 72.dp))
+            SubtitleLine(player, fullscreen, Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = 72.dp))
         }
         return
     }
@@ -294,7 +289,7 @@ internal fun LocalPlayerView(
         }
         // Moves up out of the bar's way while it shows.
         SubtitleLine(
-            player, cues, fullscreen,
+            player, fullscreen,
             Modifier.align(Alignment.BottomCenter).padding(start = 16.dp, end = 16.dp, bottom = if (controlsVisible) 80.dp else 24.dp),
         )
         AnimatedVisibility(
@@ -340,17 +335,12 @@ internal fun LocalPlayerView(
 }
 
 /**
- * The subtitle line on screen now (a file's, or a track's in the video), white on a dark band so it
- * reads on any picture. Only this reads the position, so the rest of the player isn't recomposed for it.
+ * The subtitle line on screen now (the player works it out, from a file or a track in the video),
+ * white on a dark band so it reads on any picture. Only this reads it, so the rest isn't recomposed.
  */
 @Composable
-private fun SubtitleLine(player: LocalPlayer, cues: List<SubtitleCue>, large: Boolean, modifier: Modifier) {
-    val status by player.status.collectAsStateWithLifecycle()
-    // A track inside the file: the player's text; a file: its cues at the position.
-    val trackText by player.subtitleText.collectAsStateWithLifecycle()
-    // Recomposes when the text changes, not on every position update.
-    val text by remember(cues) { derivedStateOf { if (cues.isEmpty()) trackText else status?.let { cues.textAt(it.positionMs) } } }
-    val line = text ?: return
+private fun SubtitleLine(player: LocalPlayer, large: Boolean, modifier: Modifier) {
+    val line = player.subtitleText.collectAsStateWithLifecycle().value ?: return
     Text(
         line,
         color = Color.White,

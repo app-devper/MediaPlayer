@@ -17,6 +17,20 @@ data class TextTrack(
     val language: String? = null,
 )
 
+/** The subtitle on this device's player: none, a file next to the video, or a track inside it. */
+sealed interface SubtitleChoice {
+    data object Off : SubtitleChoice
+    data class File(val subtitle: Subtitle) : SubtitleChoice
+    data class Track(val track: TextTrack) : SubtitleChoice
+}
+
+/** The [SubtitleChoice], whether its file is still being read, and why one couldn't be read. */
+data class SubtitleState(
+    val choice: SubtitleChoice = SubtitleChoice.Off,
+    val loading: Boolean = false,
+    val error: String? = null,
+)
+
 /** One line (or a few) on screen from [startMs] until [endMs]. */
 data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String)
 

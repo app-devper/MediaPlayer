@@ -3,9 +3,14 @@ package com.appdevper.mediaplayer.domain.session
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
+import com.appdevper.mediaplayer.domain.model.SubtitleState
 import com.appdevper.mediaplayer.domain.model.TextTrack
+import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.domain.model.TransportState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +34,13 @@ class LocalPlayer(
     private val engine: PlaybackEngine,
     private val scope: CoroutineScope,
     private val pollIntervalMs: Long = POLL_INTERVAL_MS,
+    /** Where subtitle files are fetched from ([SubtitleChoice.File]). */
+    subtitleFiles: SubtitleRepository = NoSubtitleFiles,
+    /** Where they're read (not the player's thread). */
+    subtitleParsing: CoroutineDispatcher = Dispatchers.Default,
 ) : Transport {
+
+    private val subtitlesOfItem = LocalSubtitles(engine, subtitleFiles, scope, subtitleParsing)
 
     private val _status = MutableStateFlow<RendererStatus?>(null)
 
@@ -48,21 +59,14 @@ class LocalPlayer(
     /** Subtitle tracks inside the loaded file. */
     val textTracks: StateFlow<List<TextTrack>> = _textTracks.asStateFlow()
 
-    private val _selectedTextTrack = MutableStateFlow<String?>(null)
-
     /**
-     * The track inside the file that shows, or none: what was picked ([selectTextTrack]), or what the
-     * platform's own controls picked (AVKit's menu). It stays through a reload of the same item.
+     * The subtitle for the loaded item ([selectSubtitle]): kept through a reload of the same item, none
+     * for another; a track picked in the platform's own controls (AVKit's menu) becomes it.
      */
-    val selectedTextTrack: StateFlow<String?> = _selectedTextTrack.asStateFlow()
+    val subtitles: StateFlow<SubtitleState> = subtitlesOfItem.state.asStateFlow()
 
-    // The engine loses the choice on every load: until the tracks are known, it isn't applied yet.
-    private var trackApplied = false
-
-    private val _subtitleText = MutableStateFlow<String?>(null)
-
-    /** The selected track's text on screen now, when we draw it ([selectTextTrack]). */
-    val subtitleText: StateFlow<String?> = _subtitleText.asStateFlow()
+    /** The subtitle line on screen now, for us to draw (none when the engine draws its track itself). */
+    val subtitleText: StateFlow<String?> = subtitlesOfItem.text.asStateFlow()
 
     private val _loaded = MutableStateFlow<MediaEntry?>(null)
 
@@ -80,9 +84,7 @@ class LocalPlayer(
         if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) return@onPlayer unloadNow()
         pausedInBackground = false
         stopped = !autoPlay
-        // Another item: its tracks are others, so none. The same one again keeps its track.
-        if (_loaded.value?.let { it.id != entry.id || it.streamUrl != entry.streamUrl } != false) _selectedTextTrack.value = null
-        trackApplied = false
+        subtitlesOfItem.onLoad(sameItem = _loaded.value?.let { it.id == entry.id && it.streamUrl == entry.streamUrl } == true)
         _loaded.value = entry
         _status.value = null
         engine.load(entry, url, autoPlay, startPositionMs.coerceAtLeast(0))
@@ -109,8 +111,7 @@ class LocalPlayer(
         _loaded.value = null
         _error.value = null
         _textTracks.value = emptyList()
-        _subtitleText.value = null
-        _selectedTextTrack.value = null
+        subtitlesOfItem.clear()
         stopped = true
         pausedInBackground = false
         engine.unload()
@@ -121,7 +122,7 @@ class LocalPlayer(
         when {
             facts.error != null -> {
                 engine.reload(facts.positionMs)
-                trackApplied = false
+                subtitlesOfItem.onLoad(sameItem = true)
             }
             facts.ended -> engine.seekTo(0)
         }
@@ -142,29 +143,11 @@ class LocalPlayer(
         engine.seekTo(positionMs.coerceAtLeast(0))
     }
 
-    /** Shows a subtitle track inside the file ([textTracks]), or none; kept through reloads of the item. */
-    fun selectTextTrack(id: String?) = onPlayer {
+    /** Shows [choice] for the loaded item: a file is fetched and read first ([subtitles] says so). */
+    fun selectSubtitle(choice: SubtitleChoice) = onPlayer {
         if (_loaded.value == null) return@onPlayer
-        _selectedTextTrack.value = id
-        trackApplied = false
+        subtitlesOfItem.pick(choice)
         refresh()
-    }
-
-    /**
-     * Once the engine knows the tracks: applies our choice (none, unless picked; a file's default
-     * doesn't show by itself). After that, a different track showing was picked by the platform's own
-     * controls, and becomes the choice.
-     */
-    private fun syncTextTrack(facts: EngineFacts): EngineFacts {
-        val wanted = _selectedTextTrack.value
-        if (!trackApplied) {
-            if (facts.textTracks.isEmpty()) return facts
-            engine.selectTextTrack(wanted?.takeIf { id -> facts.textTracks.any { it.id == id } })
-            trackApplied = true
-            return engine.facts()
-        }
-        if (facts.selectedTextTrack != wanted) _selectedTextTrack.value = facts.selectedTextTrack
-        return facts
     }
 
     /** 0..1. */
@@ -214,9 +197,8 @@ class LocalPlayer(
         // Started by itself (e.g. after a phone call) or by the system's controls: no longer stopped.
         if (facts.playing && !facts.ended) stopped = false
         _error.value = facts.error
-        facts = syncTextTrack(facts)
+        facts = subtitlesOfItem.sync(facts)
         _textTracks.value = facts.textTracks
-        _subtitleText.value = facts.subtitleText
         _status.value = RendererStatus(
             state = when {
                 facts.ended || (stopped && !facts.playing) -> TransportState.STOPPED
@@ -233,4 +215,8 @@ class LocalPlayer(
     private companion object {
         const val POLL_INTERVAL_MS = 250L
     }
+}
+
+private object NoSubtitleFiles : SubtitleRepository {
+    override suspend fun fetch(url: String): ByteArray = throw IllegalStateException("No subtitle files here")
 }

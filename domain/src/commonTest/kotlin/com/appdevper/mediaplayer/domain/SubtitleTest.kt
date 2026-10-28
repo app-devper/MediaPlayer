@@ -1,13 +1,9 @@
 package com.appdevper.mediaplayer.domain
 
-import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.domain.model.SubtitleCue
 import com.appdevper.mediaplayer.domain.model.textAt
-import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleParser
-import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -122,15 +118,5 @@ class SubtitleTest {
         assertEquals("Movie.srt", SubtitleFiles.label(null, "Movie.srt"))
         assertEquals("th", SubtitleFiles.languageOf("http://h/media/Movie.th.srt?x=1"))
         assertNull(SubtitleFiles.languageOf("Movie.srt"))
-    }
-
-    @Test
-    fun loadingFailsWhenTheFileHasNoCues() = runTest {
-        val repo = object : SubtitleRepository {
-            override suspend fun fetch(url: String) = if (url.endsWith("good.srt")) "1\n00:00:01,000 --> 00:00:02,000\nHi\n".encodeToByteArray() else "not subtitles".encodeToByteArray()
-        }
-        val load = LoadSubtitlesUseCase(repo)
-        assertEquals(1, load(Subtitle("http://h/good.srt", "good")).getOrThrow().size)
-        assertTrue(load(Subtitle("http://h/bad.srt", "bad")).isFailure)
     }
 }
