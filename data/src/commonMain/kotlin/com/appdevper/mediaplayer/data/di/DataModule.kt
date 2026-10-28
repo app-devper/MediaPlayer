@@ -70,7 +70,7 @@ val dataModule = module {
         )
     }
     single { ContentDirectoryClient(get()) }
-    single { MediaServer(get(), get(AppScope), get()) }
+    single { MediaServer(get(), get(), get(AppScope), get()) }
     single { MediaRenderer(get(), get(), get(AppScope)) }
 
     // Repositories

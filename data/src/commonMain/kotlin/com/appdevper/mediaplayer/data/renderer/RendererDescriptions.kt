@@ -1,57 +1,12 @@
 package com.appdevper.mediaplayer.data.renderer
 
-import com.appdevper.mediaplayer.data.upnp.UpnpTypes
-import com.appdevper.mediaplayer.data.upnp.Xml
 import com.appdevper.mediaplayer.data.upnp.host.Scpd.action
 import com.appdevper.mediaplayer.data.upnp.host.Scpd.arg
 import com.appdevper.mediaplayer.data.upnp.host.Scpd.document
 import com.appdevper.mediaplayer.data.upnp.host.Scpd.variable
 
-/** Static UPnP description documents served by the built-in media renderer. */
+/** The AVTransport and RenderingControl SCPDs served by the built-in media renderer. */
 internal object RendererDescriptions {
-
-    fun device(udn: String, friendlyName: String): String = """
-<?xml version="1.0" encoding="utf-8"?>
-<root xmlns="urn:schemas-upnp-org:device-1-0" xmlns:dlna="urn:schemas-dlna-org:device-1-0">
-  <specVersion><major>1</major><minor>0</minor></specVersion>
-  <device>
-    <deviceType>${UpnpTypes.MEDIA_RENDERER}</deviceType>
-    <friendlyName>${Xml.escape(friendlyName)}</friendlyName>
-    <manufacturer>appdevper</manufacturer>
-    <manufacturerURL>https://github.com/app-devper</manufacturerURL>
-    <modelDescription>MediaPlayer DLNA renderer</modelDescription>
-    <modelName>MediaPlayer</modelName>
-    <modelNumber>2.0</modelNumber>
-    <modelURL>https://github.com/app-devper/MediaPlayer</modelURL>
-    <serialNumber>${Xml.escape(udn.removePrefix("uuid:"))}</serialNumber>
-    <UDN>$udn</UDN>
-    <dlna:X_DLNADOC>DMR-1.50</dlna:X_DLNADOC>
-    <serviceList>
-      <service>
-        <serviceType>${UpnpTypes.AV_TRANSPORT}</serviceType>
-        <serviceId>urn:upnp-org:serviceId:AVTransport</serviceId>
-        <SCPDURL>/avt.xml</SCPDURL>
-        <controlURL>/avt/control</controlURL>
-        <eventSubURL>/avt/event</eventSubURL>
-      </service>
-      <service>
-        <serviceType>${UpnpTypes.RENDERING_CONTROL}</serviceType>
-        <serviceId>urn:upnp-org:serviceId:RenderingControl</serviceId>
-        <SCPDURL>/rcs.xml</SCPDURL>
-        <controlURL>/rcs/control</controlURL>
-        <eventSubURL>/rcs/event</eventSubURL>
-      </service>
-      <service>
-        <serviceType>${UpnpTypes.CONNECTION_MANAGER}</serviceType>
-        <serviceId>urn:upnp-org:serviceId:ConnectionManager</serviceId>
-        <SCPDURL>/cm.xml</SCPDURL>
-        <controlURL>/cm/control</controlURL>
-        <eventSubURL>/cm/event</eventSubURL>
-      </service>
-    </serviceList>
-  </device>
-</root>
-""".trimStart()
 
     private val instanceId = arg("InstanceID", "in", "A_ARG_TYPE_InstanceID")
 

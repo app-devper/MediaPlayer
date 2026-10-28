@@ -1,6 +1,5 @@
 package com.appdevper.mediaplayer.data.upnp.host
 
-import com.appdevper.mediaplayer.data.server.MediaServer
 import com.appdevper.mediaplayer.data.upnp.Xml
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
@@ -58,7 +57,7 @@ internal class GenaPublisher(
         val callback = parseCallback(call.request.header("CALLBACK"), call.request.origin.remoteAddress)
         if (call.request.header("NT") != "upnp:event" || callback == null) return call.respond(HttpStatusCode.PreconditionFailed)
 
-        val sub = Subscription("uuid:${MediaServer.randomUuid()}", callback, TimeSource.Monotonic.markNow() + timeout.seconds)
+        val sub = Subscription("uuid:${LocalDevice.randomUuid()}", callback, TimeSource.Monotonic.markNow() + timeout.seconds)
         mutex.withLock {
             pruneLocked()
             if (subscriptions.size >= MAX_SUBSCRIPTIONS) subscriptions.remove(subscriptions.keys.first())

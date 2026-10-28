@@ -41,7 +41,7 @@ class AddServerByAddressE2ETest {
         val http = HttpClient()
         // One SSDP engine for both, as in the app: the server answers on the port the control point uses.
         val ssdp = SsdpEngine(scope)
-        val server = MediaServer(ssdp, scope)
+        val server = MediaServer(ssdp, http, scope)
         try {
             server.start(ServerConfig("Living Room PC", "uuid:by-address-1", setOf(MediaKind.VIDEO)), library)
             val running = assertIs<ServerState.Running>(server.state.value)

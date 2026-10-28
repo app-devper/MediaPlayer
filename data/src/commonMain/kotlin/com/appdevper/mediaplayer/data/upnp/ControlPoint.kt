@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.data.upnp
 
+import com.appdevper.mediaplayer.data.upnp.host.LocalDevice
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -320,8 +321,6 @@ internal class ServerAddress private constructor(val text: String, val host: Str
         if (host == null) location == text else hostOf(location).equals(host, ignoreCase = true)
 
     companion object {
-        private val OWN_SERVER_PORTS = listOf(8191, 8192, 8193, 8194)
-
         fun parse(input: String): ServerAddress? {
             val text = input.trim()
             if (text.isEmpty() || text.any { it.isWhitespace() }) return null
@@ -332,7 +331,7 @@ internal class ServerAddress private constructor(val text: String, val host: Str
             val host = text.substringBefore(':')
             val port = text.substringAfter(':', "").takeIf { it.isNotEmpty() }?.let { it.toIntOrNull()?.takeIf { p -> p in 1..65535 } ?: return null }
             if (host.isEmpty() || !host.all { it.isLetterOrDigit() || it == '.' || it == '-' }) return null
-            val ports = port?.let(::listOf) ?: OWN_SERVER_PORTS
+            val ports = port?.let(::listOf) ?: LocalDevice.SERVER_PORTS
             return ServerAddress(text, host, ports.map { "http://$host:$it/description.xml" })
         }
 

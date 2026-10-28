@@ -1,6 +1,5 @@
 package com.appdevper.mediaplayer.data
 
-import com.appdevper.mediaplayer.data.platform.localIpv4Address
 import com.appdevper.mediaplayer.data.renderer.MediaRenderer
 import com.appdevper.mediaplayer.data.renderer.RendererConfig
 import com.appdevper.mediaplayer.data.upnp.DeviceDescription
@@ -37,7 +36,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.junit.Assume.assumeNotNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -45,16 +43,16 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** Starts the real renderer on the LAN interface and drives it with the app's own DLNA controller client. */
+/** Starts the real renderer and drives it with the app's own DLNA controller client. */
 class MediaRendererE2ETest {
 
     @Test
     fun controlStatusAndEvents() = runBlocking {
-        val ip = localIpv4Address()
-        assumeNotNull(ip) // needs a LAN interface
+        // SSDP on an in-memory LAN, HTTP on loopback: no network needed.
+        val ip = "127.0.0.1"
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val http = HttpClient()
-        val renderer = MediaRenderer(SsdpEngine(scope), http, scope)
+        val renderer = MediaRenderer(SsdpEngine(scope, network = InMemoryLan().host(ip)), http, scope)
         val commands = Channel<CastCommand>(Channel.UNLIMITED)
         scope.launch { renderer.commands.collect { commands.send(it) } }
         val events = Channel<String>(Channel.UNLIMITED)

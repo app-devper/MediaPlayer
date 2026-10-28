@@ -3,7 +3,7 @@ package com.appdevper.mediaplayer.data.repository
 import com.appdevper.mediaplayer.data.upnp.AddressStore
 import com.appdevper.mediaplayer.data.platform.defaultSharedFolders
 import com.appdevper.mediaplayer.data.platform.platformName
-import com.appdevper.mediaplayer.data.server.MediaServer
+import com.appdevper.mediaplayer.data.upnp.host.LocalDevice
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import com.russhwolf.settings.Settings
@@ -22,11 +22,11 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
 
     /** Stable device UDN so renderers/TVs keep recognising this server across restarts. */
     val serverUdn: String
-        get() = s.getStringOrNull(KEY_UDN) ?: "uuid:${MediaServer.randomUuid()}".also { s.putString(KEY_UDN, it) }
+        get() = s.getStringOrNull(KEY_UDN) ?: "uuid:${LocalDevice.randomUuid()}".also { s.putString(KEY_UDN, it) }
 
     /** Separate stable UDN for the renderer: controllers cache devices by UDN. */
     val rendererUdn: String
-        get() = s.getStringOrNull(KEY_RENDERER_UDN) ?: "uuid:${MediaServer.randomUuid()}".also { s.putString(KEY_RENDERER_UDN, it) }
+        get() = s.getStringOrNull(KEY_RENDERER_UDN) ?: "uuid:${LocalDevice.randomUuid()}".also { s.putString(KEY_RENDERER_UDN, it) }
 
     /** Stable AirPlay device id (6 bytes, locally administered MAC-like): senders remember receivers by it. */
     val airPlayDeviceId: ByteArray
