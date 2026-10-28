@@ -46,7 +46,17 @@ class FakeDevices : DeviceRepository {
         if (slow) kotlinx.coroutines.delay(10_000)
         val found = listOfNotNull(byAddress[address.trim()])
         devices.value = (devices.value + found).distinct()
+        if (found.isNotEmpty()) savedAddresses.value += address.trim()
         return found
+    }
+
+    override val savedAddresses = MutableStateFlow(emptyList<String>())
+    override suspend fun forgetAddress(address: String) {
+        // As the real one: trimmed, whatever the case.
+        val text = address.trim()
+        savedAddresses.value = savedAddresses.value.filterNot { it.equals(text, ignoreCase = true) }
+        val host = byAddress.entries.firstOrNull { it.key.equals(text, ignoreCase = true) }?.value?.host
+        devices.value = devices.value.filterNot { it.host == host }
     }
 }
 

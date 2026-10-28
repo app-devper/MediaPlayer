@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.appdevper.mediaplayer.designsystem.components.CenteredColumn
 import com.appdevper.mediaplayer.designsystem.components.ComposerField
+import com.appdevper.mediaplayer.designsystem.components.GhostIconButton
 import com.appdevper.mediaplayer.designsystem.components.IconTile
 import com.appdevper.mediaplayer.designsystem.components.OutlineCard
 import com.appdevper.mediaplayer.designsystem.components.PillButton
@@ -79,6 +81,7 @@ fun HomeScreen(
     onOpenMyServer: () -> Unit,
     onAddServer: (String) -> Unit = {},
     onDismissAddServer: () -> Unit = {},
+    onForgetServer: (String) -> Unit = {},
 ) {
     val c = AppTheme.colors
     // imePadding: room for the keyboard, so what's under a focused field can scroll into view.
@@ -126,6 +129,7 @@ fun HomeScreen(
             }
 
             AddServerByAddress(state.addServer, onAddServer, onDismissAddServer)
+            SavedAddresses(state.savedAddresses, onForgetServer)
 
             SectionLabel("Play on")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -266,6 +270,25 @@ private fun AddServerByAddress(state: AddServerState, onAdd: (String) -> Unit, o
                 open = false
                 onDismiss()
             }, style = PillStyle.Secondary)
+        }
+    }
+}
+
+/** Addresses added by hand: they're asked on every search until removed here. */
+@Composable
+private fun SavedAddresses(addresses: List<String>, onForget: (String) -> Unit) {
+    if (addresses.isEmpty()) return
+    val c = AppTheme.colors
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        Text("Added by address", style = MaterialTheme.typography.labelMedium, color = c.textTertiary, modifier = Modifier.padding(start = 4.dp))
+        addresses.forEach { address ->
+            key(address) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Icon(AppIcons.Server, null, Modifier.padding(start = 4.dp).size(16.dp), tint = c.textSecondary)
+                    Text(address, style = MaterialTheme.typography.bodyMedium, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    GhostIconButton(AppIcons.Close, "Remove $address", { onForget(address) }, iconSize = 16.dp)
+                }
+            }
         }
     }
 }

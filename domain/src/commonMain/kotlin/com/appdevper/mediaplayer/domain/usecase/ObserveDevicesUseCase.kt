@@ -7,4 +7,5 @@ import kotlinx.coroutines.flow.StateFlow
 class ObserveDevicesUseCase(private val repo: DeviceRepository) {
     operator fun invoke(): StateFlow<List<MediaDevice>> = repo.devices
     val isSearching: StateFlow<Boolean> get() = repo.isSearching
+    val savedAddresses: StateFlow<List<String>> get() = repo.savedAddresses
 }

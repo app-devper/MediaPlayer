@@ -10,13 +10,6 @@ import com.appdevper.mediaplayer.data.upnp.ControlPoint
 import com.appdevper.mediaplayer.data.upnp.SsdpEngine
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import io.ktor.client.HttpClient
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.runBlocking
-import kotlinx.io.Buffer
-import org.junit.Assume.assumeNotNull
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -24,6 +17,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.io.Buffer
+import org.junit.Assume.assumeNotNull
 
 /** Adding a server by its address (no multicast discovery), against the real DLNA server. */
 class AddServerByAddressE2ETest {

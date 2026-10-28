@@ -147,6 +147,11 @@ class UpnpTest {
         assertEquals(listOf("http://192.168.1.5:9000/dms/desc.xml"), url.descriptionUrls)
         assertTrue(url.matches("http://192.168.1.5:9000/dms/desc.xml"))
 
+        // Same machine, whatever the port or the letter case.
+        assertTrue(host.sameHost(assertNotNull(ServerAddress.parse("192.168.1.20:8191"))))
+        assertTrue(name.sameHost(assertNotNull(ServerAddress.parse("http://NAS.local:9000/desc.xml"))))
+        assertFalse(host.sameHost(assertNotNull(ServerAddress.parse("192.168.1.21"))))
+
         for (bad in listOf("", "  ", "192.168.1.20:0", "192.168.1.20:70000", "host:port", "a b", "x/y", "user@host", "http://")) {
             assertNull(ServerAddress.parse(bad), bad)
         }
