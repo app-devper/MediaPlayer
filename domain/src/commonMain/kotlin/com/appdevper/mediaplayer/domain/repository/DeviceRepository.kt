@@ -18,4 +18,10 @@ interface DeviceRepository {
      * which then shows in [devices] and is asked again on later launches; empty if nothing did.
      */
     suspend fun addByAddress(address: String): List<MediaDevice>
+
+    /** Addresses added with [addByAddress] that are kept and asked again. */
+    val savedAddresses: StateFlow<List<String>>
+
+    /** Stops asking [address] and drops its servers from [devices] (unless the network announces them). */
+    suspend fun forgetAddress(address: String)
 }

@@ -147,6 +147,7 @@ fun AppShell(startDestination: Any = HomeRoute) {
                                 onRefresh = { vm.refresh(clear = true) },
                                 onAddServer = vm::addServer,
                                 onDismissAddServer = vm::dismissAddServer,
+                                onForgetServer = vm::forgetServer,
                             )
                             androidx.compose.animation.AnimatedVisibility(
                                 visible = state.hasNowPlaying && !onPlayer,

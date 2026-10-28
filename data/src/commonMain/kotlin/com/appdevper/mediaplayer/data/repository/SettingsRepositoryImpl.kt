@@ -49,6 +49,10 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         if (serverAddresses.none { it.equals(address, ignoreCase = true) }) s.putString(KEY_SERVER_ADDRESSES, (serverAddresses + address).joinToString("\n"))
     }
 
+    fun removeServerAddress(address: String) {
+        s.putString(KEY_SERVER_ADDRESSES, serverAddresses.filterNot { it.equals(address, ignoreCase = true) }.joinToString("\n"))
+    }
+
     override fun update(transform: (ServerSettings) -> ServerSettings) {
         val next = transform(_serverSettings.value).let { it.copy(name = it.name.trim().ifEmpty { defaultName }) }
         s.putString(KEY_NAME, next.name)

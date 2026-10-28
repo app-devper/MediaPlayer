@@ -74,6 +74,7 @@ val dataModule = module {
             ownUdns = { if (renderer.state.value is ReceiverStatus.Running) setOf(settings.rendererUdn) else emptySet() },
             savedAddresses = settings.serverAddresses,
             saveAddress = settings::addServerAddress,
+            removeAddress = settings::removeServerAddress,
         )
     }
     single<LibraryRepository> { LibraryRepositoryImpl(get(), get()) }

@@ -197,6 +197,7 @@ class PresentationTest {
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
             com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
+            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(FakeDevices()),
             session,
             receiverSession(),
             airPlaySession(airPlay = airPlay).also { it.start() },
@@ -220,6 +221,7 @@ class PresentationTest {
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
             com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
+            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(FakeDevices()),
             session,
             receiverSession(),
             airPlaySession(),
@@ -241,6 +243,7 @@ class PresentationTest {
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(devices),
             com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(devices),
+            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(devices),
             session,
             receiverSession(),
             airPlaySession(),
@@ -258,6 +261,13 @@ class PresentationTest {
         assertEquals(AddServerState.Added(listOf("Office NAS")), vm.uiState.value.addServer)
         assertTrue("Office NAS" in vm.uiState.value.servers.map { it.name })
         assertEquals(listOf("192.168.1.99", " 192.168.1.30 "), devices.asked)
+        assertEquals(listOf("192.168.1.30"), vm.uiState.value.savedAddresses)
+
+        // Removed again: no longer saved, and its server leaves the list.
+        vm.forgetServer("192.168.1.30")
+        advanceUntilIdle()
+        assertEquals(emptyList(), vm.uiState.value.savedAddresses)
+        assertTrue("Office NAS" !in vm.uiState.value.servers.map { it.name })
 
         // Cancel while it works: the search stops, and nothing turns up later.
         devices.slow = true
@@ -275,6 +285,7 @@ class PresentationTest {
             ObserveServerStatusUseCase(FakeServer()),
             com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
             com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
+            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(FakeDevices()),
             session,
             receiverSession(),
             airPlaySession(),

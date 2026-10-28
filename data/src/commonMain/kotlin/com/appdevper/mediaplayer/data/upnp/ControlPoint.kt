@@ -105,6 +105,17 @@ class ControlPoint(
         }
     }
 
+    /**
+     * Stops asking [address] and drops the devices found there. One the network also announces comes
+     * back with its next announcement.
+     */
+    suspend fun forget(address: String) {
+        val text = address.trim()
+        addresses.update { set -> set.filterNot { it.equals(text, ignoreCase = true) }.toSet() }
+        val target = ServerAddress.parse(text) ?: return
+        mutex.withLock { if (entries.values.removeAll { target.matches(it.device.location) }) publish() }
+    }
+
     /** Addresses to ask directly from now on (e.g. ones saved from earlier sessions). */
     fun remember(addresses: Collection<String>) {
         this.addresses.update { it + addresses }

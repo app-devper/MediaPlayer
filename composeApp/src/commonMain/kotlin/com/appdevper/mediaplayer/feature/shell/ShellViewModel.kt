@@ -13,6 +13,7 @@ import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
 import com.appdevper.mediaplayer.domain.playback.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase
+import com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase
 import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase
 import com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase
@@ -43,6 +44,8 @@ data class ShellUiState(
     val airPlay: AirPlayActivity = AirPlayActivity(),
     /** Adding a media server by its address (Home › Media servers). */
     val addServer: AddServerState = AddServerState.Idle,
+    /** Server addresses the user added, which can be removed again. */
+    val savedAddresses: List<String> = emptyList(),
 ) {
     /** Something to show under "Now playing": our own item, or audio a sender plays here. */
     val hasNowPlaying: Boolean get() = nowPlaying != null || airPlay.audioOnly
@@ -54,6 +57,7 @@ class ShellViewModel(
     observeServerStatus: ObserveServerStatusUseCase,
     private val refreshDevices: RefreshDevicesUseCase,
     private val addServerByAddress: AddServerByAddressUseCase,
+    private val forgetServerAddress: ForgetServerAddressUseCase,
     private val session: PlaybackSession,
     receiver: CastReceiverSession,
     airPlay: AirPlayReceiverSession,
@@ -89,7 +93,9 @@ class ShellViewModel(
             },
             airPlay = airPlayActivity,
         )
-    }.combine(addServer) { state, adding -> state.copy(addServer = adding) }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShellUiState())
+    }.combine(addServer) { state, adding -> state.copy(addServer = adding) }
+        .combine(observeDevices.savedAddresses) { state, saved -> state.copy(savedAddresses = saved) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShellUiState())
 
     fun refresh(clear: Boolean = false) = refreshDevices(clear)
 
@@ -101,6 +107,10 @@ class ShellViewModel(
             val found = runCatching { addServerByAddress(address) }.getOrDefault(emptyList())
             addServer.value = if (found.isEmpty()) AddServerState.NotFound(address.trim()) else AddServerState.Added(found.map { it.name })
         }
+    }
+
+    fun forgetServer(address: String) {
+        viewModelScope.launch { forgetServerAddress(address) }
     }
 
     /** Cancel, or a fresh start: a search still running stops (it won't add or report anything later). */

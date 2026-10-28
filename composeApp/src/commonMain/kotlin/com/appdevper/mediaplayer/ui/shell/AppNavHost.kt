@@ -22,6 +22,7 @@ internal fun AppNavHost(
     onRefresh: () -> Unit,
     onAddServer: (String) -> Unit,
     onDismissAddServer: () -> Unit,
+    onForgetServer: (String) -> Unit,
 ) {
     NavHost(nav, startDestination = startDestination) {
         composable<HomeRoute> {
@@ -33,6 +34,7 @@ internal fun AppNavHost(
                 onOpenMyServer = { nav.navigate(ServerRoute) },
                 onAddServer = onAddServer,
                 onDismissAddServer = onDismissAddServer,
+                onForgetServer = onForgetServer,
             )
         }
         composable<BrowseRoute> { e ->
