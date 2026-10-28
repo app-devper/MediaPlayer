@@ -19,7 +19,6 @@ actual fun VideoSurface(title: String, modifier: Modifier) {
             PlayerView(ctx).apply {
                 this.player = player
                 useController = false
-                contentDescription = title
             }
         },
         // The player plays on (its sound, without a picture) when this leaves the screen.

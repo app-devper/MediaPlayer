@@ -37,7 +37,8 @@ private fun Frames(player: FfmpegPlayer, title: String, modifier: Modifier) {
         SkiaImage.makeRaster(ImageInfo(f.width, f.height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE), f.bgra, f.width * 4)
             .toComposeImageBitmap()
     }
-    Image(bitmap, contentDescription = title, modifier = modifier, contentScale = ContentScale.Fit)
+    // The title is on the view's picture area, over this.
+    Image(bitmap, contentDescription = null, modifier = modifier, contentScale = ContentScale.Fit)
 }
 
 actual val videoSurfaceHasControls: Boolean = false

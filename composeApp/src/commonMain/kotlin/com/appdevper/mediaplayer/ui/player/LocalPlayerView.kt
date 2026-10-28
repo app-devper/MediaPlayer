@@ -51,6 +51,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -104,8 +106,10 @@ internal fun LocalPlayerView(
     val state = status?.state
     val playing = state == TransportState.PLAYING || state == TransportState.TRANSITIONING
     val buffering = state == TransportState.TRANSITIONING
+    // Reads the player now, not this composition's `playing`: gesture handlers keep the function they started with.
     fun togglePlay() {
-        if (playing) player.pause() else player.play()
+        val now = player.status.value?.state
+        if (now == TransportState.PLAYING || now == TransportState.TRANSITIONING) player.pause() else player.play()
     }
 
     // M or the speaker icon: mute, and back to the volume it had (full, if it was dragged down to 0).
@@ -226,6 +230,8 @@ internal fun LocalPlayerView(
             // Any key brings them back; media keys play and pause (keyboards, remotes, headsets).
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // OK on a remote: the focused picture's click shows or hides the bar (or a focused button's runs).
+                if (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter) return@onPreviewKeyEvent false
                 activity.tryEmit(Unit)
                 when (e.key) {
                     Key.MediaPlayPause -> togglePlay()
@@ -257,8 +263,8 @@ internal fun LocalPlayerView(
         contentAlignment = Alignment.Center,
     ) {
         VideoSurface(title, Modifier.fillMaxSize())
-        // Over the picture: clicks and taps go to Compose, not to the platform view.
-        Box(Modifier.fillMaxSize().then(picture))
+        // Over the picture: clicks and taps go to Compose, not to the platform view. It carries the title.
+        Box(Modifier.fillMaxSize().semantics { contentDescription = title }.then(picture))
         when {
             error != null -> Text(error.orEmpty(), color = Color.White, modifier = Modifier.padding(16.dp))
             buffering -> CircularProgressIndicator(Modifier.size(36.dp), strokeWidth = 3.dp, color = Color.White)
