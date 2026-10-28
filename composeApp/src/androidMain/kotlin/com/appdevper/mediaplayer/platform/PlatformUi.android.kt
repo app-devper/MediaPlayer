@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
@@ -51,4 +52,4 @@ actual fun rememberMediaPermissionRequest(): MediaPermissionRequest {
 actual val supportsAirPlay: Boolean = false
 
 @Composable
-actual fun AirPlayButton(modifier: Modifier) {}
+actual fun AirPlayButton(modifier: Modifier, tint: Color?) {}

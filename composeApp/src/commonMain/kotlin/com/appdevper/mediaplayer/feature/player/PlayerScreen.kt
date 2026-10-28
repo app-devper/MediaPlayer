@@ -67,11 +67,11 @@ import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.drives
-import com.appdevper.mediaplayer.platform.NativeMediaPlayer
 import com.appdevper.mediaplayer.ui.LocalFullscreen
 import com.appdevper.mediaplayer.ui.formatClock
 import com.appdevper.mediaplayer.ui.icon
 import com.appdevper.mediaplayer.ui.joinDetails
+import com.appdevper.mediaplayer.ui.player.LocalPlayerView
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Now playing (replaces `FullScreenPlayerActivity`, `ImageActivity` and the remote controls). */
@@ -119,10 +119,14 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                 Thumbnail(item.thumbnailUrl, AppIcons.Music, size = 160.dp, shape = Radius.large, modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp))
             }
             key(item.id, item.streamUrl) {
-                NativeMediaPlayer(
-                    url = item.streamUrl.orEmpty(),
+                LocalPlayerView(
+                    player = vm.localPlayer,
                     title = item.title,
                     isAudio = isAudio,
+                    volume = state.localVolume,
+                    muted = state.localMuted,
+                    onVolumeChange = vm::setVolume,
+                    onMutedChange = vm::setMuted,
                     modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
                     fullscreen = fullscreen,
                     onToggleFullscreen = if (isAudio) null else fullscreenState::toggle,

@@ -2,6 +2,7 @@ package com.appdevper.mediaplayer.platform
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
 
 /** Asks for media read permission where needed (Android 13+ READ_MEDIA_*, iOS/desktop: granted). */
@@ -13,27 +14,31 @@ fun interface MediaPermissionRequest {
 expect fun rememberMediaPermissionRequest(): MediaPermissionRequest
 
 /**
- * Shows the app's local player ([com.appdevper.mediaplayer.domain.session.LocalPlayer]) and its
- * transport controls: the picture for a video, the controls for a song. The player itself follows
- * the playback session and plays on when this leaves the screen.
+ * The picture of the app's local player ([com.appdevper.mediaplayer.ui.player.LocalPlayerView] puts
+ * the controls over it): Android's PlayerView, desktop's FFmpeg frames, iOS's AVPlayerViewController
+ * (with AVKit's own controls, full screen, Picture in Picture and AirPlay; see [videoSurfaceHasControls]).
  */
 @Composable
-expect fun NativeMediaPlayer(
-    url: String,
-    title: String,
-    isAudio: Boolean,
-    modifier: Modifier = Modifier,
-    /** Shows a full-screen button (desktop also: double-click) when set; iOS uses AVKit's own. */
-    fullscreen: Boolean = false,
-    onToggleFullscreen: (() -> Unit)? = null,
-)
+expect fun VideoSurface(title: String, modifier: Modifier = Modifier)
+
+/** [VideoSurface] brings its own controls (AVKit on iOS), so ours don't go over it. */
+expect val videoSurfaceHasControls: Boolean
+
+/**
+ * A mouse and keyboard (desktop): a click on the video plays or pauses, the pointer hides with the
+ * controls, keys are shortcuts and the bar has a volume control. Otherwise touch (and TV remotes).
+ */
+expect val pointerIsMouse: Boolean
+
+/** Hides the mouse pointer over this element while [hidden] (desktop); nothing elsewhere. */
+expect fun Modifier.hidePointer(hidden: Boolean): Modifier
 
 /** True where the OS offers AirPlay routing (iOS). */
 expect val supportsAirPlay: Boolean
 
-/** System AirPlay route picker button (AVRoutePickerView on iOS; nothing elsewhere). */
+/** System AirPlay route picker button (AVRoutePickerView on iOS; nothing elsewhere); [tint] overrides its idle color. */
 @Composable
-expect fun AirPlayButton(modifier: Modifier = Modifier)
+expect fun AirPlayButton(modifier: Modifier = Modifier, tint: Color? = null)
 
 /** Draws AirPlay screen mirroring from [player] (Android: a SurfaceView; desktop: decoded frames). */
 @Composable
