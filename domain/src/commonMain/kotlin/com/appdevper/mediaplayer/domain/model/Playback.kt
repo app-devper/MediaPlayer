@@ -14,7 +14,7 @@ data class RendererStatus(
     val state: TransportState,
     val positionMs: Long,
     val durationMs: Long,
-    /** Played to its end (not stopped by a controller, nor by leaving the player). Local players only. */
+    /** Played to its end by itself (not stopped by a controller): the session moves on. */
     val ended: Boolean = false,
 )
 
@@ -33,23 +33,12 @@ data class PlaybackState(
     val autoPlay: Boolean = true,
     /** Where the local player starts the current item. */
     val startPositionMs: Long = 0,
-    /** Last state reported by the local player, null until it reports. */
+    /** What this device's player is doing, null until it loaded something. */
     val local: RendererStatus? = null,
     val localVolume: Int = 100,
     val localMuted: Boolean = false,
-    /** Counts play()/playAt(): a player that outlives its screen loads the same item again when it changes. */
-    val loads: Int = 0,
 ) {
     val current: MediaEntry? get() = queue.getOrNull(index)
     val hasNext: Boolean get() = index < queue.lastIndex
     val hasPrevious: Boolean get() = index > 0
-}
-
-/** Commands for the on-screen player that don't come from its own controls (e.g. a DLNA controller). */
-sealed interface LocalPlayerCommand {
-    data object Play : LocalPlayerCommand
-    data object Pause : LocalPlayerCommand
-    /** Pause and rewind; the player reports [TransportState.STOPPED] until it plays again. */
-    data object Stop : LocalPlayerCommand
-    data class Seek(val positionMs: Long) : LocalPlayerCommand
 }

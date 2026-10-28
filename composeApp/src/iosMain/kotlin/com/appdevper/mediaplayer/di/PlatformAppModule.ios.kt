@@ -1,8 +1,11 @@
 package com.appdevper.mediaplayer.di
 
 import com.appdevper.mediaplayer.data.platform.ServerHost
+import com.appdevper.mediaplayer.domain.session.PlaybackEngine
+import com.appdevper.mediaplayer.playback.AvPlaybackEngine
 import com.appdevper.mediaplayer.playback.IosBackgroundPlayer
 import org.koin.core.module.Module
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import platform.UIKit.UIApplication
 import platform.darwin.dispatch_async
@@ -21,5 +24,6 @@ private class IdleTimerServerHost : ServerHost {
 
 actual val platformAppModule: Module = module {
     single<ServerHost> { IdleTimerServerHost() }
+    single { AvPlaybackEngine() } bind PlaybackEngine::class
     single { IosBackgroundPlayer(get()) }
 }

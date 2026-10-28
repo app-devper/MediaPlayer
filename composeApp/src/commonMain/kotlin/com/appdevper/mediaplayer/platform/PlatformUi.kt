@@ -3,11 +3,6 @@ package com.appdevper.mediaplayer.platform
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.appdevper.mediaplayer.airplay.AirPlayPlayer
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
-import com.appdevper.mediaplayer.domain.model.RendererStatus
-import com.appdevper.mediaplayer.domain.model.TransportState
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 
 /** Asks for media read permission where needed (Android 13+ READ_MEDIA_*, iOS/desktop: granted). */
 fun interface MediaPermissionRequest {
@@ -18,24 +13,16 @@ fun interface MediaPermissionRequest {
 expect fun rememberMediaPermissionRequest(): MediaPermissionRequest
 
 /**
- * Native video/audio player with its own transport controls. It can also be driven from outside
- * ([commands], [volume]) and reports what it is doing through [onStatus] about twice a second.
- * With [autoPlay] false it loads paused and reports [TransportState.STOPPED] until it plays.
+ * Shows the app's local player ([com.appdevper.mediaplayer.domain.session.LocalPlayer]) and its
+ * transport controls: the picture for a video, the controls for a song. The player itself follows
+ * the playback session and plays on when this leaves the screen.
  */
 @Composable
 expect fun NativeMediaPlayer(
     url: String,
     title: String,
     isAudio: Boolean,
-    onEnded: () -> Unit,
     modifier: Modifier = Modifier,
-    autoPlay: Boolean = true,
-    /** Where playback starts (e.g. an AirPlay sender resuming a video). */
-    startPositionMs: Long = 0,
-    /** 0..1; 0 when muted. */
-    volume: Float = 1f,
-    commands: Flow<LocalPlayerCommand> = emptyFlow(),
-    onStatus: (RendererStatus) -> Unit = {},
     /** Shows a full-screen button (desktop also: double-click) when set; iOS uses AVKit's own. */
     fullscreen: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
@@ -61,6 +48,3 @@ expect fun SystemFullscreenEffect(fullscreen: Boolean, onExit: () -> Unit)
 
 /** "Android" / "iOS" / OS name — shown for the local playback target. */
 expect val deviceLabel: String
-
-/** How often the native players report position. */
-internal const val STATUS_INTERVAL_MS = 500L

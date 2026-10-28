@@ -18,6 +18,7 @@ import com.appdevper.mediaplayer.feature.mirror.MirrorViewModel
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
@@ -35,9 +36,6 @@ import com.appdevper.mediaplayer.feature.shell.ShellViewModel
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import kotlinx.coroutines.test.advanceUntilIdle
 import com.appdevper.mediaplayer.feature.shell.AddServerState
-import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.model.RendererStatus
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -81,7 +79,8 @@ class PresentationTest {
     }
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
-    private val session = PlaybackSession(FakeRenderer(), appScope)
+    private val engine = FakeEngine()
+    private val session = PlaybackSession(FakeRenderer(), LocalPlayer(engine, appScope), appScope)
 
     private fun receiverSession(settings: FakeSettings = FakeSettings(), receiver: FakeReceiver = FakeReceiver()) =
         CastReceiverSession(receiver, settings, session, appScope)
@@ -292,21 +291,16 @@ class PresentationTest {
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
-        session.play(song, listOf(song))
-        // Nothing reported yet, or a player that stopped when it left the screen: nothing to control.
-        assertEquals(null, vm.uiState.value.localPlaying)
-        session.reportLocalStatus(RendererStatus(TransportState.STOPPED, 0, 180_000))
+        // Loaded but not started (or stopped): nothing to pause.
+        session.play(song, listOf(song), autoPlay = false)
         assertEquals(null, vm.uiState.value.localPlaying)
 
-        // Android's player plays on in the background: the mini player pauses and plays it.
-        session.reportLocalStatus(RendererStatus(TransportState.PLAYING, 5_000, 180_000))
+        // Our player plays on off the player screen: the mini player plays and pauses it.
+        vm.togglePause()
         assertEquals(true, vm.uiState.value.localPlaying)
-        vm.toggleLocal()
-        assertEquals(LocalPlayerCommand.Pause, session.localCommands.first())
-        session.reportLocalStatus(RendererStatus(TransportState.PAUSED, 5_000, 180_000))
+        vm.togglePause()
         assertEquals(false, vm.uiState.value.localPlaying)
-        vm.toggleLocal()
-        assertEquals(LocalPlayerCommand.Play, session.localCommands.first())
+        assertEquals(listOf("load:a1", "play", "pause"), engine.calls)
 
         // Playing on a TV: that's the renderer's play/pause, not ours.
         vm.selectTarget(PlaybackTarget.Renderer(fakeTv))

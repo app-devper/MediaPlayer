@@ -10,7 +10,7 @@ class MediaPlayerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         initKoin { androidContext(this@MediaPlayerApp) }
-        // Plays the session's songs and videos from now on, with or without the player screen.
+        // The media session and the app lifecycle for the local player, with or without the player screen.
         get<BackgroundPlayer>(BackgroundPlayer::class.java)
     }
 }

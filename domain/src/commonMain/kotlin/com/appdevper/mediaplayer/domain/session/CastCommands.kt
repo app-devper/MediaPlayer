@@ -1,7 +1,6 @@
 package com.appdevper.mediaplayer.domain.session
 
 import com.appdevper.mediaplayer.domain.model.CastCommand
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
@@ -12,8 +11,10 @@ import com.appdevper.mediaplayer.domain.model.TransportState
 /**
  * Plays what another device cast here (DLNA or AirPlay video) on the local player.
  * [openPlayer] brings the player on screen (on a load, and on play since it may have been closed).
+ * Until the next load, the other commands are for our own player only, not a renderer we picked since.
  */
 internal fun PlaybackSession.apply(command: CastCommand, openPlayer: () -> Unit) {
+    if (command !is CastCommand.Load && state.value.target != PlaybackTarget.Local) return
     when (command) {
         is CastCommand.Load -> {
             setTarget(PlaybackTarget.Local)
@@ -21,14 +22,14 @@ internal fun PlaybackSession.apply(command: CastCommand, openPlayer: () -> Unit)
             openPlayer()
         }
         CastCommand.Play -> {
-            sendLocal(LocalPlayerCommand.Play)
+            play()
             openPlayer()
         }
-        CastCommand.Pause -> sendLocal(LocalPlayerCommand.Pause)
-        CastCommand.Stop -> stopLocal()
-        is CastCommand.Seek -> sendLocal(LocalPlayerCommand.Seek(command.positionMs))
-        is CastCommand.SetVolume -> setLocalVolume(command.volume)
-        is CastCommand.SetMute -> setLocalMuted(command.muted)
+        CastCommand.Pause -> pause()
+        CastCommand.Stop -> stop()
+        is CastCommand.Seek -> seek(command.positionMs)
+        is CastCommand.SetVolume -> setVolume(command.volume)
+        is CastCommand.SetMute -> setMuted(command.muted)
     }
 }
 

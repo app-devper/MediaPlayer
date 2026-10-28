@@ -4,10 +4,13 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import com.appdevper.mediaplayer.data.platform.ServerHost
+import com.appdevper.mediaplayer.domain.session.PlaybackEngine
 import com.appdevper.mediaplayer.playback.BackgroundPlayer
+import com.appdevper.mediaplayer.playback.ExoPlaybackEngine
 import com.appdevper.mediaplayer.service.ServerService
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 /** Runs the DLNA server inside a foreground service so Android keeps it alive. */
@@ -25,5 +28,6 @@ private class ServiceServerHost(private val context: Context) : ServerHost {
 
 actual val platformAppModule: Module = module {
     single<ServerHost> { ServiceServerHost(androidContext()) }
+    single { ExoPlaybackEngine(androidContext()) } bind PlaybackEngine::class
     single { BackgroundPlayer(androidContext(), get(), get()) }
 }

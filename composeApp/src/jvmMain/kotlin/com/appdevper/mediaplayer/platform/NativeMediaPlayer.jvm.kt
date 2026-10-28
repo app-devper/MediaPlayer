@@ -24,13 +24,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,9 +58,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appdevper.mediaplayer.designsystem.components.ThinSlider
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
-import com.appdevper.mediaplayer.domain.model.RendererStatus
-import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
+import com.appdevper.mediaplayer.playback.FfmpegPlaybackEngine
 import com.appdevper.mediaplayer.playback.FfmpegPlayer
 import com.appdevper.mediaplayer.ui.player.PlayerControlBar
 import java.awt.GraphicsEnvironment
@@ -72,92 +68,54 @@ import java.awt.Toolkit
 import java.awt.image.BufferedImage
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image as SkiaImage
 import org.jetbrains.skia.ImageInfo
+import org.koin.compose.koinInject
+import kotlin.math.roundToInt
 
-/** Desktop player on FFmpeg ([FfmpegPlayer]): plays from DLNA servers, http(s) URLs and HLS. */
+/**
+ * Shows the app's one player ([PlaybackSession.local] on [FfmpegPlaybackEngine]): plays from DLNA
+ * servers, http(s) URLs and HLS, and plays on when this leaves the screen.
+ */
 @Composable
 actual fun NativeMediaPlayer(
     url: String,
     title: String,
     isAudio: Boolean,
-    onEnded: () -> Unit,
     modifier: Modifier,
-    autoPlay: Boolean,
-    startPositionMs: Long,
-    volume: Float,
-    commands: Flow<LocalPlayerCommand>,
-    onStatus: (RendererStatus) -> Unit,
     fullscreen: Boolean,
     onToggleFullscreen: (() -> Unit)?,
 ) {
-    val player = remember(url) { FfmpegPlayer(url, autoPlay).apply { if (startPositionMs > 0) seek(startPositionMs) } }
+    val session = koinInject<PlaybackSession>()
+    // Empty for a moment while the session's item goes into the player.
+    val player = koinInject<FfmpegPlaybackEngine>().player.collectAsStateWithLifecycle().value ?: return
+    FfmpegPlayerView(player, session, title, isAudio, modifier, fullscreen, onToggleFullscreen)
+}
+
+@Composable
+private fun FfmpegPlayerView(
+    player: FfmpegPlayer,
+    session: PlaybackSession,
+    title: String,
+    isAudio: Boolean,
+    modifier: Modifier,
+    fullscreen: Boolean,
+    onToggleFullscreen: (() -> Unit)?,
+) {
+    val local = session.local
     val status by player.status.collectAsStateWithLifecycle()
     val frame by player.frames.collectAsStateWithLifecycle()
-    val ended by rememberUpdatedState(onEnded)
-    val report by rememberUpdatedState(onStatus)
-    // "Stopped" = loaded but not started, finished, or stopped by a controller; reported as STOPPED rather than PAUSED.
-    var stopped by remember(url) { mutableStateOf(!autoPlay) }
     var seeking by remember { mutableStateOf(false) }
-    var sliderVolume by remember { mutableFloatStateOf(100f) }
-
-    fun rendererStatus() = RendererStatus(
-        state = when {
-            stopped || status.ended -> TransportState.STOPPED
-            status.buffering && status.playing -> TransportState.TRANSITIONING
-            status.playing -> TransportState.PLAYING
-            else -> TransportState.PAUSED
-        },
-        positionMs = status.positionMs,
-        durationMs = status.durationMs,
-        ended = status.ended,
-    )
-
-    DisposableEffect(player) {
-        onDispose {
-            report(rendererStatus().copy(state = TransportState.STOPPED))
-            player.release()
-        }
-    }
-    LaunchedEffect(player) {
-        commands.collect { cmd ->
-            when (cmd) {
-                LocalPlayerCommand.Play -> {
-                    stopped = false
-                    player.play()
-                }
-                LocalPlayerCommand.Pause -> player.pause()
-                LocalPlayerCommand.Stop -> {
-                    stopped = true
-                    player.pause()
-                    player.seek(0)
-                }
-                is LocalPlayerCommand.Seek -> player.seek(cmd.positionMs)
-            }
-        }
-    }
-    LaunchedEffect(player) {
-        while (true) {
-            report(rendererStatus())
-            delay(STATUS_INTERVAL_MS)
-        }
-    }
-    LaunchedEffect(status.ended) {
-        if (status.ended) {
-            stopped = true
-            ended()
-        }
-    }
-    LaunchedEffect(volume) {
-        sliderVolume = volume.coerceIn(0f, 1f) * 100f
-        player.setVolume(sliderVolume / 100f)
-    }
+    // The session's volume, so a controller casting here sees it and sets it.
+    val volume by remember(session) { session.state.map { if (it.localMuted) 0 else it.localVolume }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(100)
 
     // Video: controls float over the picture and hide while it plays; songs: always shown, in theme colors.
     // Mouse moves and keys go through a flow, not state, so moving the mouse doesn't recompose the player.
@@ -179,31 +137,26 @@ actual fun NativeMediaPlayer(
             controlsVisible = false
         }
     }
-    // M or the speaker icon: mute, and back to the volume it had.
-    var volumeBeforeMute by remember { mutableFloatStateOf(100f) }
+    // M or the speaker icon: mute, and back to the volume it had (full, if it was dragged down to 0).
     fun toggleMute() {
-        if (sliderVolume > 0f) {
-            volumeBeforeMute = sliderVolume
-            sliderVolume = 0f
-        } else {
-            sliderVolume = volumeBeforeMute.takeIf { it > 0f } ?: 100f
+        val s = session.state.value
+        when {
+            !s.localMuted && s.localVolume > 0 -> session.setMuted(true)
+            else -> {
+                session.setMuted(false)
+                if (s.localVolume == 0) session.setVolume(100)
+            }
         }
-        player.setVolume(sliderVolume / 100f)
     }
     // ← / →: back or on by SEEK_STEP_MS, within the video.
     fun seekBy(deltaMs: Long) {
         val to = (status.positionMs + deltaMs).coerceAtLeast(0)
         // Not right onto the end: that would finish it and a held key would go on in the next item.
-        player.seek(if (status.durationMs > 0) to.coerceAtMost((status.durationMs - SEEK_END_MARGIN_MS).coerceAtLeast(0)) else to)
+        local.seek(if (status.durationMs > 0) to.coerceAtMost((status.durationMs - SEEK_END_MARGIN_MS).coerceAtLeast(0)) else to)
     }
 
     fun togglePlay() {
-        if (status.playing) {
-            player.pause()
-        } else {
-            stopped = false
-            player.play()
-        }
+        if (status.playing) local.pause() else local.play()
     }
 
     val c = AppTheme.colors
@@ -215,7 +168,7 @@ actual fun NativeMediaPlayer(
             positionMs = status.positionMs,
             durationMs = status.durationMs,
             onPlayPause = ::togglePlay,
-            onSeek = player::seek,
+            onSeek = local::seek,
             content = content,
             modifier = Modifier
                 .onFocusChanged { controlsHaveFocus = it.hasFocus }
@@ -234,7 +187,7 @@ actual fun NativeMediaPlayer(
             onToggleFullscreen = onToggleFullscreen,
         ) {
             IconButton(onClick = ::toggleMute) {
-                val muted = sliderVolume <= 0f
+                val muted = volume <= 0
                 Icon(
                     if (muted) AppIcons.VolumeOff else AppIcons.Volume,
                     if (muted) "Unmute (M)" else "Mute (M)",
@@ -243,10 +196,10 @@ actual fun NativeMediaPlayer(
                 )
             }
             ThinSlider(
-                value = sliderVolume,
+                value = volume.toFloat(),
                 onValueChange = {
-                    sliderVolume = it
-                    player.setVolume(it / 100f)
+                    session.setMuted(false)
+                    session.setVolume(it.roundToInt())
                 },
                 valueRange = 0f..100f,
                 activeColor = content,

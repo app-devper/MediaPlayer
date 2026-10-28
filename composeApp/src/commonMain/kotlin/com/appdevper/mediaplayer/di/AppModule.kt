@@ -5,6 +5,7 @@ import com.appdevper.mediaplayer.data.di.dataModule
 import com.appdevper.mediaplayer.data.di.platformDataModule
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.session.CastReceiverSession
+import com.appdevper.mediaplayer.domain.session.LocalPlayer
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase
 import com.appdevper.mediaplayer.domain.usecase.AppStartupUseCase
@@ -25,6 +26,9 @@ import com.appdevper.mediaplayer.feature.mirror.MirrorViewModel
 import com.appdevper.mediaplayer.feature.player.PlayerViewModel
 import com.appdevper.mediaplayer.feature.server.ServerViewModel
 import com.appdevper.mediaplayer.feature.shell.ShellViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.factoryOf
@@ -36,7 +40,9 @@ import org.koin.mp.KoinPlatform
 
 /** Use cases + the app-wide playback session (domain layer wiring). */
 val domainModule = module {
-    single { PlaybackSession(get(), get(AppScope)) }
+    // The platform's PlaybackEngine (platformAppModule) runs on the main thread.
+    single { LocalPlayer(get(), CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) }
+    single { PlaybackSession(get(), get(), get(AppScope)) }
     single { CastReceiverSession(get(), get(), get(), get(AppScope)) }
     single { AirPlayReceiverSession(get(), get(), get(), get(AppScope)) }
     factoryOf(::ObserveDevicesUseCase)

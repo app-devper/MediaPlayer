@@ -123,13 +123,7 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                     url = item.streamUrl.orEmpty(),
                     title = item.title,
                     isAudio = isAudio,
-                    onEnded = { vm.onLocalEnded() },
                     modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
-                    autoPlay = state.autoPlay,
-                    startPositionMs = state.startPositionMs,
-                    volume = if (state.localMuted) 0f else state.localVolume / 100f,
-                    commands = vm.localCommands,
-                    onStatus = vm::reportLocalStatus,
                     fullscreen = fullscreen,
                     onToggleFullscreen = if (isAudio) null else fullscreenState::toggle,
                 )

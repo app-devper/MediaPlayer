@@ -2,8 +2,8 @@ package com.appdevper.mediaplayer.domain.session
 
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaEntry
+import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
@@ -43,6 +43,15 @@ class AirPlayReceiverSession(
 
     private var started = false
 
+    init {
+        // Next/previous anywhere (our controls, the notification, the lock screen) go to the sender's queue while it drives.
+        playback.senderSkip = { next ->
+            airPlay.activity.value.drives(playback.state.value.current).also { drives ->
+                if (drives) scope.launch { airPlay.sendToSender(if (next) SenderCommand.Next else SenderCommand.Previous) }
+            }
+        }
+    }
+
     /** Asks the sender to skip or play/pause in its own app; false when it didn't take it (or has none). */
     suspend fun sendToSender(command: SenderCommand): Boolean = airPlay.sendToSender(command)
 
@@ -66,7 +75,8 @@ class AirPlayReceiverSession(
             airPlay.activity.collect { a ->
                 if (a.mirroring && !wasMirroring) _openMirror.tryEmit(Unit)
                 val playing = a.mirroring || a.audioOnly
-                if (playing && !wasPlaying) playback.sendLocal(LocalPlayerCommand.Pause) // don't play over the sender
+                // Don't play over the sender (our own player only, not a renderer we play on).
+                if (playing && !wasPlaying && playback.state.value.target == PlaybackTarget.Local) playback.pause()
                 // Music from a sender shows on the player screen, like everything else that plays.
                 if (a.audioOnly && !a.mirroring && !wasPlaying) _openPlayer.tryEmit(Unit)
                 wasMirroring = a.mirroring

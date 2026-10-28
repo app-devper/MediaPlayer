@@ -40,7 +40,9 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.SenderCommand
+import com.appdevper.mediaplayer.domain.session.PlaybackEngine
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
+import com.appdevper.mediaplayer.playback.FfmpegPlaybackEngine
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
@@ -66,6 +68,7 @@ import org.jetbrains.skia.Surface
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
 import kotlin.test.assertEquals
@@ -96,6 +99,7 @@ class DesignShots {
                     single<CastReceiverRepository> { FakeReceiver().apply { status.value = ReceiverStatus.Running("Worawit's MacBook") } }
                     single<AirPlayRepository> { airPlay }
                     single { AirPlayPlayer() }
+                    single { FfmpegPlaybackEngine() } bind PlaybackEngine::class
                 },
                 domainModule, presentationModule,
             )

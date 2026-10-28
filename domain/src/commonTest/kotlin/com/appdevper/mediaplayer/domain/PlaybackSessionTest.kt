@@ -7,7 +7,6 @@ import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
@@ -55,7 +54,7 @@ class PlaybackSessionTest {
 
     @Test
     fun queueKeepsSameFamily() = runTest {
-        val session = PlaybackSession(FakeRenderer(), backgroundScope)
+        val session = playbackSession(FakeRenderer(), backgroundScope)
         session.play(folder[3], folder)
         assertEquals(listOf("v1", "a1"), session.state.value.queue.map { it.id })
         assertEquals(1, session.state.value.index)
@@ -69,23 +68,89 @@ class PlaybackSessionTest {
     }
 
     @Test
-    fun playingTheSameItemAgainIsANewLoad() = runTest {
-        // A player that outlives its screen (Android's) must load it again: from the start, playing.
-        val session = PlaybackSession(FakeRenderer(), backgroundScope)
+    fun playingTheSameItemAgainLoadsItAgain() = runTest {
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), backgroundScope, engine)
         session.play(folder[3], folder)
-        val first = session.state.value.loads
         session.play(folder[3], folder)
-        assertEquals(first + 1, session.state.value.loads)
         session.playAt(session.state.value.index)
-        assertEquals(first + 2, session.state.value.loads)
-        session.reportLocalStatus(null)
-        assertEquals(first + 2, session.state.value.loads) // status updates aren't loads
+        runCurrent()
+        assertEquals(listOf("load:a1@0", "load:a1@0", "load:a1@0"), engine.calls)
+    }
+
+    @Test
+    fun theLocalPlayerMovesOnAtTheEnd() = runTest {
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), backgroundScope, engine)
+        session.play(folder[1], folder)
+        runCurrent()
+        assertEquals(TransportState.PLAYING, session.state.value.local?.state)
+        engine.finish()
+        advanceTimeBy(300)
+        runCurrent()
+        assertEquals("a1", session.state.value.current?.id)
+        assertEquals("load:a1@0", engine.calls.last())
+
+        // The last one ends: it stays there, stopped.
+        engine.finish()
+        advanceTimeBy(300)
+        runCurrent()
+        assertEquals("a1", session.state.value.current?.id)
+        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
+    }
+
+    @Test
+    fun commandsGoToTheLocalPlayer() = runTest {
+        val engine = FakeEngine()
+        val renderer = FakeRenderer()
+        val session = playbackSession(renderer, backgroundScope, engine)
+        session.play(folder[1], folder, autoPlay = false, startPositionMs = 5_000)
+        runCurrent()
+        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
+        session.togglePause()
+        runCurrent()
+        assertEquals(TransportState.PLAYING, session.state.value.local?.state)
+        session.togglePause()
+        session.seek(20_000)
+        session.setVolume(40)
+        session.setMuted(true)
+        runCurrent()
+        assertEquals(listOf("load:v1@5000", "play", "pause", "seek:20000"), engine.calls)
+        assertEquals(0f, engine.gain)
+        session.setMuted(false)
+        runCurrent()
+        assertEquals(0.4f, engine.gain)
+
+        session.stop()
+        runCurrent()
+        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
+        assertFalse(session.state.value.autoPlay) // loaded again later, it waits for Play
+        assertEquals(emptyList(), renderer.calls) // nothing went to a renderer
+    }
+
+    @Test
+    fun previousRestartsAfterThreeSeconds() = runTest {
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), backgroundScope, engine)
+        session.play(folder[3], folder)
+        runCurrent()
+        session.seek(10_000)
+        runCurrent()
+        assertTrue(session.previous())
+        runCurrent()
+        assertEquals("a1", session.state.value.current?.id) // same item, from the start
+        assertEquals("seek:0", engine.calls.last())
+
+        assertTrue(session.previous())
+        runCurrent()
+        assertEquals("v1", session.state.value.current?.id)
+        assertFalse(session.previous()) // the first: back to its start
     }
 
     @Test
     fun rendererLoadsAndAutoAdvances() = runTest {
         val fake = FakeRenderer()
-        val session = PlaybackSession(fake, backgroundScope, pollIntervalMs = 100)
+        val session = playbackSession(fake, backgroundScope, pollIntervalMs = 100)
         session.setTarget(PlaybackTarget.Renderer(tv))
         session.play(folder[1], folder)
         runCurrent()
@@ -104,12 +169,19 @@ class PlaybackSessionTest {
         runCurrent()
         assertEquals(100, session.state.value.remote.volume)
         assertTrue("volume:100" in fake.calls)
+
+        // The same verbs as the local player.
+        session.togglePause()
+        session.seek(7_000)
+        runCurrent()
+        assertTrue("pause" in fake.calls)
+        assertTrue("seek:7000" in fake.calls)
     }
 
     @Test
     fun switchingBackToLocalStopsTheRenderer() = runTest {
         val fake = FakeRenderer()
-        val session = PlaybackSession(fake, backgroundScope)
+        val session = playbackSession(fake, backgroundScope)
         session.setTarget(PlaybackTarget.Renderer(tv))
         session.play(folder[1], folder)
         runCurrent()
@@ -117,6 +189,7 @@ class PlaybackSessionTest {
         runCurrent()
         assertTrue("stop" in fake.calls)
         assertEquals(PlaybackTarget.Local, session.state.value.target)
+        assertEquals(TransportState.PLAYING, session.state.value.local?.state) // the item plays here now
     }
 }
 

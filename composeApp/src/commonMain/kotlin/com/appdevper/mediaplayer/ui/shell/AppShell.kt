@@ -155,7 +155,7 @@ fun AppShell(startDestination: Any = HomeRoute) {
                                 exit = slideOutVertically { it } + fadeOut(),
                                 modifier = Modifier.align(Alignment.BottomCenter),
                             ) {
-                                MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause, onToggleLocal = vm::toggleLocal)
+                                MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause)
                             }
                         }
                     }

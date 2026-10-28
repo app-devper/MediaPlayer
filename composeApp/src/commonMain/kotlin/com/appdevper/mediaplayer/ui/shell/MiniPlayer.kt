@@ -29,7 +29,7 @@ import com.appdevper.mediaplayer.feature.shell.ShellUiState
 import com.appdevper.mediaplayer.ui.icon
 
 @Composable
-internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: () -> Unit, onToggleLocal: () -> Unit) {
+internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: () -> Unit) {
     val c = AppTheme.colors
     val airPlay = state.airPlay.takeIf { it.audioOnly }
     val item = state.nowPlaying
@@ -74,7 +74,7 @@ internal fun MiniPlayer(state: ShellUiState, onOpen: () -> Unit, onTogglePause: 
             if (remote != null) {
                 GhostIconButton(if (state.remotePlaying) AppIcons.Pause else AppIcons.Play, "Play/Pause", onTogglePause, tint = c.textPrimary)
             } else if (localPlaying != null) {
-                GhostIconButton(if (localPlaying) AppIcons.Pause else AppIcons.Play, "Play/Pause", onToggleLocal, tint = c.textPrimary)
+                GhostIconButton(if (localPlaying) AppIcons.Pause else AppIcons.Play, "Play/Pause", onTogglePause, tint = c.textPrimary)
             } else {
                 GhostIconButton(AppIcons.ChevronRight, "Open player", onOpen)
             }
