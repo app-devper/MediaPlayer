@@ -291,5 +291,28 @@ class LocalPlayerTest {
         runCurrent()
         assertEquals(emptyList(), engine.calls)
     }
-}
 
+    @Test
+    fun playPauseAndStepsAreThePlayersOwn() = runTest {
+        val engine = FakeEngine(durationMs = 60_000)
+        val player = player(engine)
+        player.load(movie, autoPlay = true, startPositionMs = 0)
+        runCurrent()
+        player.togglePause()
+        runCurrent()
+        assertEquals(TransportState.PAUSED, player.status.value?.state)
+        player.togglePause()
+        runCurrent()
+        assertEquals(TransportState.PLAYING, player.status.value?.state)
+
+        // ← → by a step; never right onto the end (a held key would go on in the next item), nor before 0.
+        player.seekBy(5_000)
+        runCurrent()
+        assertEquals(5_000, player.status.value?.positionMs)
+        player.seekBy(-60_000)
+        player.seekBy(120_000)
+        runCurrent()
+        assertEquals(listOf("seek:5000", "seek:0", "seek:59000"), engine.calls.filter { it.startsWith("seek") })
+        assertTrue(player.status.value?.ended == false)
+    }
+}

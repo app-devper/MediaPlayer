@@ -84,7 +84,7 @@ import kotlin.math.roundToInt
  * the picture ([VideoSurface]) with controls over it that hide while it plays. Only the picture is
  * platform code (and AVKit's own controls on iOS). The player plays on when this leaves the screen.
  *
- * With a mouse ([pointerIsMouse], desktop) a click on the picture plays or pauses, a double-click goes
+ * With a [mouse] (desktop: [pointerIsMouse]) a click on the picture plays or pauses, a double-click goes
  * full screen, the pointer hides with the controls, keys are shortcuts (Space, ← →, F, M) and the bar
  * has a volume control. With touch, a tap shows or hides the controls; a remote's OK does too.
  */
@@ -101,8 +101,12 @@ internal fun LocalPlayerView(
     modifier: Modifier = Modifier,
     fullscreen: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
+    /** Mouse and keyboard; else touch and remotes. */
+    mouse: Boolean = pointerIsMouse,
+    /** The picture brings its own controls (AVKit), so ours don't go over it. */
+    surfaceHasControls: Boolean = videoSurfaceHasControls,
 ) {
-    if (!isAudio && videoSurfaceHasControls) {
+    if (!isAudio && surfaceHasControls) {
         Box(modifier.fillMaxSize()) {
             VideoSurface(title, Modifier.fillMaxSize())
             // Above AVKit's own controls.
@@ -113,13 +117,10 @@ internal fun LocalPlayerView(
     val status by player.status.collectAsStateWithLifecycle()
     val error by player.error.collectAsStateWithLifecycle()
     val state = status?.state
-    val playing = state == TransportState.PLAYING || state == TransportState.TRANSITIONING
+    val playing = state?.playing == true
     val buffering = state == TransportState.TRANSITIONING
-    // Reads the player now, not this composition's `playing`: gesture handlers keep the function they started with.
-    fun togglePlay() {
-        val now = player.status.value?.state
-        if (now == TransportState.PLAYING || now == TransportState.TRANSITIONING) player.pause() else player.play()
-    }
+    // The player decides from what it's doing then, not this composition's `playing`: gesture handlers keep the function they started with.
+    fun togglePlay() = player.togglePause()
 
     // M or the speaker icon: mute, and back to the volume it had (full, if it was dragged down to 0).
     val shownVolume = if (muted) 0 else volume
@@ -136,7 +137,7 @@ internal fun LocalPlayerView(
     val content = if (isAudio) c.textPrimary else Color.White
     var seeking by remember { mutableStateOf(false) }
     val trailing: @Composable RowScope.() -> Unit = {
-        if (pointerIsMouse) {
+        if (mouse) {
             VolumeControls(shownVolume, ::toggleMute, { onMutedChange(false); onVolumeChange(it) }, content)
         }
         // AVKit's controls had the AirPlay button; songs keep one on our bar.
@@ -190,16 +191,8 @@ internal fun LocalPlayerView(
     LaunchedEffect(inputMode) {
         if (inputMode == InputMode.Keyboard && !controlsHaveFocus) pictureFocus.requestFocus()
     }
-    // ← / →: back or on by SEEK_STEP_MS. Not right onto the end: that would finish it, and a held key
-    // would go on in the next item.
-    fun seekBy(deltaMs: Long) {
-        val position = status?.positionMs ?: return
-        val duration = status?.durationMs ?: 0
-        val to = (position + deltaMs).coerceAtLeast(0)
-        player.seek(if (duration > 0) to.coerceAtMost((duration - SEEK_END_MARGIN_MS).coerceAtLeast(0)) else to)
-    }
 
-    val picture = if (pointerIsMouse) {
+    val picture = if (mouse) {
         Modifier
             .pointerInput(onToggleFullscreen) {
                 detectTapGestures(
@@ -223,7 +216,7 @@ internal fun LocalPlayerView(
         modifier.fillMaxSize().background(Color.Black)
             // With a mouse, any movement brings the controls back.
             .then(
-                if (pointerIsMouse) {
+                if (mouse) {
                     Modifier.pointerInput(Unit) {
                         awaitPointerEventScope {
                             while (true) {
@@ -254,13 +247,13 @@ internal fun LocalPlayerView(
             // play/pause, ← → seek (held: repeats), F full screen, M mute.
             .onKeyEvent { e ->
                 when {
-                    !pointerIsMouse -> return@onKeyEvent false
+                    !mouse -> return@onKeyEvent false
                     e.type == KeyEventType.KeyUp && e.key == Key.Spacebar -> togglePlay()
                     e.type != KeyEventType.KeyDown -> return@onKeyEvent false
                     // Cmd/Ctrl/Alt combinations belong to the app and the system (Cmd+F, Ctrl+M…).
                     e.isMetaPressed || e.isCtrlPressed || e.isAltPressed -> return@onKeyEvent false
-                    e.key == Key.DirectionLeft -> seekBy(-SEEK_STEP_MS)
-                    e.key == Key.DirectionRight -> seekBy(SEEK_STEP_MS)
+                    e.key == Key.DirectionLeft -> player.seekBy(-SEEK_STEP_MS)
+                    e.key == Key.DirectionRight -> player.seekBy(SEEK_STEP_MS)
                     e.key == Key.F && onToggleFullscreen != null -> onToggleFullscreen()
                     e.key == Key.M -> toggleMute()
                     else -> return@onKeyEvent false
@@ -281,10 +274,10 @@ internal fun LocalPlayerView(
             // anywhere on the picture plays, so it's only a picture there (the bar has "Play").
             !playing -> Box(
                 Modifier.size(64.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f))
-                    .then(if (pointerIsMouse) Modifier.clearAndSetSemantics {} else Modifier.clickable(role = Role.Button, onClick = ::togglePlay)),
+                    .then(if (mouse) Modifier.clearAndSetSemantics {} else Modifier.clickable(role = Role.Button, onClick = ::togglePlay)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(AppIcons.Play, if (pointerIsMouse) null else "Play", Modifier.size(30.dp), tint = Color.White)
+                Icon(AppIcons.Play, if (mouse) null else "Play", Modifier.size(30.dp), tint = Color.White)
             }
         }
         // Moves up out of the bar's way while it shows.
@@ -312,7 +305,7 @@ internal fun LocalPlayerView(
                         awaitPointerEventScope {
                             while (true) {
                                 when (awaitPointerEvent().type) {
-                                    PointerEventType.Enter -> overControls = pointerIsMouse
+                                    PointerEventType.Enter -> overControls = mouse
                                     PointerEventType.Exit -> overControls = false
                                 }
                             }
@@ -376,4 +369,3 @@ private fun VolumeControls(volume: Int, onToggleMute: () -> Unit, onVolumeChange
 
 private const val CONTROLS_HIDE_MS = 2_500L
 private const val SEEK_STEP_MS = 5_000L
-private const val SEEK_END_MARGIN_MS = 1_000L

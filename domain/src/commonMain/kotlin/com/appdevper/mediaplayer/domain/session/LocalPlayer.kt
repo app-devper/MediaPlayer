@@ -135,7 +135,9 @@ class LocalPlayer(
         engine.unload()
     }
 
-    override fun play() = whenLoaded {
+    override fun play() = whenLoaded(::playNow)
+
+    private fun playNow() {
         val facts = engine.facts()
         when {
             facts.error != null -> {
@@ -159,6 +161,23 @@ class LocalPlayer(
     override fun seek(positionMs: Long) = whenLoaded {
         stopped = false
         engine.seekTo(positionMs.coerceAtLeast(0))
+    }
+
+    /** Pauses while playing or about to, else plays: what the player is doing when it gets there, not when asked. */
+    fun togglePause() = whenLoaded {
+        if (_status.value?.state?.playing == true) engine.pause() else playNow()
+    }
+
+    /**
+     * Back or on by [deltaMs] (← →, a remote): not right onto the end, which would finish it, and a
+     * held key would go on in the next item.
+     */
+    fun seekBy(deltaMs: Long) = whenLoaded {
+        val facts = engine.facts()
+        val to = (facts.positionMs + deltaMs).coerceAtLeast(0)
+        val end = (facts.durationMs - SEEK_END_MARGIN_MS).coerceAtLeast(0)
+        stopped = false
+        engine.seekTo(if (facts.durationMs > 0) to.coerceAtMost(end) else to)
     }
 
     /** Shows [choice] for the loaded item: a file is fetched and read first ([subtitles] says so). */
@@ -243,6 +262,7 @@ class LocalPlayer(
 
     private companion object {
         const val POLL_INTERVAL_MS = 250L
+        const val SEEK_END_MARGIN_MS = 1_000L
     }
 }
 
