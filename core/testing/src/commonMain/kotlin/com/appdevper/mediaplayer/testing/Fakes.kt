@@ -4,6 +4,11 @@ import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
+import com.appdevper.mediaplayer.domain.repository.MediaServerRepository
+import com.appdevper.mediaplayer.domain.model.ServerStatus
+import com.appdevper.mediaplayer.domain.model.ServerSettings
+import com.appdevper.mediaplayer.domain.model.ServerCapabilities
+import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
@@ -135,6 +140,18 @@ class FakeAirPlay(status: AirPlayStatus = AirPlayStatus.Stopped) : AirPlayReposi
         calls += "stop"
         if (status.value != AirPlayStatus.Unsupported) status.value = AirPlayStatus.Stopped
     }
+}
+
+/** The built-in media server: starts at once with the settings it's given (kept in [starts]). */
+class FakeServer : MediaServerRepository {
+    val starts = mutableListOf<ServerSettings>()
+    override val status = MutableStateFlow<ServerStatus>(ServerStatus.Stopped)
+    override val capabilities = ServerCapabilities(canChooseFolders = true, sourceDescription = "the folders listed below")
+    override suspend fun start(settings: ServerSettings) {
+        starts += settings
+        status.value = ServerStatus.Running(settings.name, "http://192.168.1.160:8191", mapOf(MediaKind.VIDEO to 12, MediaKind.AUDIO to 340))
+    }
+    override suspend fun stop() { status.value = ServerStatus.Stopped }
 }
 
 /** Subtitle files: one Thai line from 1 s to 2 s; a URL with "broken" fails, one with "empty" has no lines. */

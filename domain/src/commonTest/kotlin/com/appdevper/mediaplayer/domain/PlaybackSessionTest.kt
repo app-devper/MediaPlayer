@@ -12,7 +12,6 @@ import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
-import com.appdevper.mediaplayer.domain.usecase.UpdateServerSettingsUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -338,19 +337,6 @@ class UseCaseTest {
         assertEquals(listOf("1", "3"), FilterEntriesUseCase()(list, " holiday ").map { it.id })
         assertEquals(listOf("2"), FilterEntriesUseCase()(list, "body").map { it.id })
         assertEquals(3, FilterEntriesUseCase()(list, "").size)
-    }
-
-    @Test
-    fun settingsUpdateReportsWhetherRestartIsNeeded() {
-        val repo = object : SettingsRepository {
-            val flow = MutableStateFlow(ServerSettings("A", false, true, true, true, emptyList()))
-            override val serverSettings: StateFlow<ServerSettings> = flow
-            override fun update(transform: (ServerSettings) -> ServerSettings) = flow.update(transform)
-        }
-        val update = UpdateServerSettingsUseCase(repo)
-        assertFalse(update { it.copy(autoStart = true) })
-        assertTrue(update { it.copy(shareImage = false) })
-        assertTrue(update { it.copy(name = "B") })
     }
 }
 

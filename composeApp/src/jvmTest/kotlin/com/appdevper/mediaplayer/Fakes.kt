@@ -64,14 +64,3 @@ class FakeSettings : SettingsRepository {
     override fun update(transform: (ServerSettings) -> ServerSettings) = serverSettings.update(transform)
 }
 
-class FakeServer : MediaServerRepository {
-    val starts = mutableListOf<ServerSettings>()
-    override val status = MutableStateFlow<ServerStatus>(ServerStatus.Stopped)
-    override val capabilities = ServerCapabilities(canChooseFolders = true, sourceDescription = "the folders listed below")
-    override suspend fun start(settings: ServerSettings) {
-        starts += settings
-        status.value = ServerStatus.Running(settings.name, "http://192.168.1.160:8191", mapOf(MediaKind.VIDEO to 12, MediaKind.AUDIO to 340))
-    }
-    override suspend fun stop() { status.value = ServerStatus.Stopped }
-}
-

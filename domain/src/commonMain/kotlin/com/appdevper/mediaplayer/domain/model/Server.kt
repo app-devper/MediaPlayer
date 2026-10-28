@@ -36,3 +36,6 @@ sealed interface ServerStatus {
     data class Running(val name: String, val url: String, val counts: Map<MediaKind, Int>) : ServerStatus
     data class Failed(val message: String) : ServerStatus
 }
+
+/** Counts per kind for the server summary line. */
+fun Map<MediaKind, Int>.countOf(kind: MediaKind): Int = this[kind] ?: 0

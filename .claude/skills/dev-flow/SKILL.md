@@ -39,9 +39,9 @@ Respect the layers (see README › Architecture):
 
 | Layer | Owns | Must not |
 |---|---|---|
-| `:domain` | models, repository interfaces, use cases, `PlaybackSession` | import Compose, ktor, platform APIs |
+| `:domain` | models, repository interfaces, sessions (`PlaybackSession`, `MediaServerSession`, the receivers), use cases with behaviour of their own | import Compose, ktor, platform APIs |
 | `:data` | UPnP stack (`upnp/`), DLNA server (`server/`), platform I/O (`platform/`), repository impls, `dataModule` | leak `Upnp*`/`Didl*` types past the repository (map in `mapper/`) |
-| `:composeApp` | ViewModels (`feature/*`), app shell (`ui/shell/`), Koin wiring (`di/`), native players | call repositories directly (ViewModels use use cases only) |
+| `:composeApp` | ViewModels (`feature/*`), app shell (`ui/shell/`), Koin wiring (`di/`), native players | reach into `:data` (ViewModels use domain sessions, repository interfaces, and use cases only where a rule lives in one; no one-line pass-through use cases) |
 | `:core:designsystem` | theme tokens (`theme/`), icons (`icons/`), components (`components/`) | depend on `:domain`, `:data` or app code (domain → UI helpers live in `composeApp/.../ui/`) |
 
 - New platform behaviour: an interface in `data/platform` bound in each

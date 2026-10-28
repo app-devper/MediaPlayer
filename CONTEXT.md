@@ -33,6 +33,10 @@ the queue on. Stopping an item or leaving the player screen does not.
 (`LocalPlayer.subtitles`): it is kept when the same item loads again, starts off for another item,
 and follows a track picked in the platform's own controls (AVKit's menu).
 
+**Media server session** (`MediaServerSession`): this device's DLNA server as the app runs it. It
+starts at launch when set to, and restarts once while running when what it publishes changes (its
+name, what it shares, its folders), wherever the change comes from.
+
 **Receiver**: this device taking playback from another device. The DLNA receiver
 (`CastReceiverSession`) takes "Play to" from other apps. The AirPlay receiver
 (`AirPlayReceiverSession`) takes mirroring, video and audio. Both play through the playback session
