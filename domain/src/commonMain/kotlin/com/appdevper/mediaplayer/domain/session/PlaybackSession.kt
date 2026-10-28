@@ -5,6 +5,7 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RepeatMode
+import com.appdevper.mediaplayer.domain.model.TransportPlayback
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,9 @@ class PlaybackSession(
     private val current = MutableStateFlow<Transport>(local)
     private val transport: Transport get() = current.value
 
+    // What the new transport reported when the target switched (see init).
+    @kotlin.concurrent.Volatile private var staleAtSwitch: TransportPlayback? = null
+
     /**
      * Next/previous for someone else's queue: an AirPlay sender playing here decides what comes next
      * ([AirPlayReceiverSession]). Returns true when it took the skip; `true` is next, `false` previous.
@@ -47,8 +51,13 @@ class PlaybackSession(
         // One "ended" for every transport: an item that ends by itself moves the queue on.
         scope.launch {
             current.collectLatest { t ->
-                var wasEnded = false
+                // A StateFlow gives its current value first. The one it had when the target switched is old
+                // (the previous item's status, which a controller casting here mustn't see): skip that very
+                // value; anything it reports since is new. Its "ended" doesn't count either.
+                val old = staleAtSwitch
+                var wasEnded = t.playback.value.status?.ended == true
                 t.playback.collect { playback ->
+                    if (playback === old) return@collect
                     _state.update { it.copy(playback = playback) }
                     val ended = playback.status?.ended == true
                     if (ended && !wasEnded) onEnded()
@@ -62,11 +71,14 @@ class PlaybackSession(
         val s = _state.value
         if (target == s.target) return
         transport.unload()
-        current.value = when (target) {
+        val next = when (target) {
             PlaybackTarget.Local -> local
             is PlaybackTarget.Renderer -> RendererTransport(renderer, target.device, scope, pollIntervalMs)
         }
-        _state.update { it.copy(target = target, playback = transport.playback.value) }
+        staleAtSwitch = next.playback.value
+        current.value = next
+        // Its volume and mute; no status until it has one for the item it loads.
+        _state.update { it.copy(target = target, playback = next.playback.value.copy(status = null)) }
         loadCurrent()
     }
 

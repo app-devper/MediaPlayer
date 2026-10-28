@@ -59,7 +59,12 @@ internal class RendererTransport(
     override fun unload() {
         loadJob?.cancel()
         stopPolling()
-        scope.launch { runCatching { renderer.stop(device) } }
+        val p = _playback.value
+        scope.launch {
+            runCatching { renderer.stop(device) }
+            // Not left silent for whoever plays on it next.
+            if (p.muted && p.volume != null) runCatching { renderer.setVolume(device, p.volume) }
+        }
     }
 
     override fun play() {
@@ -93,8 +98,8 @@ internal class RendererTransport(
 
     /** Volume 0 on the renderer, then back to its volume (the repository has no mute of its own). */
     override fun setMuted(muted: Boolean) {
+        val back = _playback.value.volume ?: return // its volume isn't known yet: nothing to go back to
         _playback.update { it.copy(muted = muted) }
-        val back = _playback.value.volume ?: return
         command { renderer.setVolume(it, if (muted) 0 else back) }
     }
 

@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -287,6 +289,27 @@ class PlaybackSessionTest {
         advanceTimeBy(300)
         assertEquals(emptyList(), engine.calls.filter { it.startsWith("load") }) // the sender decides what comes next
         assertEquals(TransportState.STOPPED, session.state.value.playback.status?.state)
+    }
+
+    @Test
+    fun aCastAfterATvNeverShowsThePreviousItemsStatus() = runTest {
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), backgroundScope, engine)
+        session.play(folder[1], folder)
+        runCurrent()
+        engine.facts = engine.facts.copy(positionMs = 42_000) // the old item, well into it
+        advanceTimeBy(1_100)
+        session.setTarget(PlaybackTarget.Renderer(tv))
+        runCurrent()
+
+        val seen = mutableListOf<Long?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { session.state.collect { seen += it.playback.status?.positionMs } }
+        // A DLNA controller casts here: back to this device, a new item.
+        session.setTarget(PlaybackTarget.Local)
+        session.play(folder[3], listOf(folder[3]), casted = true)
+        runCurrent()
+        assertTrue(42_000L !in seen.drop(1), "the old item's status showed: $seen")
+        assertEquals(0, session.state.value.playback.status?.positionMs)
     }
 
     @Test
