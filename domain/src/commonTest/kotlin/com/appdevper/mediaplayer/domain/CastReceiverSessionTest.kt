@@ -82,8 +82,8 @@ class CastReceiverSessionTest {
         assertEquals(PlaybackTarget.Local, s.target)
         assertEquals(listOf(clip), s.queue)
         assertEquals(false, s.autoPlay)
-        assertEquals(30, s.localVolume)
-        assertTrue(s.localMuted)
+        assertEquals(30, s.playback.volume)
+        assertTrue(s.playback.muted)
         assertEquals(0f, engine.gain)
         assertTrue(opened.isCompleted)
         val reopened = backgroundScope.launch { session.openPlayer.first() }
@@ -113,7 +113,7 @@ class CastReceiverSessionTest {
         receiver.commands.emit(CastCommand.SetVolume(5))
         runCurrent()
         assertEquals(emptyList(), engine.calls)
-        assertEquals(50, playback.state.value.remote.volume) // the TV's own volume, untouched
+        assertEquals(50, playback.state.value.playback.volume) // the TV's own volume, untouched
         assertNull(receiver.published.last().entry) // and the sender is told nothing plays here
     }
 

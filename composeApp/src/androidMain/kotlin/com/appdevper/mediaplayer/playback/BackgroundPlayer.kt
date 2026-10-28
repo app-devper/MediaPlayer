@@ -28,7 +28,7 @@ class BackgroundPlayer(
 ) {
     private val local = session.local
 
-    /** What the media session drives: the same commands as our own controls, next/previous on the session. */
+    /** What the media session drives: the session's commands, as our own controls send them. */
     val sessionPlayer: Player = object : ForwardingPlayer(engine.player) {
         override fun getAvailableCommands(): Player.Commands =
             super.getAvailableCommands().buildUpon().addAll(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS).build()
@@ -36,10 +36,10 @@ class BackgroundPlayer(
         override fun isCommandAvailable(command: Int): Boolean =
             command == Player.COMMAND_SEEK_TO_NEXT || command == Player.COMMAND_SEEK_TO_PREVIOUS || super.isCommandAvailable(command)
 
-        override fun play() = local.play()
-        override fun pause() = local.pause()
-        override fun seekTo(positionMs: Long) = local.seek(positionMs)
-        override fun seekTo(mediaItemIndex: Int, positionMs: Long) = local.seek(positionMs)
+        override fun play() = session.play()
+        override fun pause() = session.pause()
+        override fun seekTo(positionMs: Long) = session.seek(positionMs)
+        override fun seekTo(mediaItemIndex: Int, positionMs: Long) = session.seek(positionMs)
         override fun seekToNext() {
             session.next()
         }

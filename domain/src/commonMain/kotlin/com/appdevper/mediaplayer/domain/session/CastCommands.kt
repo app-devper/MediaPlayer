@@ -40,7 +40,7 @@ internal fun PlaybackState.receiverPlayback(): ReceiverPlayback {
         entry == null -> null
         // Photos are shown by the photo viewer, which has nothing to report.
         entry.kind == MediaKind.IMAGE -> RendererStatus(TransportState.PLAYING, 0, 0)
-        else -> local
+        else -> playback.status
     }
-    return ReceiverPlayback(entry, status, localVolume, localMuted)
+    return ReceiverPlayback(entry, status, playback.volume ?: 100, playback.muted)
 }

@@ -34,12 +34,11 @@ data class ShellUiState(
     val serverStatus: ServerStatus = ServerStatus.Stopped,
     val target: PlaybackTarget = PlaybackTarget.Local,
     val nowPlaying: MediaEntry? = null,
-    val remotePlaying: Boolean = false,
     /**
-     * Our own player still runs off the player screen (Android plays on in the background): playing
-     * or paused. Null when there's nothing to control (the others stop their player off screen).
+     * Where it plays (this device or a renderer), playing or paused, for the mini player's button.
+     * Null when there's nothing to control here (not started, stopped, or a photo).
      */
-    val localPlaying: Boolean? = null,
+    val playing: Boolean? = null,
     val airPlay: AirPlayActivity = AirPlayActivity(),
     /** Adding a media server by its address (Home › Media servers). */
     val addServer: AddServerState = AddServerState.Idle,
@@ -84,11 +83,11 @@ class ShellViewModel(
             serverStatus = server,
             target = playback.target,
             nowPlaying = playback.current,
-            remotePlaying = playback.remote.status?.state == TransportState.PLAYING,
-            localPlaying = when (playback.local?.state.takeIf { playback.target == PlaybackTarget.Local }) {
+            playing = when (playback.playback.status?.state) {
                 TransportState.PLAYING, TransportState.TRANSITIONING -> true
                 TransportState.PAUSED -> false
-                else -> null
+                // A renderer can always be told to play.
+                else -> if (playback.target is PlaybackTarget.Renderer) false else null
             },
             airPlay = airPlayActivity,
         )

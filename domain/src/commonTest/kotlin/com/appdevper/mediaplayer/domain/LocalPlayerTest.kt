@@ -274,7 +274,7 @@ class LocalPlayerTest {
     fun aPhotoEmptiesThePlayerAndTheLastReportSaysStopped() = runTest {
         val engine = FakeEngine()
         val player = player(engine)
-        player.setVolume(0.4f)
+        player.setVolume(40)
         player.load(song, autoPlay = true, startPositionMs = 0)
         runCurrent()
         assertEquals(0.4f, engine.gain)

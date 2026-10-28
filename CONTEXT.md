@@ -11,7 +11,8 @@ the current target's transport, and moves the queue on when an item ends by itse
 **Renderer** is a DLNA renderer such as a TV or a speaker.
 
 **Transport** (`Transport`): what plays the current item for a target. It takes the commands play,
-pause, stop and seek, and knows its last status. There are two transports:
+pause, stop, seek, volume and mute, and reports one playback (`TransportPlayback`: status, volume,
+mute, error), which the session shows as the state's `playback`. There are two transports:
 - **Local player** (`LocalPlayer`) is this device's player, one for the app. It plays whether a
   player screen shows it or not, and holds the rules every platform shares: when an item counts as
   stopped, Play after the end or after an error, and pausing a video in the background.

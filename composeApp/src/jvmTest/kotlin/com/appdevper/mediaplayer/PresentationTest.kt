@@ -302,18 +302,18 @@ class PresentationTest {
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
         // Loaded but not started (or stopped): nothing to pause.
         session.play(song, listOf(song), autoPlay = false)
-        assertEquals(null, vm.uiState.value.localPlaying)
+        assertEquals(null, vm.uiState.value.playing)
 
         // Our player plays on off the player screen: the mini player plays and pauses it.
         vm.togglePause()
-        assertEquals(true, vm.uiState.value.localPlaying)
+        assertEquals(true, vm.uiState.value.playing)
         vm.togglePause()
-        assertEquals(false, vm.uiState.value.localPlaying)
+        assertEquals(false, vm.uiState.value.playing)
         assertEquals(listOf("load:a1@0", "play", "pause"), engine.calls)
 
-        // Playing on a TV: that's the renderer's play/pause, not ours.
+        // Playing on a TV: the same button is the TV's play/pause (the session sends it there).
         vm.selectTarget(PlaybackTarget.Renderer(fakeTv))
-        assertEquals(null, vm.uiState.value.localPlaying)
+        assertEquals(true, vm.uiState.value.playing) // what the TV reports: it plays
     }
 
     @Test

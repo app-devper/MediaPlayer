@@ -137,8 +137,8 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                     player = vm.localPlayer,
                     title = item.title,
                     isAudio = isAudio,
-                    volume = state.localVolume,
-                    muted = state.localMuted,
+                    volume = state.playback.volume ?: 100,
+                    muted = state.playback.muted,
                     onVolumeChange = vm::setVolume,
                     onMutedChange = vm::setMuted,
                     modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
@@ -234,7 +234,7 @@ private fun ZoomableImage(url: String, title: String) {
 private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel) {
     val c = AppTheme.colors
     val renderer = (state.target as PlaybackTarget.Renderer).device
-    val status = state.remote.status
+    val status = state.playback.status
     var dragging by remember { mutableStateOf<Float?>(null) }
 
     Column(
@@ -265,7 +265,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
                 color = c.textSecondary,
             )
         }
-        state.remote.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
+        state.playback.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
 
         if (item.kind != MediaKind.IMAGE) {
             val duration = (status?.durationMs?.takeIf { it > 0 } ?: item.durationMs ?: 0L)
@@ -296,7 +296,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
         }
         if (!state.casted && item.kind != MediaKind.IMAGE) Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(state, vm) }
 
-        state.remote.volume?.let { vol ->
+        state.playback.volume?.let { vol ->
             var local by remember(vol) { mutableFloatStateOf(vol.toFloat()) }
             Row(Modifier.widthIn(max = 400.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Volume, "Volume", Modifier.size(18.dp), tint = c.textSecondary)

@@ -82,7 +82,7 @@ class AirPlayReceiverSessionTest {
         airPlay.activity.value = AirPlayActivity(client = "Worawit's iPhone", mirroring = true)
         runCurrent()
         assertTrue(opened.isCompleted)
-        assertEquals(TransportState.PAUSED, playback.state.value.local?.state)
+        assertEquals(TransportState.PAUSED, playback.state.value.playback.status?.state)
 
         // Still mirroring (e.g. the PIN went away): no second open.
         val again = backgroundScope.launch { session.openMirror.first() }
@@ -160,7 +160,7 @@ class AirPlayReceiverSessionTest {
         runCurrent()
         airPlay.activity.value = AirPlayActivity(client = "Mac", audioOnly = true)
         runCurrent()
-        assertEquals(TransportState.PAUSED, playback.state.value.local?.state)
+        assertEquals(TransportState.PAUSED, playback.state.value.playback.status?.state)
         assertTrue(opened.isCompleted, "music from a sender opens the player screen")
     }
 }

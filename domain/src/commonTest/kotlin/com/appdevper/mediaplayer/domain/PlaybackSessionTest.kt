@@ -73,7 +73,7 @@ class PlaybackSessionTest {
         val session = playbackSession(FakeRenderer(), backgroundScope, engine)
         session.play(folder[1], folder)
         runCurrent()
-        assertEquals(TransportState.PLAYING, session.state.value.local?.state)
+        assertEquals(TransportState.PLAYING, session.state.value.playback.status?.state)
         engine.finish()
         advanceTimeBy(300)
         runCurrent()
@@ -85,7 +85,7 @@ class PlaybackSessionTest {
         advanceTimeBy(300)
         runCurrent()
         assertEquals("a1", session.state.value.current?.id)
-        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
+        assertEquals(TransportState.STOPPED, session.state.value.playback.status?.state)
     }
 
     @Test
@@ -95,10 +95,10 @@ class PlaybackSessionTest {
         val session = playbackSession(renderer, backgroundScope, engine)
         session.play(folder[1], folder, autoPlay = false, startPositionMs = 5_000)
         runCurrent()
-        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
+        assertEquals(TransportState.STOPPED, session.state.value.playback.status?.state)
         session.togglePause()
         runCurrent()
-        assertEquals(TransportState.PLAYING, session.state.value.local?.state)
+        assertEquals(TransportState.PLAYING, session.state.value.playback.status?.state)
         session.togglePause()
         session.seek(20_000)
         session.setVolume(40)
@@ -112,7 +112,7 @@ class PlaybackSessionTest {
 
         session.stop()
         runCurrent()
-        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
+        assertEquals(TransportState.STOPPED, session.state.value.playback.status?.state)
         assertFalse(session.state.value.autoPlay) // loaded again later, it waits for Play
         assertEquals(emptyList(), renderer.calls) // nothing went to a renderer
     }
@@ -144,8 +144,8 @@ class PlaybackSessionTest {
         session.play(folder[1], folder)
         runCurrent()
         assertEquals(listOf("load:v1"), fake.calls)
-        assertEquals(30, session.state.value.remote.volume)
-        assertEquals(TransportState.PLAYING, session.state.value.remote.status?.state)
+        assertEquals(30, session.state.value.playback.volume)
+        assertEquals(TransportState.PLAYING, session.state.value.playback.status?.state)
 
         // Track ends on the TV → session moves to the next item and loads it.
         fake.state = TransportState.STOPPED
@@ -156,7 +156,7 @@ class PlaybackSessionTest {
 
         session.setVolume(150)
         runCurrent()
-        assertEquals(100, session.state.value.remote.volume)
+        assertEquals(100, session.state.value.playback.volume)
         assertTrue("volume:100" in fake.calls)
 
         // The same verbs as the local player.
@@ -165,6 +165,14 @@ class PlaybackSessionTest {
         runCurrent()
         assertTrue("pause" in fake.calls)
         assertTrue("seek:7000" in fake.calls)
+
+        // Mute: the renderer goes to 0, and back to its volume.
+        session.setMuted(true)
+        runCurrent()
+        assertTrue(session.state.value.playback.muted)
+        session.setMuted(false)
+        runCurrent()
+        assertEquals(listOf("volume:100", "volume:0", "volume:100"), fake.calls.filter { it.startsWith("volume") })
     }
 
     @Test
@@ -179,7 +187,7 @@ class PlaybackSessionTest {
         fake.state = TransportState.STOPPED // the TV finished it
         advanceTimeBy(150)
         runCurrent()
-        assertEquals(true, session.state.value.remote.status?.ended)
+        assertEquals(true, session.state.value.playback.status?.ended)
         assertTrue(session.previous())
         runCurrent()
         assertEquals("v1", session.state.value.current?.id)
@@ -278,7 +286,7 @@ class PlaybackSessionTest {
         engine.finish()
         advanceTimeBy(300)
         assertEquals(emptyList(), engine.calls.filter { it.startsWith("load") }) // the sender decides what comes next
-        assertEquals(TransportState.STOPPED, session.state.value.local?.state)
+        assertEquals(TransportState.STOPPED, session.state.value.playback.status?.state)
     }
 
     @Test
@@ -292,7 +300,7 @@ class PlaybackSessionTest {
         runCurrent()
         assertTrue("stop" in fake.calls)
         assertEquals(PlaybackTarget.Local, session.state.value.target)
-        assertEquals(TransportState.PLAYING, session.state.value.local?.state) // the item plays here now
+        assertEquals(TransportState.PLAYING, session.state.value.playback.status?.state) // the item plays here now
     }
 }
 
