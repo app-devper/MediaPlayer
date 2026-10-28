@@ -21,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,27 +46,21 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
-import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.playback.BackgroundPlayer
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
+import com.appdevper.mediaplayer.playback.ExoPlaybackEngine
 import com.appdevper.mediaplayer.ui.player.PlayerControlBar
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import org.koin.compose.koinInject
 
 /**
- * Shows the app's one player ([BackgroundPlayer]) and its controls. That player follows the playback
- * session by itself (loads the item, takes [commands], reports the status, moves on at the end, sets
- * the volume) and keeps playing when this leaves the screen, so those parameters are unused here.
+ * Shows the app's one player ([PlaybackSession.local] on [ExoPlaybackEngine]) and its controls. The
+ * player follows the session by itself and keeps playing when this leaves the screen.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -75,43 +68,19 @@ actual fun NativeMediaPlayer(
     url: String,
     title: String,
     isAudio: Boolean,
-    onEnded: () -> Unit,
     modifier: Modifier,
-    autoPlay: Boolean,
-    startPositionMs: Long,
-    volume: Float,
-    commands: Flow<LocalPlayerCommand>,
-    onStatus: (RendererStatus) -> Unit,
     fullscreen: Boolean,
     onToggleFullscreen: (() -> Unit)?,
 ) {
-    val background = koinInject<BackgroundPlayer>()
-    val player = background.player
-    val stopped by background.stopped.collectAsStateWithLifecycle()
-    val error by background.error.collectAsStateWithLifecycle()
-
-    // What the controls show, polled often so the seek bar moves smoothly (only while the app is in
-    // front). Only the bar reads the position; the rest reads derived state, so it isn't recomposed on
-    // every poll.
-    fun snapshot() = Shown(background.status(), player.playWhenReady)
-    var shown by remember(url) { mutableStateOf(snapshot()) }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(url, lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                shown = snapshot()
-                delay(CONTROLS_POLL_MS)
-            }
-        }
-    }
-    val playing by remember(url) {
-        derivedStateOf { shown.playWhenReady && !stopped && error == null && shown.status.state != TransportState.STOPPED }
-    }
-    val buffering by remember(url) { derivedStateOf { shown.status.state == TransportState.TRANSITIONING } }
-    fun resume() = background.resume()
+    val local = koinInject<PlaybackSession>().local
+    val player = koinInject<ExoPlaybackEngine>().player
+    val status by local.status.collectAsStateWithLifecycle()
+    val error by local.error.collectAsStateWithLifecycle()
+    val state = status?.state
+    val playing = state == TransportState.PLAYING || state == TransportState.TRANSITIONING
+    val buffering = state == TransportState.TRANSITIONING
     fun togglePlay() {
-        if (playing) player.pause() else resume()
-        shown = snapshot()
+        if (playing) local.pause() else local.play()
     }
 
     val c = AppTheme.colors
@@ -122,16 +91,13 @@ actual fun NativeMediaPlayer(
     val controls: @Composable (Modifier) -> Unit = { barModifier ->
         PlayerControlBar(
             playing = playing,
-            positionMs = shown.status.positionMs,
-            durationMs = shown.status.durationMs,
+            positionMs = status?.positionMs ?: 0,
+            durationMs = status?.durationMs ?: 0,
             onPlayPause = {
                 touches++
                 togglePlay()
             },
-            onSeek = {
-                background.seek(it)
-                shown = snapshot()
-            },
+            onSeek = local::seek,
             content = content,
             modifier = barModifier,
             onDraggingChange = {
@@ -186,8 +152,8 @@ actual fun NativeMediaPlayer(
                 touches++
                 when (e.key) {
                     Key.MediaPlayPause -> togglePlay()
-                    Key.MediaPlay -> resume()
-                    Key.MediaPause -> player.pause()
+                    Key.MediaPlay -> local.play()
+                    Key.MediaPause -> local.pause()
                     // OK: the focused picture's click shows or hides the bar (or the focused button's runs).
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> return@onPreviewKeyEvent false
                     else -> {
@@ -250,8 +216,4 @@ actual fun NativeMediaPlayer(
     }
 }
 
-/** What the controls show: the status, and whether it's meant to play (ExoPlayer's playWhenReady). */
-private data class Shown(val status: RendererStatus, val playWhenReady: Boolean)
-
 private const val CONTROLS_HIDE_MS = 2_500L
-private const val CONTROLS_POLL_MS = 200L

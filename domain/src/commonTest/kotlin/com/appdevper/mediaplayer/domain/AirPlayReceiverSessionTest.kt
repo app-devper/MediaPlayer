@@ -5,7 +5,6 @@ import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.SenderCommand
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
@@ -13,7 +12,6 @@ import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
-import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
@@ -21,10 +19,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -74,7 +71,7 @@ class AirPlayReceiverSessionTest {
     fun followsSettings() = runTest {
         val airPlay = FakeAirPlay()
         val settings = AirPlaySettings(enabled = false)
-        AirPlayReceiverSession(airPlay, settings, PlaybackSession(SilentRenderer(), backgroundScope), backgroundScope).start()
+        AirPlayReceiverSession(airPlay, settings, playbackSession(SilentRenderer(), backgroundScope), backgroundScope).start()
         runCurrent()
         settings.update { it.copy(airPlayEnabled = true) }
         runCurrent()
@@ -95,7 +92,7 @@ class AirPlayReceiverSessionTest {
     @Test
     fun unsupportedPlatformsNeverStart() = runTest {
         val airPlay = FakeAirPlay(supported = false)
-        AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), PlaybackSession(SilentRenderer(), backgroundScope), backgroundScope).start()
+        AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playbackSession(SilentRenderer(), backgroundScope), backgroundScope).start()
         runCurrent()
         assertTrue(airPlay.calls.none { it.startsWith("start") })
     }
@@ -103,19 +100,19 @@ class AirPlayReceiverSessionTest {
     @Test
     fun mirroringOpensTheScreenAndPausesOurPlayer() = runTest {
         val airPlay = FakeAirPlay()
-        val playback = PlaybackSession(SilentRenderer(), backgroundScope)
+        val engine = FakeEngine()
+        val playback = playbackSession(SilentRenderer(), backgroundScope, engine)
         playback.play(MediaEntry("v", "0", "Movie", MediaKind.VIDEO, streamUrl = "http://h/v.mp4"), emptyList())
         val session = AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playback, backgroundScope)
         session.start()
         val opened = backgroundScope.launch { session.openMirror.first() }
-        val command = backgroundScope.launch { assertEquals(LocalPlayerCommand.Pause, playback.localCommands.first()) }
         runCurrent()
         assertFalse(opened.isCompleted)
 
         airPlay.activity.value = AirPlayActivity(client = "Worawit's iPhone", mirroring = true)
         runCurrent()
         assertTrue(opened.isCompleted)
-        assertTrue(command.isCompleted)
+        assertEquals(TransportState.PAUSED, playback.state.value.local?.state)
 
         // Still mirroring (e.g. the PIN went away): no second open.
         val again = backgroundScope.launch { session.openMirror.first() }
@@ -128,12 +125,11 @@ class AirPlayReceiverSessionTest {
     @Test
     fun airPlayVideoPlaysOnOurPlayerAndReportsBack() = runTest {
         val airPlay = FakeAirPlay()
-        val playback = PlaybackSession(SilentRenderer(), backgroundScope)
+        val engine = FakeEngine()
+        val playback = playbackSession(SilentRenderer(), backgroundScope, engine)
         val session = AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playback, backgroundScope)
         session.start()
         val opened = backgroundScope.launch { session.openPlayer.first() }
-        val commands = mutableListOf<LocalPlayerCommand>()
-        backgroundScope.launch { playback.localCommands.take(2).toList(commands) }
         runCurrent()
 
         val video = MediaEntry("v", "-1", "YouTube", MediaKind.VIDEO, streamUrl = "http://localhost:7000/master.m3u8")
@@ -143,11 +139,8 @@ class AirPlayReceiverSessionTest {
         runCurrent()
         assertEquals(listOf(video), playback.state.value.queue)
         assertTrue(opened.isCompleted)
-        assertEquals(listOf<LocalPlayerCommand>(LocalPlayerCommand.Seek(30_000), LocalPlayerCommand.Pause), commands)
-
-        playback.reportLocalStatus(RendererStatus(TransportState.PAUSED, 30_000, 300_000))
-        runCurrent()
-        assertEquals(ReceiverPlayback(video, RendererStatus(TransportState.PAUSED, 30_000, 300_000)), airPlay.published.last())
+        assertEquals(listOf("load:v@0", "seek:30000", "pause"), engine.calls)
+        assertEquals(ReceiverPlayback(video, RendererStatus(TransportState.PAUSED, 30_000, 60_000)), airPlay.published.last())
 
         // Stopped by the sender: shown again later (after AirPlay audio), it must not start by itself.
         airPlay.commands.emit(CastCommand.Stop)
@@ -159,21 +152,45 @@ class AirPlayReceiverSessionTest {
         runCurrent()
         assertEquals(157_000, playback.state.value.startPositionMs)
         assertEquals(true, playback.state.value.autoPlay)
+        assertEquals("load:v2@157000", engine.calls.last())
+    }
+
+    @Test
+    fun theSendersQueueDecidesNextAndPreviousForItsVideo() = runTest {
+        val airPlay = FakeAirPlay()
+        val engine = FakeEngine()
+        val playback = playbackSession(SilentRenderer(), backgroundScope, engine)
+        AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playback, backgroundScope).start()
+        runCurrent()
+        val video = MediaEntry("yt", "-1", "YouTube", MediaKind.VIDEO, streamUrl = "http://localhost:7000/master.m3u8")
+        airPlay.commands.emit(CastCommand.Load(video, autoPlay = true))
+        airPlay.activity.value = AirPlayActivity(client = "iPhone", canControlSender = true, videoEntryId = "yt")
+        runCurrent()
+        assertTrue(playback.next())
+        assertTrue(playback.previous())
+        runCurrent()
+        assertEquals(listOf(SenderCommand.Next, SenderCommand.Previous), airPlay.sentToSender)
+
+        // At the end of its video, the sender (not us) decides what comes next.
+        engine.finish()
+        advanceTimeBy(300)
+        runCurrent()
+        assertEquals(listOf(SenderCommand.Next, SenderCommand.Previous), airPlay.sentToSender)
     }
 
     @Test
     fun audioFromASenderAlsoPausesOurPlayer() = runTest {
         val airPlay = FakeAirPlay()
-        val playback = PlaybackSession(SilentRenderer(), backgroundScope)
+        val playback = playbackSession(SilentRenderer(), backgroundScope)
+        playback.play(MediaEntry("a", "0", "Song", MediaKind.AUDIO, streamUrl = "http://h/a.mp3"), emptyList())
         val session = AirPlayReceiverSession(airPlay, AirPlaySettings(enabled = true), playback, backgroundScope)
         session.start()
-        val command = backgroundScope.launch { assertEquals(LocalPlayerCommand.Pause, playback.localCommands.first()) }
         runCurrent()
         val opened = backgroundScope.launch { session.openPlayer.first() }
         runCurrent()
         airPlay.activity.value = AirPlayActivity(client = "Mac", audioOnly = true)
         runCurrent()
-        assertTrue(command.isCompleted)
+        assertEquals(TransportState.PAUSED, playback.state.value.local?.state)
         assertTrue(opened.isCompleted, "music from a sender opens the player screen")
     }
 }

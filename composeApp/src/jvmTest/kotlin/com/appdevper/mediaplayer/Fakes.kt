@@ -14,6 +14,8 @@ import com.appdevper.mediaplayer.domain.model.ServerCapabilities
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.session.EngineFacts
+import com.appdevper.mediaplayer.domain.session.PlaybackEngine
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
@@ -116,4 +118,21 @@ class FakeReceiver : CastReceiverRepository {
     override suspend fun start(name: String) { status.value = ReceiverStatus.Running(name) }
     override suspend fun stop() { status.value = ReceiverStatus.Stopped }
     override fun publish(playback: ReceiverPlayback) {}
+}
+
+/** A platform player that does what it's told at once. */
+class FakeEngine : PlaybackEngine {
+    val calls = mutableListOf<String>()
+    private var facts = EngineFacts()
+    override fun load(entry: MediaEntry, url: String, playWhenReady: Boolean, startPositionMs: Long) {
+        calls += "load:${entry.id}"
+        facts = EngineFacts(playing = playWhenReady, positionMs = startPositionMs, durationMs = 180_000)
+    }
+    override fun unload() { facts = EngineFacts() }
+    override fun play() { calls += "play"; facts = facts.copy(playing = true) }
+    override fun pause() { calls += "pause"; facts = facts.copy(playing = false) }
+    override fun seekTo(positionMs: Long) { facts = facts.copy(positionMs = positionMs, ended = false) }
+    override fun setVolume(volume: Float) {}
+    override fun reload(positionMs: Long) {}
+    override fun facts() = facts
 }

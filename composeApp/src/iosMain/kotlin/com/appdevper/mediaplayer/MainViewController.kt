@@ -21,7 +21,7 @@ fun MainViewController(): UIViewController {
         session.setCategory(AVAudioSessionCategoryPlayback, error = null)
         session.setActive(true, error = null)
     }
-    // Plays the session's songs and videos from now on, with or without the player screen.
+    // The lock screen and the app lifecycle for the local player, with or without the player screen.
     KoinPlatform.getKoin().get<IosBackgroundPlayer>()
     return ComposeUIViewController { App() }
 }

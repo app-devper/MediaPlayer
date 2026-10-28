@@ -9,7 +9,6 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasText
@@ -40,7 +39,9 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.SenderCommand
+import com.appdevper.mediaplayer.domain.session.PlaybackEngine
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
+import com.appdevper.mediaplayer.playback.FfmpegPlaybackEngine
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
@@ -66,6 +67,7 @@ import org.jetbrains.skia.Surface
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import java.io.File
 import kotlin.test.assertEquals
@@ -96,6 +98,7 @@ class DesignShots {
                     single<CastReceiverRepository> { FakeReceiver().apply { status.value = ReceiverStatus.Running("Worawit's MacBook") } }
                     single<AirPlayRepository> { airPlay }
                     single { AirPlayPlayer() }
+                    single { FfmpegPlaybackEngine() } bind PlaybackEngine::class
                 },
                 domainModule, presentationModule,
             )
@@ -144,8 +147,8 @@ class DesignShots {
         s.setTarget(PlaybackTarget.Renderer(fakeTv))
         s.play(song, listOf(song, song2))
     }, start = PlayerRoute, always = true) {
-        // First song: "Previous" is one node with its name, announced as a disabled button.
-        onNodeWithContentDescription("Previous").assertIsNotEnabled()
+        // First song: "Previous" is one node with its name, still enabled (it goes back to the start).
+        onNodeWithContentDescription("Previous").assertIsEnabled()
         onNodeWithContentDescription("Next").assertIsEnabled()
     }
     @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1100, dark = true, start = ServerRoute, always = true) {

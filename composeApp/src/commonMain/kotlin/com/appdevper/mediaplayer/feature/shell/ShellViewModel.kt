@@ -3,7 +3,6 @@ package com.appdevper.mediaplayer.feature.shell
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
-import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
@@ -124,9 +123,8 @@ class ShellViewModel(
 
     fun selectTarget(target: PlaybackTarget) = session.setTarget(target)
 
+    /** Play/pause where the current item plays: here or on a renderer. */
     fun togglePause() = session.togglePause()
-
-    fun toggleLocal() = session.sendLocal(if (uiState.value.localPlaying == true) LocalPlayerCommand.Pause else LocalPlayerCommand.Play)
 }
 
 sealed interface AddServerState {
