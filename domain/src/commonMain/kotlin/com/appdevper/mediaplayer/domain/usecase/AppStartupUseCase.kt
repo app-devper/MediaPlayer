@@ -1,7 +1,7 @@
 package com.appdevper.mediaplayer.domain.usecase
 
-import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
-import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.CastReceiverSession
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.repository.MediaServerRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository

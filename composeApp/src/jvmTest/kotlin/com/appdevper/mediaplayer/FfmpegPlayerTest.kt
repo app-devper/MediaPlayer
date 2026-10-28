@@ -1,7 +1,7 @@
 package com.appdevper.mediaplayer
 
-import com.appdevper.mediaplayer.platform.FfmpegPlayer
-import com.appdevper.mediaplayer.platform.PcmOutput
+import com.appdevper.mediaplayer.playback.FfmpegPlayer
+import com.appdevper.mediaplayer.playback.PcmOutput
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking

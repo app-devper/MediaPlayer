@@ -3,9 +3,9 @@ package com.appdevper.mediaplayer.di
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
-import com.appdevper.mediaplayer.ServerService
 import com.appdevper.mediaplayer.data.platform.ServerHost
 import com.appdevper.mediaplayer.playback.BackgroundPlayer
+import com.appdevper.mediaplayer.service.ServerService
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.Module
 import org.koin.dsl.module

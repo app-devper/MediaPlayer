@@ -1,4 +1,4 @@
-package com.appdevper.mediaplayer.domain.playback
+package com.appdevper.mediaplayer.domain.session
 
 import com.appdevper.mediaplayer.domain.model.LocalPlayerCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice

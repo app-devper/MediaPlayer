@@ -52,12 +52,28 @@ core:designsystem                  PlaybackSession
   tokens, the icon set and reusable components.
 
 ```
-composeApp/src/commonMain/kotlin/com/appdevper/mediaplayer/
+domain/src/commonMain/kotlin/com/appdevper/mediaplayer/domain/
+  model/       Media · Playback · Server · Cast · AirPlay (one file per area)
+  repository/  repository interfaces (implemented in :data)
+  usecase/     one use case per file
+  session/     app-wide sessions: PlaybackSession, CastReceiverSession, AirPlayReceiverSession
+
+data/src/commonMain/kotlin/com/appdevper/mediaplayer/data/
+  upnp/        SSDP, device descriptions, SOAP, DIDL-Lite (control point); host/ = our own devices
+  server/      the DLNA media server      renderer/  the DLNA renderer (receive casts)
+  repository/  repository implementations   mapper/  Upnp*/Didl* → domain
+  platform/    platform I/O behind small interfaces   di/  dataModule
+
+composeApp/src/<platform>Main/kotlin/com/appdevper/mediaplayer/
   di/          Koin modules + initKoin()
-  feature/     home · browse · player · server · shell  (Screen + ViewModel)
-  ui/shell/    routes, nav host, sidebar / drawer, top bar + "Play on" picker, mini player
-  ui/          domain → UI helpers (MediaKind/MediaDevice icons, formatClock)
-  platform/    expect: native player, AirPlay button, permissions
+  feature/     home · browse · player · mirror · server · shell  (Screen + ViewModel)
+  ui/          domain → UI helpers;  shell/ = routes, nav host, sidebar, top bar, mini player;
+               player/ = PlayerControlBar (our players' bar)
+  platform/    expect/actual UI: native player views, AirPlay button and mirror view,
+               full screen, permissions
+  playback/    the players behind the views: FfmpegPlayer (desktop), BackgroundPlayer +
+               PlaybackService (Android media session), IosBackgroundPlayer (iOS lock screen)
+  service/     Android services: ServerService (keeps the DLNA server alive)
 
 core/designsystem/src/commonMain/kotlin/com/appdevper/mediaplayer/designsystem/
   theme/       design tokens (colors, type, radii), light & dark

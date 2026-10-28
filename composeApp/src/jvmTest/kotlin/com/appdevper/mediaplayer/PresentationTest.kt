@@ -11,14 +11,14 @@ import com.appdevper.mediaplayer.domain.model.SenderCommand
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerStatus
-import com.appdevper.mediaplayer.domain.playback.CastReceiverSession
+import com.appdevper.mediaplayer.domain.session.CastReceiverSession
 import kotlin.test.assertFalse
 import kotlinx.coroutines.flow.first
 import com.appdevper.mediaplayer.feature.mirror.MirrorViewModel
-import com.appdevper.mediaplayer.domain.playback.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
-import com.appdevper.mediaplayer.domain.playback.PlaybackSession
+import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
 import com.appdevper.mediaplayer.domain.usecase.GetDeviceUseCase
