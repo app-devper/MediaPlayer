@@ -59,8 +59,3 @@ class FakeLibrary(var fail: Boolean = false) : LibraryRepository {
     }
 }
 
-class FakeSettings : SettingsRepository {
-    override val serverSettings = MutableStateFlow(ServerSettings("Worawit's MacBook", true, true, true, false, listOf("/Users/me/Movies", "/Users/me/Music")))
-    override fun update(transform: (ServerSettings) -> ServerSettings) = serverSettings.update(transform)
-}
-

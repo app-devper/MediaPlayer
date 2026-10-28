@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.domain
 
+import com.appdevper.mediaplayer.testing.FakeSettings
 import com.appdevper.mediaplayer.testing.FakeAirPlay
 import com.appdevper.mediaplayer.testing.FakeEngine
 import com.appdevper.mediaplayer.testing.FakeRenderer
@@ -17,7 +18,6 @@ import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
-import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -32,10 +32,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-private class AirPlaySettings(enabled: Boolean) : SettingsRepository {
-    override val serverSettings = MutableStateFlow(ServerSettings("Living Room", false, true, true, true, emptyList(), airPlayEnabled = enabled))
-    override fun update(transform: (ServerSettings) -> ServerSettings) = serverSettings.update(transform)
-}
+private fun AirPlaySettings(enabled: Boolean) = FakeSettings(ServerSettings("Living Room", false, true, true, true, emptyList(), airPlayEnabled = enabled))
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AirPlayReceiverSessionTest {

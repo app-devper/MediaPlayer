@@ -42,12 +42,17 @@ core:designsystem                  PlaybackSession
   settings), and the few use cases with rules of their own (`BrowseFolderUseCase`…). `PlaybackSession`
   holds the queue, play target and auto-advance. The session sends commands to a transport: `LocalPlayer`, which holds the playback
   rules shared by every platform and drives a platform `PlaybackEngine`, or `RendererTransport` for
-  a DLNA renderer. The terms are defined in `CONTEXT.md`.
+  a DLNA renderer. Its `nowPlaying` says what plays and where play/pause, next and previous go
+  (an AirPlay sender's queue, through `SenderControl`); receivers reach it through a `ReceiverLink`.
+  The terms are defined in `CONTEXT.md`.
 * **`:data`**: implements the repositories. Contains the pure-Kotlin UPnP stack (SSDP,
-  description, SOAP, DIDL-Lite), the ktor-CIO DLNA server, and the platform code
-  (multicast sockets, MediaStore / folders / iOS Documents) behind small interfaces.
+  description, SOAP, DIDL-Lite), the ktor-CIO DLNA server and renderer (both run by one
+  `LocalDevice` from a spec of their services), and the platform code (multicast sockets via
+  `Network`, MediaStore / folders / iOS Documents) behind small interfaces. Discovery is tested on an
+  in-memory LAN (`InMemoryLan`).
 * **`:composeApp`**: MVVM. One ViewModel per screen (`ShellViewModel`, `BrowseViewModel`,
-  `PlayerViewModel`, `ServerViewModel`) exposes a `StateFlow` UI state and calls domain sessions,
+  `PlayerViewModel`, `ServerViewModel`) exposes a `StateFlow` UI state (the player's is one
+  `PlayerUi` model the screen only lays out) and calls domain sessions,
   repository interfaces and use cases.
   Koin (`di/AppModule.kt`) is the composition root.
 * **`:airplay`**: the AirPlay receiver. UxPlay's protocol library (C, vendored in `native/uxplay`)
@@ -55,7 +60,7 @@ core:designsystem                  PlaybackSession
   behind a small JNI API (`AirPlayReceiver`). `AirPlayPlayer` plays what it receives: MediaCodec on
   Android, FFmpeg (bytedeco) on the desktop; ALAC is decoded natively with Apple's decoder.
 * **`:core:testing`**: test fakes for the domain's interfaces (engine, renderer, receivers,
-  subtitle files), shared by the tests of every module. Never a main dependency.
+  settings, subtitle files), shared by the tests of every module. Never a main dependency.
 * **`:core:designsystem`**: Compose-only building blocks with no app or domain code: design
   tokens, the icon set and reusable components.
 

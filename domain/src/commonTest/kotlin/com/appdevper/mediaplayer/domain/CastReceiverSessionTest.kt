@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.domain
 
+import com.appdevper.mediaplayer.testing.FakeSettings
 import com.appdevper.mediaplayer.testing.FakeAirPlay
 import com.appdevper.mediaplayer.testing.FakeEngine
 import com.appdevper.mediaplayer.testing.FakeReceiver
@@ -16,7 +17,6 @@ import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.session.CastReceiverSession
-import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -31,10 +31,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-private class ReceiverSettings(enabled: Boolean) : SettingsRepository {
-    override val serverSettings = MutableStateFlow(ServerSettings("Phone", false, true, true, true, emptyList(), receiverEnabled = enabled))
-    override fun update(transform: (ServerSettings) -> ServerSettings) = serverSettings.update(transform)
-}
+private fun ReceiverSettings(enabled: Boolean) = FakeSettings(ServerSettings("Phone", false, true, true, true, emptyList(), receiverEnabled = enabled))
 
 private val clip = MediaEntry("cast", "-1", "Holiday", MediaKind.VIDEO, streamUrl = "http://10.0.0.9/holiday.mp4")
 private val photo = MediaEntry("cast", "-1", "Beach", MediaKind.IMAGE, streamUrl = "http://10.0.0.9/beach.jpg")

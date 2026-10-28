@@ -20,6 +20,7 @@ import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
+import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.domain.session.EngineFacts
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
@@ -28,6 +29,7 @@ import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 
 /** A platform player that does what it's told at once; [facts] can be set to anything. */
 class FakeEngine(private val durationMs: Long = 60_000) : PlaybackEngine {
@@ -153,6 +155,14 @@ class FakeAirPlay(status: AirPlayStatus = AirPlayStatus.Stopped) : AirPlayReposi
         calls += "stop"
         if (status.value != AirPlayStatus.Unsupported) status.value = AirPlayStatus.Stopped
     }
+}
+
+/** Settings kept in memory, from [initial]. */
+class FakeSettings(
+    initial: ServerSettings = ServerSettings("Worawit's MacBook", true, true, true, false, listOf("/Users/me/Movies", "/Users/me/Music")),
+) : SettingsRepository {
+    override val serverSettings = MutableStateFlow(initial)
+    override fun update(transform: (ServerSettings) -> ServerSettings) = serverSettings.update(transform)
 }
 
 /** The built-in media server: starts at once with the settings it's given (kept in [starts]). */
