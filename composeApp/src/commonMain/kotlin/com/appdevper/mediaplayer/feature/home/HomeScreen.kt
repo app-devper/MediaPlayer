@@ -11,23 +11,43 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.appdevper.mediaplayer.designsystem.components.CenteredColumn
+import com.appdevper.mediaplayer.designsystem.components.ComposerField
 import com.appdevper.mediaplayer.designsystem.components.IconTile
 import com.appdevper.mediaplayer.designsystem.components.OutlineCard
 import com.appdevper.mediaplayer.designsystem.components.PillButton
@@ -42,6 +62,7 @@ import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ServerStatus
+import com.appdevper.mediaplayer.feature.shell.AddServerState
 import com.appdevper.mediaplayer.feature.shell.ShellUiState
 import com.appdevper.mediaplayer.platform.deviceLabel
 import com.appdevper.mediaplayer.ui.icon
@@ -56,9 +77,12 @@ fun HomeScreen(
     onSelectTarget: (PlaybackTarget) -> Unit,
     onRefresh: () -> Unit,
     onOpenMyServer: () -> Unit,
+    onAddServer: (String) -> Unit = {},
+    onDismissAddServer: () -> Unit = {},
 ) {
     val c = AppTheme.colors
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+    // imePadding: room for the keyboard, so what's under a focused field can scroll into view.
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         CenteredColumn(maxWidth = 720.dp) {
             Spacer(Modifier.height(48.dp))
             Icon(AppIcons.Logo, null, Modifier.size(40.dp).align(Alignment.CenterHorizontally), tint = c.textPrimary)
@@ -101,6 +125,8 @@ fun HomeScreen(
                 }
             }
 
+            AddServerByAddress(state.addServer, onAddServer, onDismissAddServer)
+
             SectionLabel("Play on")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TargetChip(AppIcons.Phone, "This device ($deviceLabel)", state.target == PlaybackTarget.Local) { onSelectTarget(PlaybackTarget.Local) }
@@ -136,7 +162,7 @@ private fun SearchingCard(searching: Boolean, onRefresh: () -> Unit) {
     val c = AppTheme.colors
     Row(
         Modifier.fillMaxWidth().border(1.dp, c.border, Radius.large).padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (searching) {
@@ -144,11 +170,103 @@ private fun SearchingCard(searching: Boolean, onRefresh: () -> Unit) {
         } else {
             Icon(AppIcons.Server, null, Modifier.size(20.dp), tint = c.textSecondary)
         }
-        Column(Modifier.weight(1f)) {
+        // The action goes under the text, so the text keeps the width on a phone.
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(if (searching) "Looking for media servers…" else "No media servers found", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
             Text("NAS boxes, PCs and phones running this app on the same Wi‑Fi show up here.", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
+            if (!searching) {
+                PillButton("Search again", onRefresh, style = PillStyle.Secondary, icon = AppIcons.Refresh, modifier = Modifier.padding(top = 10.dp))
+            }
         }
-        if (!searching) PillButton("Search again", onRefresh, style = PillStyle.Secondary, icon = AppIcons.Refresh)
+    }
+}
+
+/**
+ * For servers discovery can't find (an iPhone without Apple's multicast entitlement, or a network
+ * that blocks multicast): ask one by its address. Found servers join the list and are kept.
+ */
+@Composable
+private fun AddServerByAddress(state: AddServerState, onAdd: (String) -> Unit, onDismiss: () -> Unit) {
+    val c = AppTheme.colors
+    var open by rememberSaveable { mutableStateOf(false) }
+    var address by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(state) {
+        if (state is AddServerState.Added) {
+            open = false
+            address = ""
+        }
+    }
+    val working = state is AddServerState.Working
+    // Opening it is asking to type: the field takes focus (and the keyboard comes up).
+    val field = remember { FocusRequester() }
+    LaunchedEffect(open) { if (open) field.requestFocus() }
+    // The answer below the field mustn't stay behind the keyboard.
+    val message = remember { BringIntoViewRequester() }
+    LaunchedEffect(state) { if (open && state is AddServerState.NotFound) message.bringIntoView() }
+    LaunchedEffect(open) { if (open) message.bringIntoView() }
+    fun submit() {
+        if (address.isNotBlank() && !working) onAdd(address)
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (!open) {
+            Row(
+                Modifier.heightIn(min = 48.dp).interactive({
+                    onDismiss() // a fresh start: no earlier "Added" or "not found"
+                    open = true
+                }, shape = Radius.pill).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(AppIcons.Plus, null, Modifier.size(16.dp), tint = c.textSecondary)
+                Text("Add a server by address", style = MaterialTheme.typography.labelLarge, color = c.textSecondary)
+            }
+            if (state is AddServerState.Added) {
+                Text(
+                    "Added ${state.names.joinToString()}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.success,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+            return@Column
+        }
+        Text("Server address", style = MaterialTheme.typography.labelLarge, color = c.textPrimary, modifier = Modifier.padding(top = 8.dp))
+        // Full width for the address (up to 15 characters, or a URL); the actions go below it.
+        ComposerField(
+            value = address,
+            onValueChange = {
+                address = it
+                if (state is AddServerState.NotFound) onDismiss()
+            },
+            placeholder = "192.168.1.20",
+            leadingIcon = AppIcons.Server,
+            label = "Server address",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false, imeAction = ImeAction.Go),
+            keyboardActions = KeyboardActions(onGo = { submit() }),
+            modifier = Modifier.focusRequester(field),
+        )
+        val notFound = state as? AddServerState.NotFound
+        Text(
+            if (notFound != null) {
+                "No media server answered at ${notFound.address}. Check the address, and that both are on the same Wi‑Fi."
+            } else {
+                "A PC, NAS or phone sharing media on this Wi‑Fi, for when it doesn't show up by itself: its IP address (like 192.168.1.20), or the URL of its description.xml."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (notFound != null) c.danger else c.textTertiary,
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
+        Row(
+            Modifier.padding(top = 4.dp).bringIntoViewRequester(message),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Same size while it works, so nothing jumps; it just says so.
+            PillButton(if (working) "Adding…" else "Add", ::submit, enabled = address.isNotBlank() && !working, modifier = Modifier.widthIn(min = 104.dp))
+            PillButton("Cancel", {
+                open = false
+                onDismiss()
+            }, style = PillStyle.Secondary)
+        }
     }
 }
 

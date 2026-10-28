@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -20,12 +22,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
 
-/** Rounded "composer" input — the ChatGPT message box, used here for searching. */
+/**
+ * Rounded "composer" input — the ChatGPT message box, used here for searching. [label] names the field
+ * for screen readers (show it on screen too; the placeholder isn't a label); [keyboardOptions] and
+ * [keyboardActions] pick the keyboard and what its action key does.
+ */
 @Composable
 fun ComposerField(
     value: String,
@@ -33,6 +41,9 @@ fun ComposerField(
     placeholder: String,
     modifier: Modifier = Modifier,
     leadingIcon: ImageVector = AppIcons.Search,
+    label: String? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
 ) {
     val c = AppTheme.colors
     Row(
@@ -55,7 +66,9 @@ fun ComposerField(
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = c.textPrimary),
                 cursorBrush = SolidColor(c.textPrimary),
-                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = keyboardOptions,
+                keyboardActions = keyboardActions,
+                modifier = Modifier.fillMaxWidth().then(if (label != null) Modifier.semantics { contentDescription = label } else Modifier),
             )
         }
         if (value.isNotEmpty()) GhostIconButton(AppIcons.Close, "Clear", onClick = { onValueChange("") }, size = 28.dp, iconSize = 16.dp)

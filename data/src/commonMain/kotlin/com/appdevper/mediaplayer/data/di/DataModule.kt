@@ -68,7 +68,13 @@ val dataModule = module {
         val settings = get<SettingsRepositoryImpl>()
         val renderer = get<MediaRenderer>()
         // Hide our own renderer only while it runs, so a stale UDN never hides a real device.
-        DeviceRepositoryImpl(get(), get(AppScope)) { if (renderer.state.value is ReceiverStatus.Running) setOf(settings.rendererUdn) else emptySet() }
+        DeviceRepositoryImpl(
+            get(),
+            get(AppScope),
+            ownUdns = { if (renderer.state.value is ReceiverStatus.Running) setOf(settings.rendererUdn) else emptySet() },
+            savedAddresses = settings.serverAddresses,
+            saveAddress = settings::addServerAddress,
+        )
     }
     single<LibraryRepository> { LibraryRepositoryImpl(get(), get()) }
     single<RendererRepository> { RendererRepositoryImpl(get(), get()) }

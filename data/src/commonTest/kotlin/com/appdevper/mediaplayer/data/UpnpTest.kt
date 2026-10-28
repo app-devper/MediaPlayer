@@ -3,7 +3,7 @@ package com.appdevper.mediaplayer.data
 import com.appdevper.mediaplayer.data.server.MediaServer
 import com.appdevper.mediaplayer.data.upnp.DeviceDescription
 import com.appdevper.mediaplayer.data.upnp.Didl
-import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.data.upnp.ServerAddress
 import com.appdevper.mediaplayer.data.upnp.Soap
 import com.appdevper.mediaplayer.data.upnp.SsdpMessage
 import com.appdevper.mediaplayer.data.upnp.UpnpException
@@ -11,9 +11,12 @@ import com.appdevper.mediaplayer.data.upnp.Xml
 import com.appdevper.mediaplayer.data.upnp.formatUpnpTime
 import com.appdevper.mediaplayer.data.upnp.parseUpnpTime
 import com.appdevper.mediaplayer.data.upnp.resolveUrl
+import com.appdevper.mediaplayer.domain.model.MediaKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -122,5 +125,30 @@ class UpnpTest {
         assertEquals(990L..999L, MediaServer.parseRange("bytes=990-5000", 1000))
         assertNull(MediaServer.parseRange("bytes=1000-", 1000))
         assertNull(MediaServer.parseRange("bytes=abc", 1000))
+    }
+
+    @Test
+    fun serverAddressesTheUserTypes() {
+        val host = assertNotNull(ServerAddress.parse(" 192.168.1.20 "))
+        assertEquals("192.168.1.20", host.host)
+        // A bare host is also tried on this app's own server ports.
+        assertEquals((8191..8194).map { "http://192.168.1.20:$it/description.xml" }, host.descriptionUrls)
+        assertTrue(host.matches("http://192.168.1.20:49152/rootDesc.xml"))
+        assertFalse(host.matches("http://192.168.1.21:8191/description.xml"))
+
+        assertEquals("192.168.1.20", host.searchHost) // an IP gets the unicast M-SEARCH
+        val name = assertNotNull(ServerAddress.parse("nas.local:5000"))
+        assertEquals(listOf("http://nas.local:5000/description.xml"), name.descriptionUrls)
+        assertNull(name.searchHost) // a name is only fetched (its LOCATION keeps the name)
+        assertNull(ServerAddress.parse("192.168.1.300")?.searchHost)
+
+        val url = assertNotNull(ServerAddress.parse("http://192.168.1.5:9000/dms/desc.xml"))
+        assertEquals(null, url.host) // fetched as is, no search
+        assertEquals(listOf("http://192.168.1.5:9000/dms/desc.xml"), url.descriptionUrls)
+        assertTrue(url.matches("http://192.168.1.5:9000/dms/desc.xml"))
+
+        for (bad in listOf("", "  ", "192.168.1.20:0", "192.168.1.20:70000", "host:port", "a b", "x/y", "user@host", "http://")) {
+            assertNull(ServerAddress.parse(bad), bad)
+        }
     }
 }
