@@ -25,6 +25,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -79,8 +80,10 @@ class ControlPoint(
     private val store: AddressStore = AddressStore.InMemory(),
     /** UDNs of devices this app runs itself (our own renderer, while it runs): never offered. */
     private val ownUdns: () -> Set<String> = { emptySet() },
+    /** When announcements expire (tests pass virtual time). */
+    private val time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) {
-    private class Entry(val device: UpnpDevice, var expiresAt: TimeSource.Monotonic.ValueTimeMark)
+    private class Entry(val device: UpnpDevice, var expiresAt: ComparableTimeMark)
 
     private val mutex = Mutex()
     private val entries = LinkedHashMap<String, Entry>()
@@ -130,7 +133,7 @@ class ControlPoint(
         val target = ServerAddress.parse(text) ?: return
         mutex.withLock {
             // A probe of it still under way mustn't put it back: its late answers are ignored a while.
-            forgotten[target] = TimeSource.Monotonic.markNow() + FORGOTTEN_IGNORE_SECONDS.seconds
+            forgotten[target] = time.markNow() + FORGOTTEN_IGNORE_SECONDS.seconds
             if (entries.values.removeAll { target.matches(it.device.location) }) publish()
         }
         // Another saved address on the same host (e.g. host and host:port) still wants its devices.
@@ -139,7 +142,7 @@ class ControlPoint(
     }
 
     // Just-forgotten addresses, until when their late answers are ignored (under mutex).
-    private val forgotten = HashMap<ServerAddress, TimeSource.Monotonic.ValueTimeMark>()
+    private val forgotten = HashMap<ServerAddress, ComparableTimeMark>()
 
     /** Asks [address] directly from now on, and keeps it (once, whatever its letter case). */
     private fun keep(address: String) {
@@ -234,10 +237,12 @@ class ControlPoint(
         val location = msg.header("LOCATION") ?: return
         val ttl = msg.maxAgeSeconds.coerceIn(60, 7200)
         val known = mutex.withLock {
+            // Only at the same location: a device that moved (another port, a new address) is read
+            // again there, or commands would keep going to where it was.
             var hit = false
-            for ((k, e) in entries) {
-                if (k == udn || e.device.location == location) {
-                    e.expiresAt = TimeSource.Monotonic.markNow() + ttl.seconds
+            for (e in entries.values) {
+                if (e.device.location == location) {
+                    e.expiresAt = time.markNow() + ttl.seconds
                     hit = true
                 }
             }
@@ -262,7 +267,8 @@ class ControlPoint(
             mutex.withLock {
                 forgotten.values.removeAll { it.hasPassedNow() }
                 if (forgotten.keys.any { it.matches(location) }) return
-                val expires = TimeSource.Monotonic.markNow() + ttl.seconds
+                val expires = time.markNow() + ttl.seconds
+                // What was at another location under these UDNs moved here.
                 devices.forEach { d -> entries[d.udn] = Entry(d, expires) }
                 if (devices.isNotEmpty()) publish()
             }

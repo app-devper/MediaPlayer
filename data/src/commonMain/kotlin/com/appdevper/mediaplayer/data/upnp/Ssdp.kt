@@ -1,9 +1,8 @@
 package com.appdevper.mediaplayer.data.upnp
 
 import com.appdevper.mediaplayer.data.platform.MulticastLock
+import com.appdevper.mediaplayer.data.platform.Network
 import com.appdevper.mediaplayer.data.platform.UdpSocket
-import com.appdevper.mediaplayer.data.platform.localIpv4Address
-import com.appdevper.mediaplayer.data.platform.openUdpSocket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -73,6 +72,7 @@ class SsdpMessage(
 class SsdpEngine(
     private val scope: CoroutineScope,
     private val multicastLock: MulticastLock = MulticastLock.None,
+    private val network: Network = Network.Platform,
 ) {
 
     private val _messages = MutableSharedFlow<SsdpMessage>(extraBufferCapacity = 512)
@@ -90,14 +90,14 @@ class SsdpEngine(
 
     /** Starts (or restarts when the LAN address changed). Returns false when there is no network. */
     suspend fun ensureStarted(): Boolean = mutex.withLock {
-        val ip = localIpv4Address()
+        val ip = network.localIpv4Address()
         if (unicastSocket != null && ip == localIp) return@withLock true
         stopLocked()
         if (ip == null) return@withLock false
         localIp = ip
         multicastLock.acquire()
-        unicastSocket = runCatching { openUdpSocket(0, null, ip) }.getOrNull()
-        listenSocket = runCatching { openUdpSocket(SSDP_PORT, SSDP_ADDRESS, ip) }.getOrNull()
+        unicastSocket = runCatching { network.openUdpSocket(0, null, ip) }.getOrNull()
+        listenSocket = runCatching { network.openUdpSocket(SSDP_PORT, SSDP_ADDRESS, ip) }.getOrNull()
         listOfNotNull(unicastSocket, listenSocket).forEach { sock -> readers += scope.launch { readLoop(sock) } }
         unicastSocket != null
     }
