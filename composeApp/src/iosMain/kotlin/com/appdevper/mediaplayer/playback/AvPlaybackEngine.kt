@@ -51,6 +51,10 @@ class AvPlaybackEngine : PlaybackEngine {
     }
 
     private var url: NSURL? = null
+    private var badUrl = false
+
+    // Played to the end (the notification); AVKit's own controls can move it back without telling us,
+    // so it only counts while the position is still at the end.
     private var ended = false
 
     /** AVKit's Picture in Picture is up; set through [pictureInPictureDelegate]. */
@@ -75,12 +79,14 @@ class AvPlaybackEngine : PlaybackEngine {
 
     override fun load(entry: MediaEntry, url: String, playWhenReady: Boolean, startPositionMs: Long) {
         this.url = toNsUrl(url)
+        badUrl = this.url == null
         replaceItem(startPositionMs)
         if (playWhenReady) player.play() else player.pause()
     }
 
     override fun unload() {
         url = null
+        badUrl = false
         ended = false
         player.pause()
         player.replaceCurrentItemWithPlayerItem(null)
@@ -110,18 +116,22 @@ class AvPlaybackEngine : PlaybackEngine {
 
     override fun facts(): EngineFacts {
         val item = player.currentItem
+        val positionMs = CMTimeGetSeconds(player.currentTime()).toMs()
+        val durationMs = item?.let { CMTimeGetSeconds(it.duration).toMs() } ?: 0
         return EngineFacts(
             playing = player.timeControlStatus != AVPlayerTimeControlStatusPaused,
             loading = player.timeControlStatus == AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate,
-            ended = ended,
-            positionMs = CMTimeGetSeconds(player.currentTime()).toMs(),
-            durationMs = item?.let { CMTimeGetSeconds(it.duration).toMs() } ?: 0,
-            error = item?.takeIf { it.status == AVPlayerItemStatusFailed }?.error?.localizedDescription,
+            ended = ended && (durationMs <= 0 || positionMs >= durationMs - END_MARGIN_MS),
+            positionMs = positionMs,
+            durationMs = durationMs,
+            error = if (badUrl) "This address can't be played" else item?.takeIf { it.status == AVPlayerItemStatusFailed }?.error?.localizedDescription,
             // In Picture in Picture or on an Apple TV it plays on with the app in the background.
             shownElsewhere = pictureInPicture || player.externalPlaybackActive,
         )
     }
 }
+
+private const val END_MARGIN_MS = 500L
 
 private fun Double.toMs(): Long = if (isNaN() || isInfinite() || this < 0) 0 else (this * 1000).toLong()
 

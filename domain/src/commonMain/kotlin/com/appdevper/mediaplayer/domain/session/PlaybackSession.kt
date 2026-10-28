@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.concurrent.Volatile
 
 /**
  * App-wide playback session: the queue, the current item and where it plays. Every command (play,
@@ -31,7 +32,8 @@ class PlaybackSession(
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
-    private var transport: Transport = local
+    // Set from the UI, read by the status collectors.
+    @Volatile private var transport: Transport = local
     private var remoteJob: Job? = null
 
     /**
@@ -67,9 +69,12 @@ class PlaybackSession(
 
     private fun follow(remote: RendererTransport) {
         remoteJob = scope.launch {
+            var wasEnded = false
             remote.playback.collect { playback ->
                 _state.update { it.copy(remote = playback) }
-                if (playback.status?.ended == true) advance()
+                val ended = playback.status?.ended == true
+                if (ended && !wasEnded) advance()
+                wasEnded = ended
             }
         }
     }
@@ -83,13 +88,14 @@ class PlaybackSession(
         val photos = entry.kind == MediaKind.IMAGE
         val queue = siblings.filter { it == entry || (it.isPlayable && (it.kind == MediaKind.IMAGE) == photos) }
             .ifEmpty { listOf(entry) }
-        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, startPositionMs = startPositionMs) }
+        // local = null: a controller casting here mustn't see the previous item's status meanwhile.
+        _state.update { it.copy(queue = queue, index = queue.indexOf(entry).coerceAtLeast(0), autoPlay = autoPlay, startPositionMs = startPositionMs, local = null) }
         loadCurrent()
     }
 
     fun playAt(index: Int) {
         if (index !in _state.value.queue.indices) return
-        _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0) }
+        _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0, local = null) }
         loadCurrent()
     }
 
@@ -117,7 +123,9 @@ class PlaybackSession(
     fun previous(): Boolean {
         if (senderSkip?.invoke(false) == true) return true
         val s = _state.value
-        val position = transport.lastStatus?.positionMs ?: 0
+        // Stopped or finished counts as the start: back to the previous item.
+        val status = transport.lastStatus
+        val position = if (status == null || status.ended || status.state == TransportState.STOPPED) 0 else status.positionMs
         if (position > RESTART_MS) {
             seek(0)
             return true

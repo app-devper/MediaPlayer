@@ -68,7 +68,9 @@ class ExoPlaybackEngine(context: Context) : PlaybackEngine {
     }
 
     override fun facts() = EngineFacts(
-        playing = player.playWhenReady,
+        // Not while a call holds the audio focus, nor stopped by a controller straight on ExoPlayer.
+        playing = player.playWhenReady && player.playbackState != Player.STATE_IDLE &&
+            player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE,
         loading = player.playbackState == Player.STATE_BUFFERING,
         ended = player.playbackState == Player.STATE_ENDED,
         positionMs = player.currentPosition,

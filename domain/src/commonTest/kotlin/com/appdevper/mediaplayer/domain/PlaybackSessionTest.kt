@@ -26,12 +26,13 @@ import kotlin.test.assertTrue
 private class FakeRenderer : RendererRepository {
     val calls = mutableListOf<String>()
     var state = TransportState.PLAYING
+    var position = 1_000L
     override suspend fun load(device: MediaDevice, entry: MediaEntry) { calls += "load:${entry.id}"; state = TransportState.PLAYING }
     override suspend fun play(device: MediaDevice) { calls += "play" }
     override suspend fun pause(device: MediaDevice) { calls += "pause" }
     override suspend fun stop(device: MediaDevice) { calls += "stop" }
     override suspend fun seek(device: MediaDevice, positionMs: Long) { calls += "seek:$positionMs" }
-    override suspend fun status(device: MediaDevice) = RendererStatus(state, 1_000, 60_000)
+    override suspend fun status(device: MediaDevice) = RendererStatus(state, position, 60_000)
     override suspend fun volume(device: MediaDevice) = 30
     override suspend fun setVolume(device: MediaDevice, volume: Int) { calls += "volume:$volume" }
 }
@@ -176,6 +177,25 @@ class PlaybackSessionTest {
         runCurrent()
         assertTrue("pause" in fake.calls)
         assertTrue("seek:7000" in fake.calls)
+    }
+
+    @Test
+    fun onARendererPreviousAfterTheLastTrackEndedGoesBack() = runTest {
+        val fake = FakeRenderer()
+        val session = playbackSession(fake, backgroundScope, pollIntervalMs = 100)
+        session.setTarget(PlaybackTarget.Renderer(tv))
+        session.play(folder[3], folder) // a1, the last
+        runCurrent()
+        fake.position = 59_000
+        advanceTimeBy(150)
+        fake.state = TransportState.STOPPED // the TV finished it
+        advanceTimeBy(150)
+        runCurrent()
+        assertEquals(true, session.state.value.remote.status?.ended)
+        assertTrue(session.previous())
+        runCurrent()
+        assertEquals("v1", session.state.value.current?.id)
+        assertEquals(listOf("load:a1", "load:v1"), fake.calls.filter { it.startsWith("load") })
     }
 
     @Test

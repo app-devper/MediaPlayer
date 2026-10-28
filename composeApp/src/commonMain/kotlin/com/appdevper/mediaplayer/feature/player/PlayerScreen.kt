@@ -137,7 +137,7 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                             Text(item.title, style = MaterialTheme.typography.titleLarge, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
                         }
-                        GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, enabled = senderSkips || state.hasPrevious, tint = c.textPrimary)
+                        GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, tint = c.textPrimary)
                         GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = senderSkips || state.hasNext, tint = c.textPrimary)
                     }
                 }
@@ -267,7 +267,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             GhostIconButton(AppIcons.Stop, "Stop", { vm.stop() }, size = 44.dp, iconSize = 20.dp, tint = c.textSecondary)
-            GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, enabled = state.hasPrevious, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
+            GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
             CircleButton(if (status?.state == TransportState.PLAYING) AppIcons.Pause else AppIcons.Play, "Play/Pause", { vm.togglePause() }, size = 64.dp)
             GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
             Spacer(Modifier.size(44.dp))

@@ -42,8 +42,8 @@ internal class RendererTransport(
         this.entry = entry
         loadJob?.cancel()
         stopPolling()
+        _playback.update { it.copy(status = null, error = null) }
         loadJob = scope.launch {
-            _playback.update { it.copy(status = null, error = null) }
             try {
                 renderer.load(device, entry)
                 if (_playback.value.volume == null) {
@@ -67,7 +67,7 @@ internal class RendererTransport(
 
     override fun play() {
         command { renderer.play(it) }
-        if (pollJob?.isActive != true && loadJob?.isActive != true) startPolling() // after a stop or the end
+        pollAgain()
     }
 
     override fun pause() = command { renderer.pause(it) }
@@ -78,7 +78,15 @@ internal class RendererTransport(
         _playback.update { p -> p.copy(status = p.status?.copy(state = TransportState.STOPPED, positionMs = 0, ended = false)) }
     }
 
-    override fun seek(positionMs: Long) = command { renderer.seek(it, positionMs) }
+    override fun seek(positionMs: Long) {
+        command { renderer.seek(it, positionMs) }
+        pollAgain()
+    }
+
+    /** After a stop or the end, polling stopped: the renderer's state is followed again. */
+    private fun pollAgain() {
+        if (pollJob?.isActive != true && loadJob?.isActive != true) startPolling()
+    }
 
     fun setVolume(volume: Int) {
         _playback.update { it.copy(volume = volume) }

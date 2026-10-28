@@ -9,7 +9,6 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.hasText
@@ -148,8 +147,8 @@ class DesignShots {
         s.setTarget(PlaybackTarget.Renderer(fakeTv))
         s.play(song, listOf(song, song2))
     }, start = PlayerRoute, always = true) {
-        // First song: "Previous" is one node with its name, announced as a disabled button.
-        onNodeWithContentDescription("Previous").assertIsNotEnabled()
+        // First song: "Previous" is one node with its name, still enabled (it goes back to the start).
+        onNodeWithContentDescription("Previous").assertIsEnabled()
         onNodeWithContentDescription("Next").assertIsEnabled()
     }
     @Test fun serverPhoneDark() = shot("5-server-phone-dark", 400, 1100, dark = true, start = ServerRoute, always = true) {

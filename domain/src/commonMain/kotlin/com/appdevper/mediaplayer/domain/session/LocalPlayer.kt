@@ -59,6 +59,7 @@ class LocalPlayer(
         pausedInBackground = false
         stopped = !autoPlay
         _loaded.value = entry
+        _status.value = null
         engine.load(entry, url, autoPlay, startPositionMs.coerceAtLeast(0))
         engine.setVolume(volume)
         refresh()
