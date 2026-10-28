@@ -3,8 +3,7 @@ package com.appdevper.mediaplayer.domain.session
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.appdevper.mediaplayer.domain.model.RemotePlayback
-import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.TransportPlayback
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import kotlinx.coroutines.CancellationException
@@ -29,10 +28,8 @@ internal class RendererTransport(
     private val pollIntervalMs: Long,
 ) : Transport {
 
-    private val _playback = MutableStateFlow(RemotePlayback())
-    val playback: StateFlow<RemotePlayback> = _playback.asStateFlow()
-
-    override val lastStatus: RendererStatus? get() = _playback.value.status
+    private val _playback = MutableStateFlow(TransportPlayback())
+    override val playback: StateFlow<TransportPlayback> = _playback.asStateFlow()
 
     private var entry: MediaEntry? = null
     private var loadJob: Job? = null
@@ -62,7 +59,12 @@ internal class RendererTransport(
     override fun unload() {
         loadJob?.cancel()
         stopPolling()
-        scope.launch { runCatching { renderer.stop(device) } }
+        val p = _playback.value
+        scope.launch {
+            runCatching { renderer.stop(device) }
+            // Not left silent for whoever plays on it next.
+            if (p.muted && p.volume != null) runCatching { renderer.setVolume(device, p.volume) }
+        }
     }
 
     override fun play() {
@@ -88,9 +90,17 @@ internal class RendererTransport(
         if (pollJob?.isActive != true && loadJob?.isActive != true) startPolling()
     }
 
-    fun setVolume(volume: Int) {
-        _playback.update { it.copy(volume = volume) }
-        command { renderer.setVolume(it, volume) }
+    override fun setVolume(volume: Int) {
+        val v = volume.coerceIn(0, 100)
+        _playback.update { it.copy(volume = v, muted = false) }
+        command { renderer.setVolume(it, v) }
+    }
+
+    /** Volume 0 on the renderer, then back to its volume (the repository has no mute of its own). */
+    override fun setMuted(muted: Boolean) {
+        val back = _playback.value.volume ?: return // its volume isn't known yet: nothing to go back to
+        _playback.update { it.copy(muted = muted) }
+        command { renderer.setVolume(it, if (muted) 0 else back) }
     }
 
     private fun startPolling() {

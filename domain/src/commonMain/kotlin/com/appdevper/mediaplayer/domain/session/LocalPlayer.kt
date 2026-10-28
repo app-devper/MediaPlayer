@@ -3,8 +3,15 @@ package com.appdevper.mediaplayer.domain.session
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.RendererStatus
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
+import com.appdevper.mediaplayer.domain.model.SubtitleState
+import com.appdevper.mediaplayer.domain.model.TextTrack
+import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
+import com.appdevper.mediaplayer.domain.model.TransportPlayback
 import com.appdevper.mediaplayer.domain.model.TransportState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,19 +35,46 @@ class LocalPlayer(
     private val engine: PlaybackEngine,
     private val scope: CoroutineScope,
     private val pollIntervalMs: Long = POLL_INTERVAL_MS,
+    /** Where subtitle files are fetched from ([SubtitleChoice.File]). */
+    subtitleFiles: SubtitleRepository = NoSubtitleFiles,
+    /** Where they're read (not the player's thread). */
+    subtitleParsing: CoroutineDispatcher = Dispatchers.Default,
 ) : Transport {
+
+    private val subtitlesOfItem = LocalSubtitles(engine, subtitleFiles, scope, subtitleParsing)
 
     private val _status = MutableStateFlow<RendererStatus?>(null)
 
     /** What the player is doing; null until something loaded. Ends with [RendererStatus.ended]. */
     val status: StateFlow<RendererStatus?> = _status.asStateFlow()
 
-    override val lastStatus: RendererStatus? get() = _status.value
+    private val _playback = MutableStateFlow(TransportPlayback(volume = 100))
+
+    /** [status] and [error] with its volume and mute, for [PlaybackSession]. */
+    override val playback: StateFlow<TransportPlayback> = _playback.asStateFlow()
+
+    private fun publish() {
+        _playback.value = TransportPlayback(_status.value, volume, muted, _error.value)
+    }
 
     private val _error = MutableStateFlow<String?>(null)
 
     /** Why the current item can't play, if it failed. */
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _textTracks = MutableStateFlow<List<TextTrack>>(emptyList())
+
+    /** Subtitle tracks inside the loaded file. */
+    val textTracks: StateFlow<List<TextTrack>> = _textTracks.asStateFlow()
+
+    /**
+     * The subtitle for the loaded item ([selectSubtitle]): kept through a reload of the same item, none
+     * for another; a track picked in the platform's own controls (AVKit's menu) becomes it.
+     */
+    val subtitles: StateFlow<SubtitleState> = subtitlesOfItem.state.asStateFlow()
+
+    /** The subtitle line on screen now, for us to draw (none when the engine draws its track itself). */
+    val subtitleText: StateFlow<String?> = subtitlesOfItem.text.asStateFlow()
 
     private val _loaded = MutableStateFlow<MediaEntry?>(null)
 
@@ -50,18 +84,28 @@ class LocalPlayer(
     // Loaded paused or stopped by a controller: STOPPED until it plays.
     private var stopped = true
     private var pausedInBackground = false
-    private var volume = 1f
+    private var volume = 100
+    private var muted = false
     private var poll: Job? = null
 
+    // The last item asked for (kept while nothing is loaded, e.g. playing on a TV meanwhile): the same one
+    // again keeps its subtitles.
+    private var lastItem: Pair<String, String?>? = null
+
     override fun load(entry: MediaEntry, autoPlay: Boolean, startPositionMs: Long) = onPlayer {
+        val item = entry.id to entry.streamUrl
+        val sameItem = lastItem == item
+        lastItem = item
         val url = entry.streamUrl
         if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) return@onPlayer unloadNow()
         pausedInBackground = false
         stopped = !autoPlay
+        subtitlesOfItem.onLoad(sameItem)
         _loaded.value = entry
         _status.value = null
+        publish()
         engine.load(entry, url, autoPlay, startPositionMs.coerceAtLeast(0))
-        engine.setVolume(volume)
+        applyVolume()
         refresh()
         if (poll == null) {
             poll = scope.launch {
@@ -79,10 +123,13 @@ class LocalPlayer(
         if (_loaded.value == null) return
         // The last report says stopped, not playing.
         _status.value = _status.value?.copy(state = TransportState.STOPPED, ended = false)
+        _error.value = null
+        publish()
         poll?.cancel()
         poll = null
         _loaded.value = null
-        _error.value = null
+        _textTracks.value = emptyList()
+        subtitlesOfItem.onUnload()
         stopped = true
         pausedInBackground = false
         engine.unload()
@@ -91,7 +138,10 @@ class LocalPlayer(
     override fun play() = whenLoaded {
         val facts = engine.facts()
         when {
-            facts.error != null -> engine.reload(facts.positionMs)
+            facts.error != null -> {
+                engine.reload(facts.positionMs)
+                subtitlesOfItem.onLoad(sameItem = true)
+            }
             facts.ended -> engine.seekTo(0)
         }
         stopped = false
@@ -111,10 +161,27 @@ class LocalPlayer(
         engine.seekTo(positionMs.coerceAtLeast(0))
     }
 
-    /** 0..1. */
-    fun setVolume(volume: Float) = onPlayer {
-        this.volume = volume.coerceIn(0f, 1f)
-        engine.setVolume(this.volume)
+    /** Shows [choice] for the loaded item: a file is fetched and read first ([subtitles] says so). */
+    fun selectSubtitle(choice: SubtitleChoice) = onPlayer {
+        if (_loaded.value == null) return@onPlayer
+        subtitlesOfItem.pick(choice)
+        refresh()
+    }
+
+    override fun setVolume(volume: Int) = onPlayer {
+        this.volume = volume.coerceIn(0, 100)
+        muted = false
+        applyVolume()
+    }
+
+    override fun setMuted(muted: Boolean) = onPlayer {
+        this.muted = muted
+        applyVolume()
+    }
+
+    private fun applyVolume() {
+        engine.setVolume(if (muted) 0f else volume / 100f)
+        publish()
     }
 
     /** The app went to the background: a playing video pauses, unless it's on another screen. */
@@ -158,6 +225,8 @@ class LocalPlayer(
         // Started by itself (e.g. after a phone call) or by the system's controls: no longer stopped.
         if (facts.playing && !facts.ended) stopped = false
         _error.value = facts.error
+        facts = subtitlesOfItem.sync(facts)
+        _textTracks.value = facts.textTracks
         _status.value = RendererStatus(
             state = when {
                 facts.ended || (stopped && !facts.playing) -> TransportState.STOPPED
@@ -169,9 +238,14 @@ class LocalPlayer(
             durationMs = facts.durationMs.coerceAtLeast(0),
             ended = facts.ended,
         )
+        publish()
     }
 
     private companion object {
         const val POLL_INTERVAL_MS = 250L
     }
+}
+
+private object NoSubtitleFiles : SubtitleRepository {
+    override suspend fun fetch(url: String): ByteArray = throw IllegalStateException("No subtitle files here")
 }

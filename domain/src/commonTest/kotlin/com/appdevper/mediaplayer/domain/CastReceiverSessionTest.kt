@@ -1,21 +1,21 @@
 package com.appdevper.mediaplayer.domain
 
+import com.appdevper.mediaplayer.testing.FakeEngine
+import com.appdevper.mediaplayer.testing.FakeReceiver
+import com.appdevper.mediaplayer.testing.FakeRenderer
+import com.appdevper.mediaplayer.testing.playbackSession
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
-import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.RendererStatus
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.CastReceiverSession
-import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
-import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -27,28 +27,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-
-private class FakeReceiver : CastReceiverRepository {
-    val calls = mutableListOf<String>()
-    val published = mutableListOf<ReceiverPlayback>()
-    override val status = MutableStateFlow<ReceiverStatus>(ReceiverStatus.Stopped)
-    override val commands = MutableSharedFlow<CastCommand>()
-    override suspend fun start(name: String) { calls += "start:$name"; status.value = ReceiverStatus.Running(name) }
-    override suspend fun stop() { calls += "stop"; status.value = ReceiverStatus.Stopped }
-    override fun publish(playback: ReceiverPlayback) { published += playback }
-}
-
-private class NoRenderer : RendererRepository {
-    val calls = mutableListOf<String>()
-    override suspend fun load(device: MediaDevice, entry: MediaEntry) {}
-    override suspend fun play(device: MediaDevice) {}
-    override suspend fun pause(device: MediaDevice) {}
-    override suspend fun stop(device: MediaDevice) { calls += "stop" }
-    override suspend fun seek(device: MediaDevice, positionMs: Long) {}
-    override suspend fun status(device: MediaDevice) = RendererStatus(TransportState.PLAYING, 0, 0)
-    override suspend fun volume(device: MediaDevice) = 50
-    override suspend fun setVolume(device: MediaDevice, volume: Int) {}
-}
 
 private class ReceiverSettings(enabled: Boolean) : SettingsRepository {
     override val serverSettings = MutableStateFlow(ServerSettings("Phone", false, true, true, true, emptyList(), receiverEnabled = enabled))
@@ -65,7 +43,7 @@ class CastReceiverSessionTest {
     fun followsSettings() = runTest {
         val receiver = FakeReceiver()
         val settings = ReceiverSettings(enabled = false)
-        CastReceiverSession(receiver, settings, playbackSession(NoRenderer(), backgroundScope), backgroundScope).start()
+        CastReceiverSession(receiver, settings, playbackSession(FakeRenderer(volume = 50), backgroundScope), backgroundScope).start()
         runCurrent()
         assertEquals(listOf("stop"), receiver.calls)
 
@@ -83,7 +61,7 @@ class CastReceiverSessionTest {
     @Test
     fun loadPlaysHereAndOpensThePlayer() = runTest {
         val receiver = FakeReceiver()
-        val renderer = NoRenderer()
+        val renderer = FakeRenderer(volume = 50)
         val engine = FakeEngine()
         val playback = playbackSession(renderer, backgroundScope, engine)
         val session = CastReceiverSession(receiver, ReceiverSettings(enabled = true), playback, backgroundScope)
@@ -104,8 +82,8 @@ class CastReceiverSessionTest {
         assertEquals(PlaybackTarget.Local, s.target)
         assertEquals(listOf(clip), s.queue)
         assertEquals(false, s.autoPlay)
-        assertEquals(30, s.localVolume)
-        assertTrue(s.localMuted)
+        assertEquals(30, s.playback.volume)
+        assertTrue(s.playback.muted)
         assertEquals(0f, engine.gain)
         assertTrue(opened.isCompleted)
         val reopened = backgroundScope.launch { session.openPlayer.first() }
@@ -121,7 +99,7 @@ class CastReceiverSessionTest {
     @Test
     fun afterTheUserPicksARendererTheSenderNoLongerDrivesIt() = runTest {
         val receiver = FakeReceiver()
-        val renderer = NoRenderer()
+        val renderer = FakeRenderer(volume = 50)
         val engine = FakeEngine()
         val playback = playbackSession(renderer, backgroundScope, engine)
         CastReceiverSession(receiver, ReceiverSettings(enabled = true), playback, backgroundScope).start()
@@ -135,7 +113,7 @@ class CastReceiverSessionTest {
         receiver.commands.emit(CastCommand.SetVolume(5))
         runCurrent()
         assertEquals(emptyList(), engine.calls)
-        assertEquals(50, playback.state.value.remote.volume) // the TV's own volume, untouched
+        assertEquals(50, playback.state.value.playback.volume) // the TV's own volume, untouched
         assertNull(receiver.published.last().entry) // and the sender is told nothing plays here
     }
 
@@ -143,7 +121,7 @@ class CastReceiverSessionTest {
     fun publishesWhatThePlayerReports() = runTest {
         val receiver = FakeReceiver()
         val engine = FakeEngine()
-        val playback = playbackSession(NoRenderer(), backgroundScope, engine)
+        val playback = playbackSession(FakeRenderer(volume = 50), backgroundScope, engine)
         CastReceiverSession(receiver, ReceiverSettings(enabled = true), playback, backgroundScope).start()
         runCurrent()
         assertNull(receiver.published.last().entry)

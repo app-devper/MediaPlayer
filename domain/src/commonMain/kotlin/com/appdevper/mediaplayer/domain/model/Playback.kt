@@ -18,9 +18,14 @@ data class RendererStatus(
     val ended: Boolean = false,
 )
 
-data class RemotePlayback(
+/**
+ * What a [com.appdevper.mediaplayer.domain.session.Transport] reports: its status (null until it has
+ * one), volume 0..100 (null until a renderer says), whether it's muted, and why a command failed.
+ */
+data class TransportPlayback(
     val status: RendererStatus? = null,
     val volume: Int? = null,
+    val muted: Boolean = false,
     val error: String? = null,
 )
 
@@ -28,15 +33,12 @@ data class PlaybackState(
     val target: PlaybackTarget = PlaybackTarget.Local,
     val queue: List<MediaEntry> = emptyList(),
     val index: Int = -1,
-    val remote: RemotePlayback = RemotePlayback(),
+    /** What the current target is doing: this device's player, or the renderer. */
+    val playback: TransportPlayback = TransportPlayback(),
     /** Whether the local player starts as soon as the current item loads. */
     val autoPlay: Boolean = true,
     /** Where the local player starts the current item. */
     val startPositionMs: Long = 0,
-    /** What this device's player is doing, null until it loaded something. */
-    val local: RendererStatus? = null,
-    val localVolume: Int = 100,
-    val localMuted: Boolean = false,
     /** Plays the queue in a random order ([order]). */
     val shuffle: Boolean = false,
     val repeat: RepeatMode = RepeatMode.OFF,

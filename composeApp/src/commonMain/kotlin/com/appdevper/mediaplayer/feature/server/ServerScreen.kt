@@ -59,7 +59,7 @@ import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.ServerStatus
-import com.appdevper.mediaplayer.domain.usecase.countOf
+import com.appdevper.mediaplayer.domain.model.countOf
 import com.appdevper.mediaplayer.platform.rememberMediaPermissionRequest
 import org.koin.compose.viewmodel.koinViewModel
 

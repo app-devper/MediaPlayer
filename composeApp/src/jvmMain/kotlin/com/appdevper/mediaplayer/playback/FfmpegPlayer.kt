@@ -6,6 +6,25 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.bytedeco.ffmpeg.avcodec.AVCodecContext
 import org.bytedeco.ffmpeg.avcodec.AVPacket
+import org.bytedeco.ffmpeg.avcodec.AVSubtitle
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_ASS
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_MOV_TEXT
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_SRT
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_SSA
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_SUBRIP
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_TEXT
+import org.bytedeco.ffmpeg.global.avcodec.AV_CODEC_ID_WEBVTT
+import org.bytedeco.ffmpeg.global.avcodec.SUBTITLE_ASS
+import org.bytedeco.ffmpeg.global.avcodec.SUBTITLE_TEXT
+import org.bytedeco.ffmpeg.global.avcodec.avcodec_decode_subtitle2
+import org.bytedeco.ffmpeg.global.avcodec.avsubtitle_free
+import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_SUBTITLE
+import org.bytedeco.ffmpeg.global.avutil.av_dict_get
+import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.domain.model.TextTrack
+import com.appdevper.mediaplayer.domain.model.textAt
+import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
+import com.appdevper.mediaplayer.domain.subtitle.SubtitleParser
 import org.bytedeco.ffmpeg.avformat.AVFormatContext
 import org.bytedeco.ffmpeg.avformat.AVIOInterruptCB
 import org.bytedeco.ffmpeg.avutil.AVDictionary
@@ -30,6 +49,7 @@ import org.bytedeco.ffmpeg.global.avformat.avformat_find_stream_info
 import org.bytedeco.ffmpeg.global.avformat.avformat_open_input
 import org.bytedeco.ffmpeg.global.avformat.avformat_seek_file
 import org.bytedeco.ffmpeg.global.avcodec.AVDISCARD_ALL
+import org.bytedeco.ffmpeg.global.avcodec.AVDISCARD_DEFAULT
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_AUDIO
 import org.bytedeco.ffmpeg.global.avutil.AV_LOG_WARNING
 import org.bytedeco.ffmpeg.global.avutil.av_log_set_level
@@ -110,6 +130,31 @@ class FfmpegPlayer(
 
     private val _frames = MutableStateFlow<BgraFrame?>(null)
     val frames: StateFlow<BgraFrame?> = _frames.asStateFlow()
+
+    /** A text subtitle stream in the file: while selected, decoded on the demux thread as it's read, its cues kept. */
+    private class SubtitleStream(val index: Int, val track: TextTrack, val decoder: AVCodecContext, val clock: Clock) {
+        @Volatile var cues: List<SubtitleCue> = emptyList()
+        // Demux thread only: the decode target, reused; and a cue with no end yet, which the next one ends.
+        val sub = AVSubtitle()
+        var open: SubtitleCue? = null
+    }
+
+    /** The subtitle stream to read (its index as a track id); the others are discarded, not downloaded. */
+    @Volatile private var selectedSubtitle: String? = null
+
+    fun selectSubtitleStream(id: String?) {
+        selectedSubtitle = id
+    }
+
+    @Volatile private var subtitleStreams: List<SubtitleStream> = emptyList()
+    private val _textTracks = MutableStateFlow<List<TextTrack>>(emptyList())
+
+    /** The file's text subtitle tracks (ids are stream indexes), once it's open. */
+    val textTracks: StateFlow<List<TextTrack>> = _textTracks.asStateFlow()
+
+    /** Track [id]'s text at [positionMs], from the cues read so far (they're read ahead of playback). */
+    fun subtitleText(id: String?, positionMs: Long): String? =
+        subtitleStreams.firstOrNull { it.track.id == id }?.cues?.textAt(positionMs)
 
     @Volatile private var closing = false
     @Volatile private var paused = !autoPlay
@@ -296,10 +341,14 @@ class FfmpegPlayer(
             val videoIndex = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, null as PointerPointer<*>?, 0)
             val audioIndex = av_find_best_stream(fmt, AVMEDIA_TYPE_AUDIO, -1, videoIndex, null as PointerPointer<*>?, 0)
             hasAudio = audioIndex >= 0
-            // Don't fetch what we won't play (HLS stops downloading other variants' segments).
+            subtitleStreams = openSubtitleStreams(fmt)
+            _textTracks.value = subtitleStreams.map { it.track }
+            // Don't fetch what we won't play (HLS stops downloading other variants' segments, and
+            // subtitle renditions nobody picked).
             for (i in 0 until fmt.nb_streams()) {
                 if (i != videoIndex && i != audioIndex) fmt.streams(i).discard(AVDISCARD_ALL)
             }
+            var readingSubtitle: String? = null
             debug("playing video stream $videoIndex, audio stream $audioIndex")
             // Decoders are opened here, on the demux thread: the HLS demuxer can reallocate fmt's streams
             // while reading, so the decoder threads never touch fmt at all (only their own codec context).
@@ -354,6 +403,12 @@ class FfmpegPlayer(
                         Thread.sleep(20)
                         continue
                     }
+                    // The picked subtitle stream is read from here on, right before the read (fmt is this thread's only).
+                    val wantSubtitle = selectedSubtitle
+                    if (wantSubtitle != readingSubtitle) {
+                        subtitleStreams.forEach { fmt.streams(it.index).discard(if (it.track.id == wantSubtitle) AVDISCARD_DEFAULT else AVDISCARD_ALL) }
+                        readingSubtitle = wantSubtitle
+                    }
                     val read = av_read_frame(fmt, pkt)
                     if (read < 0) {
                         eof = true
@@ -365,6 +420,7 @@ class FfmpegPlayer(
                     when (pkt.stream_index()) {
                         videoIndex -> av_packet_clone(pkt)?.let { put(videoQueue, Packet(it, readSerial)) }
                         audioIndex -> av_packet_clone(pkt)?.let { put(audioQueue, Packet(it, readSerial)) }
+                        else -> subtitleStreams.firstOrNull { it.index == pkt.stream_index() && it.track.id == readingSubtitle }?.let { decodeSubtitle(it, pkt) }
                     }
                     av_packet_unref(pkt)
                 }
@@ -378,6 +434,10 @@ class FfmpegPlayer(
             videoThread?.join(1_000)
             audioThread?.join(1_000)
             listOf(videoQueue, audioQueue).forEach(::drainAndFree)
+            subtitleStreams.forEach {
+                avcodec_free_context(it.decoder)
+                it.sub.close()
+            }
             avformat_close_input(fmt)
         }
     }
@@ -421,6 +481,75 @@ class FfmpegPlayer(
             return null
         }
         return ctx
+    }
+
+    /** The file's text subtitle streams with an open decoder (image ones, PGS / DVD, have no text). */
+    private fun openSubtitleStreams(fmt: AVFormatContext): List<SubtitleStream> = buildList {
+        for (i in 0 until fmt.nb_streams()) {
+            val stream = fmt.streams(i)
+            val par = stream.codecpar()
+            if (par.codec_type() != AVMEDIA_TYPE_SUBTITLE || par.codec_id() !in TEXT_SUBTITLE_CODECS) continue
+            val decoder = openDecoder(fmt, i) ?: continue
+            // So the decoder can turn a packet's duration into the cue's end itself.
+            decoder.pkt_timebase(stream.time_base())
+            fun tag(key: String) = av_dict_get(stream.metadata(), key, null, 0)?.value()?.getString("UTF-8")?.takeIf { it.isNotBlank() }
+            val language = tag("language")?.takeIf { it != "und" }
+            val label = tag("title") ?: SubtitleFiles.label(language, "Track ${size + 1}")
+            add(SubtitleStream(i, TextTrack(i.toString(), label, language), decoder, clockOf(fmt, i)))
+        }
+    }
+
+    /** Adds a subtitle packet's text as a cue (once: a seek back reads it again). */
+    private fun decodeSubtitle(stream: SubtitleStream, pkt: AVPacket) {
+        val start = stream.clock.ms(pkt.pts()).takeIf { it >= 0 } ?: return
+        val sub = stream.sub
+        val got = IntArray(1)
+        if (avcodec_decode_subtitle2(stream.decoder, sub, got, pkt) < 0 || got[0] == 0) return
+        try {
+            val text = (0 until sub.num_rects()).mapNotNull { r ->
+                val rect = sub.rects(r)
+                when (rect.type()) {
+                    // Vector drawings ({\p1} m 0 0 l …) aren't text.
+                    SUBTITLE_ASS -> rect.ass()?.getString("UTF-8")?.takeUnless { ASS_DRAWING.containsMatchIn(it) }?.let(SubtitleParser::assText)
+                    SUBTITLE_TEXT -> rect.text()?.getString("UTF-8")?.trim()
+                    else -> null
+                }?.takeIf { it.isNotEmpty() }
+            }.joinToString("\n")
+            if (text.isEmpty()) return
+            // Display times are relative to the packet; else the packet's duration; else until the next
+            // cue, and at most NO_END_MS.
+            val shown = sub.end_display_time().toLong() and 0xFFFFFFFFL
+            val from = start + sub.start_display_time()
+            val end = when {
+                shown in 1 until 0xFFFFFFFFL -> start + shown
+                pkt.duration() > 0 -> stream.clock.ms(pkt.pts() + pkt.duration())
+                else -> -1L
+            }
+            stream.open?.let { open -> if (open.startMs < from && open.endMs > from) replaceCue(stream, open, open.copy(endMs = from)) }
+            val cue = SubtitleCue(from, if (end > from) end else from + NO_END_MS, text)
+            stream.open = cue.takeIf { end <= from }
+            addCue(stream, cue)
+        } finally {
+            avsubtitle_free(sub)
+        }
+    }
+
+    /** In start order; mostly an append, since packets come in order. A cue read again (a seek back) isn't added twice. */
+    private fun addCue(stream: SubtitleStream, cue: SubtitleCue) {
+        val cues = stream.cues
+        var at = cues.size
+        while (at > 0 && cues[at - 1].startMs > cue.startMs) at--
+        var i = at - 1
+        while (i >= 0 && cues[i].startMs == cue.startMs) if (cues[i--].text == cue.text) return
+        stream.cues = ArrayList<SubtitleCue>(cues.size + 1).apply {
+            addAll(cues.subList(0, at))
+            add(cue)
+            addAll(cues.subList(at, cues.size))
+        }
+    }
+
+    private fun replaceCue(stream: SubtitleStream, old: SubtitleCue, new: SubtitleCue) {
+        stream.cues = stream.cues.map { if (it === old) new else it }
     }
 
     /** A stream's time base and the file's start, copied out of fmt for the decoder threads. */
@@ -609,6 +738,11 @@ class FfmpegPlayer(
     // endregion
 
     private companion object {
+        val ASS_DRAWING = Regex("""\\p[1-9]""")
+        const val NO_END_MS = 5_000L
+        val TEXT_SUBTITLE_CODECS = setOf(
+            AV_CODEC_ID_SUBRIP, AV_CODEC_ID_SRT, AV_CODEC_ID_ASS, AV_CODEC_ID_SSA, AV_CODEC_ID_MOV_TEXT, AV_CODEC_ID_WEBVTT, AV_CODEC_ID_TEXT,
+        )
         const val MAX_QUEUED = 256
         const val LATE_DROP_MS = 150
         // Longer than the sound line holds (~250 ms) plus a write: audio still coming never gets here.

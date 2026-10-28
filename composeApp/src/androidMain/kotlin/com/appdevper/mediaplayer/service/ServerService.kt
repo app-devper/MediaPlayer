@@ -15,8 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.appdevper.mediaplayer.MainActivity
 import com.appdevper.mediaplayer.R
-import com.appdevper.mediaplayer.domain.usecase.ObserveServerSettingsUseCase
-import com.appdevper.mediaplayer.domain.usecase.StopMediaServerUseCase
+import com.appdevper.mediaplayer.domain.session.MediaServerSession
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,18 +28,17 @@ import org.koin.android.ext.android.inject
 class ServerService : Service() {
 
     private var wifiLock: WifiManager.WifiLock? = null
-    private val stopServer: StopMediaServerUseCase by inject()
-    private val settings: ObserveServerSettingsUseCase by inject()
+    private val server: MediaServerSession by inject()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            CoroutineScope(Dispatchers.Default).launch { stopServer() }
+            CoroutineScope(Dispatchers.Default).launch { server.turnOff() }
             stopSelf()
             return START_NOT_STICKY
         }
-        val name = intent?.getStringExtra(EXTRA_NAME) ?: settings().value.name
+        val name = intent?.getStringExtra(EXTRA_NAME) ?: server.serverSettings.value.name
         val type = if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0
         ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(name), type)
         if (wifiLock == null) {

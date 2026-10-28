@@ -13,6 +13,7 @@ A single Compose Multiplatform app that merges
 | Play on a TV / speaker (AVTransport + volume) | ✅ | ✅ | ✅ |
 | **AirPlay** (Apple TV, AirPlay speakers/TVs) | — | ✅ native | — |
 | Subtitles: sidecar .srt / .vtt next to a video (Thai TIS-620 too) | ✅ | ✅ | ✅ |
+| Subtitles inside the file (text tracks) | ExoPlayer: MKV/MP4 SRT, ASS, WebVTT, mov_text | AVKit: MP4 mov_text, HLS WebVTT | FFmpeg: SRT, ASS, mov_text, WebVTT |
 | Built-in DLNA media server (share this device) | MediaStore | Documents folder | chosen folders |
 | Receive casts: DLNA renderer (other apps "Play to" this device) ³ | ✅ | ✅ | ✅ |
 | **Receive AirPlay**: screen mirroring, AirPlay video (YouTube…) and audio from iPhone/iPad/Mac ⁴ | ✅ | — | ✅ |
@@ -36,21 +37,25 @@ core:designsystem                  PlaybackSession
 ```
 
 * **`:domain`**: pure Kotlin with no framework or platform code. Holds the models
-  (`MediaDevice`, `MediaEntry`, `PlaybackState`…), the repository interfaces, the use cases
-  (`BrowseFolderUseCase`, `StartMediaServerUseCase`…) and `PlaybackSession` (queue, play target and
-  auto-advance). The session sends commands to a transport: `LocalPlayer`, which holds the playback
+  (`MediaDevice`, `MediaEntry`, `PlaybackState`…), the repository interfaces, the app-wide sessions
+  (`PlaybackSession`, `MediaServerSession`, the DLNA and AirPlay receivers, each following its
+  settings), and the few use cases with rules of their own (`BrowseFolderUseCase`…). `PlaybackSession`
+  holds the queue, play target and auto-advance. The session sends commands to a transport: `LocalPlayer`, which holds the playback
   rules shared by every platform and drives a platform `PlaybackEngine`, or `RendererTransport` for
   a DLNA renderer. The terms are defined in `CONTEXT.md`.
 * **`:data`**: implements the repositories. Contains the pure-Kotlin UPnP stack (SSDP,
   description, SOAP, DIDL-Lite), the ktor-CIO DLNA server, and the platform code
   (multicast sockets, MediaStore / folders / iOS Documents) behind small interfaces.
 * **`:composeApp`**: MVVM. One ViewModel per screen (`ShellViewModel`, `BrowseViewModel`,
-  `PlayerViewModel`, `ServerViewModel`) exposes a `StateFlow` UI state and calls only use cases.
+  `PlayerViewModel`, `ServerViewModel`) exposes a `StateFlow` UI state and calls domain sessions,
+  repository interfaces and use cases.
   Koin (`di/AppModule.kt`) is the composition root.
 * **`:airplay`**: the AirPlay receiver. UxPlay's protocol library (C, vendored in `native/uxplay`)
   with BoringSSL and libplist, built by CMake for Android (NDK) and for the desktop build machine,
   behind a small JNI API (`AirPlayReceiver`). `AirPlayPlayer` plays what it receives: MediaCodec on
   Android, FFmpeg (bytedeco) on the desktop; ALAC is decoded natively with Apple's decoder.
+* **`:core:testing`**: test fakes for the domain's interfaces (engine, renderer, receivers,
+  subtitle files), shared by the tests of every module. Never a main dependency.
 * **`:core:designsystem`**: Compose-only building blocks with no app or domain code: design
   tokens, the icon set and reusable components.
 
@@ -58,8 +63,8 @@ core:designsystem                  PlaybackSession
 domain/src/commonMain/kotlin/com/appdevper/mediaplayer/domain/
   model/       Media · Playback · Server · Cast · AirPlay (one file per area)
   repository/  repository interfaces (implemented in :data)
-  usecase/     one use case per file
-  session/     app-wide sessions: PlaybackSession, CastReceiverSession, AirPlayReceiverSession;
+  usecase/     use cases with a rule of their own (no pass-throughs), one per file
+  session/     app-wide sessions: PlaybackSession, MediaServerSession, CastReceiverSession, AirPlayReceiverSession;
                LocalPlayer + PlaybackEngine, RendererTransport
 
 data/src/commonMain/kotlin/com/appdevper/mediaplayer/data/

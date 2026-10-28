@@ -63,6 +63,7 @@ kotlin {
 
         jvmTest.dependencies {
             implementation(compose.desktop.uiTestJUnit4)
+            implementation(project(":core:testing"))
         }
     }
 }

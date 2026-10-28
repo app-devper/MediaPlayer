@@ -66,7 +66,7 @@ class IosBackgroundPlayer(private val session: PlaybackSession) {
                 playingBeforeInterruption = isPlaying
             } else if (type == AVAudioSessionInterruptionTypeEnded) {
                 val options = (info[AVAudioSessionInterruptionOptionKey] as? NSNumber)?.unsignedLongValue ?: 0u
-                if (playingBeforeInterruption && options and AVAudioSessionInterruptionOptionShouldResume != 0uL) local.play()
+                if (playingBeforeInterruption && options and AVAudioSessionInterruptionOptionShouldResume != 0uL) session.play()
                 playingBeforeInterruption = false
             }
         }
@@ -83,14 +83,14 @@ class IosBackgroundPlayer(private val session: PlaybackSession) {
             block()
             MPRemoteCommandHandlerStatusSuccess
         }
-        center.playCommand.addTargetWithHandler { _ -> ok(local::play) }
-        center.pauseCommand.addTargetWithHandler { _ -> ok(local::pause) }
-        center.togglePlayPauseCommand.addTargetWithHandler { _ -> ok { if (isPlaying) local.pause() else local.play() } }
+        center.playCommand.addTargetWithHandler { _ -> ok(session::play) }
+        center.pauseCommand.addTargetWithHandler { _ -> ok(session::pause) }
+        center.togglePlayPauseCommand.addTargetWithHandler { _ -> ok(session::togglePause) }
         center.nextTrackCommand.addTargetWithHandler { _ -> ok { session.next() } }
         center.previousTrackCommand.addTargetWithHandler { _ -> ok { session.previous() } }
         center.changePlaybackPositionCommand.addTargetWithHandler { event ->
             val at = (event as? MPChangePlaybackPositionCommandEvent)?.positionTime ?: return@addTargetWithHandler MPRemoteCommandHandlerStatusCommandFailed
-            ok { local.seek((at * 1000).toLong()) }
+            ok { session.seek((at * 1000).toLong()) }
         }
     }
 

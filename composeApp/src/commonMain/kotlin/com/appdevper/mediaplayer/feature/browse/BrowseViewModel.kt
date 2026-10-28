@@ -7,7 +7,7 @@ import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
-import com.appdevper.mediaplayer.domain.usecase.GetDeviceUseCase
+import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,13 +32,13 @@ class BrowseViewModel(
     private val deviceId: String,
     private val folderId: String,
     title: String,
-    getDevice: GetDeviceUseCase,
+    devices: DeviceRepository,
     private val browseFolder: BrowseFolderUseCase,
     private val filterEntries: FilterEntriesUseCase,
     private val session: PlaybackSession,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(BrowseUiState(title = title, deviceName = getDevice(deviceId)?.name.orEmpty()))
+    private val _uiState = MutableStateFlow(BrowseUiState(title = title, deviceName = devices.device(deviceId)?.name.orEmpty()))
     val uiState: StateFlow<BrowseUiState> = _uiState.asStateFlow()
 
     init {

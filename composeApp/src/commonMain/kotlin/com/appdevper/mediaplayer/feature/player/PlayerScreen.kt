@@ -1,6 +1,9 @@
 package com.appdevper.mediaplayer.feature.player
 
 import com.appdevper.mediaplayer.domain.model.Subtitle
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
+import com.appdevper.mediaplayer.domain.model.SubtitleState
+import com.appdevper.mediaplayer.domain.model.TextTrack
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.material3.DropdownMenu
@@ -109,6 +112,7 @@ fun PlayerScreen() {
 private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel, senderSkips: Boolean) {
     val c = AppTheme.colors
     val subtitles by vm.subtitles.collectAsStateWithLifecycle()
+    val textTracks by vm.textTracks.collectAsStateWithLifecycle()
     val isAudio = item.kind == MediaKind.AUDIO
     val fullscreenState = LocalFullscreen.current
     val fullscreen = fullscreenState.isFullscreen && !isAudio
@@ -133,14 +137,13 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                     player = vm.localPlayer,
                     title = item.title,
                     isAudio = isAudio,
-                    volume = state.localVolume,
-                    muted = state.localMuted,
+                    volume = state.playback.volume ?: 100,
+                    muted = state.playback.muted,
                     onVolumeChange = vm::setVolume,
                     onMutedChange = vm::setMuted,
                     modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
                     fullscreen = fullscreen,
                     onToggleFullscreen = if (isAudio) null else fullscreenState::toggle,
-                    cues = subtitles.cues,
                 )
             }
         }
@@ -153,7 +156,7 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                             item.subtitleLine()?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, maxLines = 1) }
                             subtitles.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.danger) }
                         }
-                        if (item.subtitles.isNotEmpty()) SubtitleMenu(item.subtitles, subtitles, vm::selectSubtitle)
+                        if (item.subtitles.isNotEmpty() || textTracks.isNotEmpty()) SubtitleMenu(item.subtitles, textTracks, subtitles, vm)
                         if (!senderSkips) QueueModes(state, vm)
                         GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, tint = c.textPrimary)
                         GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = senderSkips || state.hasNext, tint = c.textPrimary)
@@ -231,7 +234,7 @@ private fun ZoomableImage(url: String, title: String) {
 private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel) {
     val c = AppTheme.colors
     val renderer = (state.target as PlaybackTarget.Renderer).device
-    val status = state.remote.status
+    val status = state.playback.status
     var dragging by remember { mutableStateOf<Float?>(null) }
 
     Column(
@@ -262,7 +265,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
                 color = c.textSecondary,
             )
         }
-        state.remote.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
+        state.playback.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
 
         if (item.kind != MediaKind.IMAGE) {
             val duration = (status?.durationMs?.takeIf { it > 0 } ?: item.durationMs ?: 0L)
@@ -293,7 +296,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
         }
         if (!state.casted && item.kind != MediaKind.IMAGE) Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(state, vm) }
 
-        state.remote.volume?.let { vol ->
+        state.playback.volume?.let { vol ->
             var local by remember(vol) { mutableFloatStateOf(vol.toFloat()) }
             Row(Modifier.widthIn(max = 400.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Volume, "Volume", Modifier.size(18.dp), tint = c.textSecondary)
@@ -355,17 +358,20 @@ private fun ModeButton(icon: ImageVector, name: String, state: String, on: Boole
     }
 }
 
-/** Subtitles for this video: off, or one of its files (a check on the one showing). */
+/** Subtitles for this video: off, one of its files, or a track inside it (a check on the one showing). */
 @Composable
-private fun SubtitleMenu(options: List<Subtitle>, state: SubtitleState, onSelect: (Subtitle?) -> Unit) {
+private fun SubtitleMenu(files: List<Subtitle>, tracks: List<TextTrack>, state: SubtitleState, vm: PlayerViewModel) {
     val c = AppTheme.colors
     var open by remember { mutableStateOf(false) }
     Box {
+        val choice = state.choice
         val shown = when {
             state.loading -> "Loading"
-            else -> state.selected?.label ?: "Off"
+            choice is SubtitleChoice.File -> choice.subtitle.label
+            choice is SubtitleChoice.Track -> choice.track.label
+            else -> "Off"
         }
-        ModeButton(AppIcons.Captions, "Subtitles", shown, on = state.selected != null) { open = true }
+        ModeButton(AppIcons.Captions, "Subtitles", shown, on = choice != SubtitleChoice.Off) { open = true }
         DropdownMenu(
             expanded = open,
             onDismissRequest = { open = false },
@@ -374,20 +380,37 @@ private fun SubtitleMenu(options: List<Subtitle>, state: SubtitleState, onSelect
             containerColor = c.surface,
             tonalElevation = 0.dp,
             shadowElevation = 12.dp,
-            modifier = Modifier.width(240.dp).border(1.dp, c.border, Radius.large),
+            modifier = Modifier.width(260.dp).border(1.dp, c.border, Radius.large),
         ) {
             Text("Subtitles", style = MaterialTheme.typography.labelMedium, color = c.textTertiary, modifier = Modifier.padding(start = 16.dp, top = 6.dp, bottom = 4.dp))
-            (listOf<Subtitle?>(null) + options).forEach { option ->
-                ListRow(
-                    title = option?.label ?: "Off",
-                    onClick = {
-                        open = false
-                        onSelect(option)
-                    },
-                    modifier = Modifier.padding(horizontal = 6.dp),
-                    trailing = { if (state.selected == option) Icon(AppIcons.Check, "Showing", Modifier.size(18.dp), tint = c.textPrimary) },
-                )
-            }
+            @Composable
+            fun option(title: String, subtitle: String?, selected: Boolean, onClick: () -> Unit) = ListRow(
+                title = title,
+                subtitle = subtitle,
+                onClick = {
+                    open = false
+                    onClick()
+                },
+                modifier = Modifier.padding(horizontal = 6.dp),
+                trailing = { if (selected) Icon(AppIcons.Check, "Showing", Modifier.size(18.dp), tint = c.textPrimary) },
+            )
+            @Composable
+            fun pick(c: SubtitleChoice) = option(
+                when (c) {
+                    SubtitleChoice.Off -> "Off"
+                    is SubtitleChoice.File -> c.subtitle.label
+                    is SubtitleChoice.Track -> c.track.label
+                },
+                when (c) {
+                    SubtitleChoice.Off -> null
+                    is SubtitleChoice.File -> "File"
+                    is SubtitleChoice.Track -> "In the video"
+                },
+                choice == c,
+            ) { vm.selectSubtitle(c) }
+            pick(SubtitleChoice.Off)
+            files.forEach { pick(SubtitleChoice.File(it)) }
+            tracks.forEach { pick(SubtitleChoice.Track(it)) }
         }
     }
 }

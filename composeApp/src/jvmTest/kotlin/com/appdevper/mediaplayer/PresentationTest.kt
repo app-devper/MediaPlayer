@@ -1,8 +1,14 @@
 package com.appdevper.mediaplayer
 
-import com.appdevper.mediaplayer.feature.player.SubtitleState
-import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
-import com.appdevper.mediaplayer.domain.model.SubtitleCue
+import com.appdevper.mediaplayer.testing.FakeServer
+import com.appdevper.mediaplayer.testing.FakeEngine
+import com.appdevper.mediaplayer.testing.FakeRenderer
+import com.appdevper.mediaplayer.testing.FakeAirPlay
+import com.appdevper.mediaplayer.testing.FakeReceiver
+import com.appdevper.mediaplayer.testing.FakeSubtitles
+import com.appdevper.mediaplayer.domain.model.SubtitleState
+import com.appdevper.mediaplayer.domain.model.SubtitleChoice
+import com.appdevper.mediaplayer.domain.model.TextTrack
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.data.di.dataModule
 import com.appdevper.mediaplayer.data.di.platformDataModule
@@ -23,16 +29,10 @@ import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
+import com.appdevper.mediaplayer.domain.session.MediaServerSession
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
 import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
-import com.appdevper.mediaplayer.domain.usecase.GetDeviceUseCase
-import com.appdevper.mediaplayer.domain.usecase.GetServerCapabilitiesUseCase
-import com.appdevper.mediaplayer.domain.usecase.ObserveServerSettingsUseCase
-import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase
-import com.appdevper.mediaplayer.domain.usecase.StartMediaServerUseCase
-import com.appdevper.mediaplayer.domain.usecase.StopMediaServerUseCase
-import com.appdevper.mediaplayer.domain.usecase.UpdateServerSettingsUseCase
 import com.appdevper.mediaplayer.feature.browse.BrowseViewModel
 import com.appdevper.mediaplayer.feature.player.PlayerViewModel
 import com.appdevper.mediaplayer.feature.server.ServerViewModel
@@ -84,7 +84,9 @@ class PresentationTest {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private val engine = FakeEngine()
-    private val session = PlaybackSession(FakeRenderer(), LocalPlayer(engine, appScope), appScope)
+    private val session = PlaybackSession(FakeRenderer(), LocalPlayer(engine, appScope, subtitleFiles = FakeSubtitles()), appScope)
+
+    private fun serverSession(server: FakeServer, settings: FakeSettings) = MediaServerSession(server, settings, appScope).also { it.start() }
 
     private fun receiverSession(settings: FakeSettings = FakeSettings(), receiver: FakeReceiver = FakeReceiver()) =
         CastReceiverSession(receiver, settings, session, appScope)
@@ -95,7 +97,7 @@ class PresentationTest {
     @Test
     fun browseLoadsFiltersAndPlays() = runTest {
         val library = FakeLibrary()
-        val vm = BrowseViewModel("uuid:nas", "0", "Root", GetDeviceUseCase(FakeDevices()), BrowseFolderUseCase(library), FilterEntriesUseCase(), session)
+        val vm = BrowseViewModel("uuid:nas", "0", "Root", FakeDevices(), BrowseFolderUseCase(library), FilterEntriesUseCase(), session)
         val s = vm.uiState.value
         assertEquals("Living Room NAS", s.deviceName)
         assertEquals(listOf("Movies", "Music"), s.visible.take(2).map { it.title }) // folders first
@@ -111,7 +113,7 @@ class PresentationTest {
     @Test
     fun browseShowsErrorAndRetries() = runTest {
         val library = FakeLibrary(fail = true)
-        val vm = BrowseViewModel("uuid:nas", "0", "Root", GetDeviceUseCase(FakeDevices()), BrowseFolderUseCase(library), FilterEntriesUseCase(), session)
+        val vm = BrowseViewModel("uuid:nas", "0", "Root", FakeDevices(), BrowseFolderUseCase(library), FilterEntriesUseCase(), session)
         assertEquals("Server timed out", vm.uiState.value.error)
         library.fail = false
         vm.load()
@@ -122,10 +124,9 @@ class PresentationTest {
     @Test
     fun serverStartsOnlyWithPermissionAndRestartsOnChange() = runTest {
         val server = FakeServer()
-        val settings = FakeSettings()
+        val settings = FakeSettings().apply { update { it.copy(autoStart = false) } }
         val vm = ServerViewModel(
-            ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
-            StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
+            serverSession(server, settings),
             receiverSession(settings),
             airPlaySession(settings),
         )
@@ -153,18 +154,18 @@ class PresentationTest {
         val receiver = FakeReceiver()
         val receiving = receiverSession(settings, receiver).also { it.start() }
         val vm = ServerViewModel(
-            ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
-            StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
+            serverSession(server, settings),
             receiving,
             airPlaySession(settings),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         assertEquals(ReceiverStatus.Stopped, vm.uiState.value.receiver) // off by default
+        val starts = server.starts.size
 
         vm.setReceiverEnabled(true)
         assertEquals(ReceiverStatus.Running("Worawit's MacBook"), vm.uiState.value.receiver)
         assertTrue(settings.serverSettings.value.receiverEnabled)
-        assertEquals(0, server.starts.size) // the DLNA server is unaffected
+        assertEquals(starts, server.starts.size) // the DLNA server is unaffected
 
         vm.setReceiverEnabled(false)
         assertEquals(ReceiverStatus.Stopped, vm.uiState.value.receiver)
@@ -177,30 +178,27 @@ class PresentationTest {
         val airPlay = FakeAirPlay()
         airPlaySession(settings, airPlay).start()
         val vm = ServerViewModel(
-            ObserveServerStatusUseCase(server), ObserveServerSettingsUseCase(settings), UpdateServerSettingsUseCase(settings),
-            StartMediaServerUseCase(server, settings), StopMediaServerUseCase(server), GetServerCapabilitiesUseCase(server),
+            serverSession(server, settings),
             receiverSession(settings), airPlaySession(settings, airPlay),
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         assertEquals(AirPlayStatus.Stopped, vm.uiState.value.airPlay) // off by default
         assertTrue(settings.serverSettings.value.airPlayRequirePin) // code required by default
+        val starts = server.starts.size
 
         vm.setAirPlayEnabled(true)
         assertEquals(AirPlayStatus.Running("Worawit's MacBook"), vm.uiState.value.airPlay)
         vm.setAirPlayRequirePin(false)
         assertFalse(settings.serverSettings.value.airPlayRequirePin)
-        assertEquals(0, server.starts.size) // the DLNA server is unaffected
+        assertEquals(starts, server.starts.size) // the DLNA server is unaffected
     }
 
     @Test
     fun shellOpensMirroringAndShowsThePin() = runTest {
         val airPlay = FakeAirPlay(AirPlayStatus.Running("TV"))
         val vm = ShellViewModel(
-            com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
-            ObserveServerStatusUseCase(FakeServer()),
-            com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
-            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
-            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(FakeDevices()),
+            FakeDevices(),
+            serverSession(FakeServer(), FakeSettings()),
             session,
             receiverSession(),
             airPlaySession(airPlay = airPlay).also { it.start() },
@@ -220,11 +218,8 @@ class PresentationTest {
     @Test
     fun shellCombinesDevicesAndTarget() = runTest {
         val vm = ShellViewModel(
-            com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
-            ObserveServerStatusUseCase(FakeServer()),
-            com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
-            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
-            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(FakeDevices()),
+            FakeDevices(),
+            serverSession(FakeServer(), FakeSettings()),
             session,
             receiverSession(),
             airPlaySession(),
@@ -242,11 +237,8 @@ class PresentationTest {
         val nas = MediaDevice("uuid:nas2", "Office NAS", "Synology", "DS220", "192.168.1.30", null, isServer = true, isRenderer = false)
         devices.byAddress["192.168.1.30"] = nas
         val vm = ShellViewModel(
-            com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(devices),
-            ObserveServerStatusUseCase(FakeServer()),
-            com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(devices),
-            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(devices),
-            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(devices),
+            devices,
+            serverSession(FakeServer(), FakeSettings()),
             session,
             receiverSession(),
             airPlaySession(),
@@ -284,11 +276,8 @@ class PresentationTest {
     @Test
     fun theMiniPlayerPlaysAndPausesOurPlayerOffScreen() = runTest {
         val vm = ShellViewModel(
-            com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase(FakeDevices()),
-            ObserveServerStatusUseCase(FakeServer()),
-            com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase(FakeDevices()),
-            com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase(FakeDevices()),
-            com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase(FakeDevices()),
+            FakeDevices(),
+            serverSession(FakeServer(), FakeSettings()),
             session,
             receiverSession(),
             airPlaySession(),
@@ -297,24 +286,24 @@ class PresentationTest {
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
         // Loaded but not started (or stopped): nothing to pause.
         session.play(song, listOf(song), autoPlay = false)
-        assertEquals(null, vm.uiState.value.localPlaying)
+        assertEquals(null, vm.uiState.value.playing)
 
         // Our player plays on off the player screen: the mini player plays and pauses it.
         vm.togglePause()
-        assertEquals(true, vm.uiState.value.localPlaying)
+        assertEquals(true, vm.uiState.value.playing)
         vm.togglePause()
-        assertEquals(false, vm.uiState.value.localPlaying)
-        assertEquals(listOf("load:a1", "play", "pause"), engine.calls)
+        assertEquals(false, vm.uiState.value.playing)
+        assertEquals(listOf("load:a1@0", "play", "pause"), engine.calls)
 
-        // Playing on a TV: that's the renderer's play/pause, not ours.
+        // Playing on a TV: the same button is the TV's play/pause (the session sends it there).
         vm.selectTarget(PlaybackTarget.Renderer(fakeTv))
-        assertEquals(null, vm.uiState.value.localPlaying)
+        assertEquals(true, vm.uiState.value.playing) // what the TV reports: it plays
     }
 
     @Test
     fun nextAndPreviousGoToTheSenderForItsAirPlayVideo() = runTest {
         val airPlay = FakeAirPlay(AirPlayStatus.Running("Mac"))
-        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay), LoadSubtitlesUseCase(FakeSubtitles()))
+        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay))
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
         val song2 = MediaEntry("a2", "0", "Lam Phloen", MediaKind.AUDIO, streamUrl = "http://h/a2.mp3")
 
@@ -340,8 +329,8 @@ class PresentationTest {
     }
 
     @Test
-    fun subtitlesArePickedPerVideoAndOffForTheNext() = runTest {
-        val vm = PlayerViewModel(session, airPlaySession(), LoadSubtitlesUseCase(FakeSubtitles()))
+    fun subtitlesArePickedPerVideoAndKeptWhenThePlayerScreenComesBack() = runTest {
+        val vm = PlayerViewModel(session, airPlaySession())
         val thai = Subtitle("http://h/Movie.th.srt", "Thai", "th")
         val broken = Subtitle("http://h/Movie.broken.srt", "broken")
         val movie = MediaEntry("v1", "0", "Movie", MediaKind.VIDEO, streamUrl = "http://h/v1.mp4", subtitles = listOf(thai, broken))
@@ -350,19 +339,24 @@ class PresentationTest {
         assertEquals(SubtitleState(), vm.subtitles.value) // off until picked
 
         // Read off the main thread: wait for it.
-        vm.selectSubtitle(thai)
-        val loaded = vm.subtitles.first { !it.loading }
-        assertEquals(thai, loaded.selected)
-        assertEquals(listOf(SubtitleCue(1_000, 2_000, "สวัสดี")), loaded.cues)
+        vm.selectSubtitle(SubtitleChoice.File(broken))
+        assertEquals("Couldn't load the subtitles (broken)", vm.subtitles.first { !it.loading }.error)
+        vm.selectSubtitle(SubtitleChoice.File(thai))
+        assertEquals(SubtitleState(SubtitleChoice.File(thai)), vm.subtitles.first { !it.loading })
 
-        vm.selectSubtitle(broken)
-        val failed = vm.subtitles.first { !it.loading }
-        assertEquals(null, failed.selected)
-        assertEquals("Couldn't load the subtitles (broken)", failed.error)
+        // The player screen closed and opened again: a new ViewModel, the same subtitles.
+        val again = PlayerViewModel(session, airPlaySession())
+        assertEquals(SubtitleChoice.File(thai), again.subtitles.value.choice)
 
-        vm.selectSubtitle(thai)
+        // A track inside the video: the player shows it, and the file goes.
+        val inside = TextTrack("2", "English", "eng")
+        engine.facts = engine.facts.copy(textTracks = listOf(inside)) // the player has read the file's tracks
+        again.selectSubtitle(SubtitleChoice.Track(inside))
+        assertEquals(SubtitleState(SubtitleChoice.Track(inside)), again.subtitles.value)
+        assertEquals("track:2", engine.calls.last())
+
         session.next() // another video: its own files, so off again
-        assertEquals(SubtitleState(), vm.subtitles.value)
+        assertEquals(SubtitleState(), again.subtitles.value)
     }
 }
 

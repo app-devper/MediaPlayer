@@ -11,7 +11,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.appdevper.mediaplayer.di.initKoin
-import com.appdevper.mediaplayer.domain.usecase.StopMediaServerUseCase
+import com.appdevper.mediaplayer.domain.session.MediaServerSession
 import com.appdevper.mediaplayer.platform.LocalWindowState
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.Image
@@ -24,7 +24,7 @@ fun main() {
         Window(
             onCloseRequest = {
                 // Send ssdp:byebye so TVs drop our server immediately.
-                runBlocking { KoinPlatform.getKoin().get<StopMediaServerUseCase>()() }
+                runBlocking { KoinPlatform.getKoin().get<MediaServerSession>().turnOff() }
                 exitApplication()
             },
             title = "Media Player",

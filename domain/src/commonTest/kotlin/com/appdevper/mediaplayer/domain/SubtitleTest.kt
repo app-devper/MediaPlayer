@@ -1,13 +1,9 @@
 package com.appdevper.mediaplayer.domain
 
-import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.domain.model.SubtitleCue
 import com.appdevper.mediaplayer.domain.model.textAt
-import com.appdevper.mediaplayer.domain.repository.SubtitleRepository
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleParser
-import com.appdevper.mediaplayer.domain.usecase.LoadSubtitlesUseCase
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -68,6 +64,12 @@ class SubtitleTest {
     }
 
     @Test
+    fun assEventsFromFfmpegBecomePlainText() {
+        assertEquals("Hello, there\nfriend", SubtitleParser.assText("0,0,Default,,0,0,0,,{\\i1}Hello, there{\\i0}\\Nfriend"))
+        assertEquals("Hi", SubtitleParser.assText("Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,Hi"))
+    }
+
+    @Test
     fun cuesWithoutABlankLineBetweenThemStayApart() {
         val srt = "1\n00:00:01,000 --> 00:00:02,000\nFirst\n2\n00:00:03,000 --> 00:00:04,000\nSecond\n3\n00:00:05,000 --> 00:00:06,000\nThird"
         assertEquals(listOf("First", "Second", "Third"), SubtitleParser.parse(srt).map { it.text })
@@ -116,15 +118,5 @@ class SubtitleTest {
         assertEquals("Movie.srt", SubtitleFiles.label(null, "Movie.srt"))
         assertEquals("th", SubtitleFiles.languageOf("http://h/media/Movie.th.srt?x=1"))
         assertNull(SubtitleFiles.languageOf("Movie.srt"))
-    }
-
-    @Test
-    fun loadingFailsWhenTheFileHasNoCues() = runTest {
-        val repo = object : SubtitleRepository {
-            override suspend fun fetch(url: String) = if (url.endsWith("good.srt")) "1\n00:00:01,000 --> 00:00:02,000\nHi\n".encodeToByteArray() else "not subtitles".encodeToByteArray()
-        }
-        val load = LoadSubtitlesUseCase(repo)
-        assertEquals(1, load(Subtitle("http://h/good.srt", "good")).getOrThrow().size)
-        assertTrue(load(Subtitle("http://h/bad.srt", "bad")).isFailure)
     }
 }

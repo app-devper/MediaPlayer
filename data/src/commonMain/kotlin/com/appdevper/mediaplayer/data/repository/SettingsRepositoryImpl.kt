@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.data.repository
 
+import com.appdevper.mediaplayer.data.upnp.AddressStore
 import com.appdevper.mediaplayer.data.platform.defaultSharedFolders
 import com.appdevper.mediaplayer.data.platform.platformName
 import com.appdevper.mediaplayer.data.server.MediaServer
@@ -41,16 +42,14 @@ class SettingsRepositoryImpl(private val s: Settings = Settings()) : SettingsRep
         s.putString(KEY_AIRPLAY_PAIRED, (airPlayPairedKeys + publicKey).joinToString("\n"))
     }
 
-    /** Media server addresses the user added by hand (asked directly, without multicast discovery). */
-    val serverAddresses: List<String>
-        get() = s.getStringOrNull(KEY_SERVER_ADDRESSES)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
+    /** Media server addresses the user added by hand (the control point decides what's in the list). */
+    val addressStore: AddressStore = object : AddressStore {
+        override fun load(): List<String> =
+            s.getStringOrNull(KEY_SERVER_ADDRESSES)?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
 
-    fun addServerAddress(address: String) {
-        if (serverAddresses.none { it.equals(address, ignoreCase = true) }) s.putString(KEY_SERVER_ADDRESSES, (serverAddresses + address).joinToString("\n"))
-    }
-
-    fun removeServerAddress(address: String) {
-        s.putString(KEY_SERVER_ADDRESSES, serverAddresses.filterNot { it.equals(address, ignoreCase = true) }.joinToString("\n"))
+        override fun save(addresses: List<String>) {
+            s.putString(KEY_SERVER_ADDRESSES, addresses.joinToString("\n"))
+        }
     }
 
     override fun update(transform: (ServerSettings) -> ServerSettings) {

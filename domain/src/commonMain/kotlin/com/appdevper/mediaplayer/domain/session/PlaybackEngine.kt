@@ -1,6 +1,7 @@
 package com.appdevper.mediaplayer.domain.session
 
 import com.appdevper.mediaplayer.domain.model.MediaEntry
+import com.appdevper.mediaplayer.domain.model.TextTrack
 
 /**
  * A platform media player (ExoPlayer, AVPlayer, FFmpeg) as [LocalPlayer] drives it: one song or
@@ -25,6 +26,13 @@ interface PlaybackEngine {
     /** Loads the item again at [positionMs] (it failed); [LocalPlayer] plays it next. */
     fun reload(positionMs: Long)
 
+    /**
+     * Shows the subtitle track [id] of [EngineFacts.textTracks], or none. A load or reload may start
+     * with any (a file's default); [LocalPlayer] applies its own choice once the tracks are known. The
+     * engine either draws it itself or reports its text in [EngineFacts.subtitleText].
+     */
+    fun selectTextTrack(id: String?)
+
     /** What the player is doing now; [LocalPlayer] polls it. */
     fun facts(): EngineFacts
 }
@@ -43,4 +51,10 @@ data class EngineFacts(
     val error: String? = null,
     /** On another screen (Picture in Picture, a TV over AirPlay): it plays on in the background. */
     val shownElsewhere: Boolean = false,
+    /** Subtitle tracks in the file (text ones; once the player has read them). */
+    val textTracks: List<TextTrack> = emptyList(),
+    /** The selected track's text on screen now, for us to draw (null when none, or the engine draws it). */
+    val subtitleText: String? = null,
+    /** The track actually showing (which the platform's own controls may have changed). */
+    val selectedTextTrack: String? = null,
 )

@@ -56,6 +56,22 @@ object SubtitleParser {
         return ((hours * 60 + m.toLong()) * 60 + s.toLong()) * 1000 + millis
     }
 
+    /**
+     * The text of an ASS/SSA event as FFmpeg gives it (`ReadOrder,Layer,Style,Name,MarginL,MarginR,
+     * MarginV,Effect,Text`, or a full `Dialogue:` line): its override tags removed, \N as new lines.
+     */
+    fun assText(event: String): String {
+        // A Dialogue line has 9 fields before the text (with start and end), FFmpeg's events 8. The text
+        // is all the rest (it may hold commas itself).
+        val dialogue = event.trimStart().startsWith("Dialogue:")
+        val fields = event.trimStart().removePrefix("Dialogue:").trim()
+        var at = 0
+        repeat(if (dialogue) 9 else 8) { at = fields.indexOf(',', at).takeIf { it >= 0 }?.plus(1) ?: return fields.trim() }
+        return fields.substring(at).replace(assTags, "").replace("\\N", "\n").replace("\\n", "\n").replace("\\h", " ").trim()
+    }
+
+    private val assTags = Regex("""\{[^}\n]{0,256}}""")
+
     // &amp; last, so "&amp;lt;" stays "&lt;".
     private fun unescape(text: String) =
         text.replace("&lt;", "<").replace("&gt;", ">").replace("&nbsp;", " ").replace("&amp;", "&")

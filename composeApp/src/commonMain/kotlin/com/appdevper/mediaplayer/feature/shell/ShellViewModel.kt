@@ -8,14 +8,11 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ServerStatus
 import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
+import com.appdevper.mediaplayer.domain.session.MediaServerSession
 import com.appdevper.mediaplayer.domain.session.CastReceiverSession
 import com.appdevper.mediaplayer.domain.session.PlaybackSession
-import com.appdevper.mediaplayer.domain.usecase.AddServerByAddressUseCase
-import com.appdevper.mediaplayer.domain.usecase.ForgetServerAddressUseCase
-import com.appdevper.mediaplayer.domain.usecase.ObserveDevicesUseCase
-import com.appdevper.mediaplayer.domain.usecase.ObserveServerStatusUseCase
-import com.appdevper.mediaplayer.domain.usecase.RefreshDevicesUseCase
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,12 +31,11 @@ data class ShellUiState(
     val serverStatus: ServerStatus = ServerStatus.Stopped,
     val target: PlaybackTarget = PlaybackTarget.Local,
     val nowPlaying: MediaEntry? = null,
-    val remotePlaying: Boolean = false,
     /**
-     * Our own player still runs off the player screen (Android plays on in the background): playing
-     * or paused. Null when there's nothing to control (the others stop their player off screen).
+     * Where it plays (this device or a renderer), playing or paused, for the mini player's button.
+     * Null when there's nothing to control here (not started, stopped, or a photo).
      */
-    val localPlaying: Boolean? = null,
+    val playing: Boolean? = null,
     val airPlay: AirPlayActivity = AirPlayActivity(),
     /** Adding a media server by its address (Home › Media servers). */
     val addServer: AddServerState = AddServerState.Idle,
@@ -52,11 +48,8 @@ data class ShellUiState(
 
 /** State for the app chrome: sidebar, "Play on" picker and the mini player. */
 class ShellViewModel(
-    observeDevices: ObserveDevicesUseCase,
-    observeServerStatus: ObserveServerStatusUseCase,
-    private val refreshDevices: RefreshDevicesUseCase,
-    private val addServerByAddress: AddServerByAddressUseCase,
-    private val forgetServerAddress: ForgetServerAddressUseCase,
+    private val devices: DeviceRepository,
+    server: MediaServerSession,
     private val session: PlaybackSession,
     receiver: CastReceiverSession,
     airPlay: AirPlayReceiverSession,
@@ -71,9 +64,9 @@ class ShellViewModel(
     private val addServer = MutableStateFlow<AddServerState>(AddServerState.Idle)
 
     val uiState: StateFlow<ShellUiState> = combine(
-        observeDevices(),
-        observeDevices.isSearching,
-        observeServerStatus(),
+        devices.devices,
+        devices.isSearching,
+        server.status,
         session.state,
         airPlay.activity,
     ) { devices, searching, server, playback, airPlayActivity ->
@@ -84,32 +77,33 @@ class ShellViewModel(
             serverStatus = server,
             target = playback.target,
             nowPlaying = playback.current,
-            remotePlaying = playback.remote.status?.state == TransportState.PLAYING,
-            localPlaying = when (playback.local?.state.takeIf { playback.target == PlaybackTarget.Local }) {
+            playing = when (playback.playback.status?.state) {
                 TransportState.PLAYING, TransportState.TRANSITIONING -> true
                 TransportState.PAUSED -> false
-                else -> null
+                // A renderer can always be told to play.
+                else -> if (playback.target is PlaybackTarget.Renderer) false else null
             },
             airPlay = airPlayActivity,
         )
     }.combine(addServer) { state, adding -> state.copy(addServer = adding) }
-        .combine(observeDevices.savedAddresses) { state, saved -> state.copy(savedAddresses = saved) }
+        .combine(devices.savedAddresses) { state, saved -> state.copy(savedAddresses = saved) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShellUiState())
 
-    fun refresh(clear: Boolean = false) = refreshDevices(clear)
+    /** [clear] forgets known devices first (pull-to-refresh / network change). */
+    fun refresh(clear: Boolean = false) = if (clear) devices.reset() else devices.refresh()
 
     /** Asks [address] directly for a media server (when discovery can't find it). */
     fun addServer(address: String) {
         if (addServer.value is AddServerState.Working) return
         addServer.value = AddServerState.Working
         adding = viewModelScope.launch {
-            val found = runCatching { addServerByAddress(address) }.getOrDefault(emptyList())
+            val found = runCatching { devices.addByAddress(address) }.getOrDefault(emptyList())
             addServer.value = if (found.isEmpty()) AddServerState.NotFound(address.trim()) else AddServerState.Added(found.map { it.name })
         }
     }
 
     fun forgetServer(address: String) {
-        viewModelScope.launch { forgetServerAddress(address) }
+        viewModelScope.launch { devices.forgetAddress(address) }
     }
 
     /** Cancel, or a fresh start: a search still running stops (it won't add or report anything later). */

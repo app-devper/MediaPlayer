@@ -7,10 +7,22 @@ import com.appdevper.mediaplayer.domain.session.EngineFacts
 import com.appdevper.mediaplayer.domain.session.PlaybackEngine
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
+import com.appdevper.mediaplayer.domain.model.TextTrack
+import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
+import platform.AVFoundation.AVMediaCharacteristicLegible
+import platform.AVFoundation.AVMediaSelectionGroup
+import platform.AVFoundation.AVMediaSelectionOption
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
 import platform.AVFoundation.AVPlayerItemStatusFailed
+import platform.AVFoundation.AVPlayerItemStatusReadyToPlay
+import platform.AVFoundation.appliesMediaSelectionCriteriaAutomatically
+import platform.AVFoundation.asset
+import platform.AVFoundation.currentMediaSelection
+import platform.AVFoundation.playable
+import platform.AVFoundation.mediaSelectionGroupForMediaCharacteristic
+import platform.AVFoundation.selectMediaOption
 import platform.AVFoundation.AVPlayerTimeControlStatusPaused
 import platform.AVFoundation.AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate
 import platform.AVFoundation.allowsExternalPlayback
@@ -48,7 +60,13 @@ class AvPlaybackEngine : PlaybackEngine {
         // Video moves to an Apple TV when an AirPlay route is picked.
         allowsExternalPlayback = true
         usesExternalPlaybackWhileExternalScreenIsActive = true
+        // Subtitles off until picked (not from the system's caption settings).
+        appliesMediaSelectionCriteriaAutomatically = false
     }
+
+    // The item's subtitle options, read once it's ready (reading them earlier can block on loading).
+    private var legible: Pair<AVMediaSelectionGroup, List<AVMediaSelectionOption>>? = null
+    private var legibleOf: AVPlayerItem? = null
 
     private var url: NSURL? = null
     private var badUrl = false
@@ -86,6 +104,8 @@ class AvPlaybackEngine : PlaybackEngine {
 
     override fun unload() {
         url = null
+        legible = null
+        legibleOf = null
         badUrl = false
         ended = false
         player.pause()
@@ -114,6 +134,24 @@ class AvPlaybackEngine : PlaybackEngine {
         if (positionMs > 0) player.seekToTime(CMTimeMakeWithSeconds(positionMs / 1000.0, 600))
     }
 
+    private fun legibleOptions(): Pair<AVMediaSelectionGroup, List<AVMediaSelectionOption>>? {
+        val item = player.currentItem ?: return null
+        if (legibleOf !== item) {
+            if (item.status != AVPlayerItemStatusReadyToPlay) return null
+            legibleOf = item
+            legible = item.asset.mediaSelectionGroupForMediaCharacteristic(AVMediaCharacteristicLegible)?.let { group ->
+                group to group.options.filterIsInstance<AVMediaSelectionOption>().filter { it.playable }
+            }
+        }
+        return legible
+    }
+
+    /** AVKit draws the selected one itself (in Picture in Picture and full screen too), so no text for us. */
+    override fun selectTextTrack(id: String?) {
+        val (group, options) = legibleOptions() ?: return
+        player.currentItem?.selectMediaOption(id?.toIntOrNull()?.let(options::getOrNull), inMediaSelectionGroup = group)
+    }
+
     override fun facts(): EngineFacts {
         val item = player.currentItem
         val positionMs = CMTimeGetSeconds(player.currentTime()).toMs()
@@ -127,6 +165,15 @@ class AvPlaybackEngine : PlaybackEngine {
             error = if (badUrl) "This address can't be played" else item?.takeIf { it.status == AVPlayerItemStatusFailed }?.error?.localizedDescription,
             // In Picture in Picture or on an Apple TV it plays on with the app in the background.
             shownElsewhere = pictureInPicture || player.externalPlaybackActive,
+            textTracks = legibleOptions()?.second.orEmpty().mapIndexed { i, option ->
+                val language = option.extendedLanguageTag
+                TextTrack(i.toString(), option.displayName.ifEmpty { SubtitleFiles.label(language, "Track ${i + 1}") }, language)
+            },
+            // AVKit's own subtitle menu can change it too.
+            selectedTextTrack = legibleOptions()?.let { (group, options) ->
+                item?.currentMediaSelection?.selectedMediaOptionInMediaSelectionGroup(group)
+                    ?.let { selected -> options.indexOfFirst { it == selected }.takeIf { it >= 0 }?.toString() }
+            },
         )
     }
 }

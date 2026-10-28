@@ -4,18 +4,17 @@ import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackState
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
-import com.appdevper.mediaplayer.domain.model.RemotePlayback
 import com.appdevper.mediaplayer.domain.model.RepeatMode
+import com.appdevper.mediaplayer.domain.model.TransportPlayback
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.RendererRepository
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.concurrent.Volatile
 import kotlin.random.Random
 
 /**
@@ -35,9 +34,12 @@ class PlaybackSession(
     private val _state = MutableStateFlow(PlaybackState())
     val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
-    // Set from the UI, read by the status collectors.
-    @Volatile private var transport: Transport = local
-    private var remoteJob: Job? = null
+    // The transport the target names; its playback becomes the state's.
+    private val current = MutableStateFlow<Transport>(local)
+    private val transport: Transport get() = current.value
+
+    // What the new transport reported when the target switched (see init).
+    @kotlin.concurrent.Volatile private var staleAtSwitch: TransportPlayback? = null
 
     /**
      * Next/previous for someone else's queue: an AirPlay sender playing here decides what comes next
@@ -46,13 +48,21 @@ class PlaybackSession(
     internal var senderSkip: ((next: Boolean) -> Boolean)? = null
 
     init {
+        // One "ended" for every transport: an item that ends by itself moves the queue on.
         scope.launch {
-            var wasEnded = false
-            local.status.collect { status ->
-                _state.update { it.copy(local = status) }
-                val ended = status?.ended == true
-                if (ended && !wasEnded && transport === local) onEnded()
-                wasEnded = ended
+            current.collectLatest { t ->
+                // A StateFlow gives its current value first. The one it had when the target switched is old
+                // (the previous item's status, which a controller casting here mustn't see): skip that very
+                // value; anything it reports since is new. Its "ended" doesn't count either.
+                val old = staleAtSwitch
+                var wasEnded = t.playback.value.status?.ended == true
+                t.playback.collect { playback ->
+                    if (playback === old) return@collect
+                    _state.update { it.copy(playback = playback) }
+                    val ended = playback.status?.ended == true
+                    if (ended && !wasEnded) onEnded()
+                    wasEnded = ended
+                }
             }
         }
     }
@@ -61,25 +71,15 @@ class PlaybackSession(
         val s = _state.value
         if (target == s.target) return
         transport.unload()
-        remoteJob?.cancel()
-        transport = when (target) {
+        val next = when (target) {
             PlaybackTarget.Local -> local
-            is PlaybackTarget.Renderer -> RendererTransport(renderer, target.device, scope, pollIntervalMs).also(::follow)
+            is PlaybackTarget.Renderer -> RendererTransport(renderer, target.device, scope, pollIntervalMs)
         }
-        _state.update { it.copy(target = target, remote = RemotePlayback()) }
+        staleAtSwitch = next.playback.value
+        current.value = next
+        // Its volume and mute; no status until it has one for the item it loads.
+        _state.update { it.copy(target = target, playback = next.playback.value.copy(status = null)) }
         loadCurrent()
-    }
-
-    private fun follow(remote: RendererTransport) {
-        remoteJob = scope.launch {
-            var wasEnded = false
-            remote.playback.collect { playback ->
-                _state.update { it.copy(remote = playback) }
-                val ended = playback.status?.ended == true
-                if (ended && !wasEnded) onEnded()
-                wasEnded = ended
-            }
-        }
     }
 
     /**
@@ -93,11 +93,11 @@ class PlaybackSession(
         val queue = siblings.filter { it == entry || (it.isPlayable && (it.kind == MediaKind.IMAGE) == photos) }
             .ifEmpty { listOf(entry) }
         val index = queue.indexOf(entry).coerceAtLeast(0)
-        // local = null: a controller casting here mustn't see the previous item's status meanwhile.
+        // No status yet: a controller casting here mustn't see the previous item's meanwhile.
         _state.update {
             it.copy(
                 queue = queue, index = index, order = order(queue.size, index, it.shuffle), casted = casted,
-                autoPlay = autoPlay, startPositionMs = startPositionMs, local = null,
+                autoPlay = autoPlay, startPositionMs = startPositionMs, playback = it.playback.copy(status = null),
             )
         }
         loadCurrent()
@@ -127,7 +127,7 @@ class PlaybackSession(
 
     /** To [index] within the current order (next, previous, the end). */
     private fun moveTo(index: Int) {
-        _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0, local = null) }
+        _state.update { it.copy(index = index, autoPlay = true, startPositionMs = 0, playback = it.playback.copy(status = null)) }
         loadCurrent()
     }
 
@@ -164,7 +164,7 @@ class PlaybackSession(
         if (senderSkip?.invoke(false) == true) return true
         val s = _state.value
         // Stopped or finished counts as the start: back to the previous item.
-        val status = transport.lastStatus
+        val status = transport.playback.value.status
         val position = if (status == null || status.ended || status.state == TransportState.STOPPED) 0 else status.positionMs
         if (position > RESTART_MS) {
             seek(0)
@@ -182,7 +182,7 @@ class PlaybackSession(
     fun pause() = transport.pause()
 
     fun togglePause() {
-        val state = transport.lastStatus?.state
+        val state = transport.playback.value.status?.state
         if (state == TransportState.PLAYING || state == TransportState.TRANSITIONING) pause() else play()
     }
 
@@ -192,33 +192,15 @@ class PlaybackSession(
      */
     fun stop() {
         transport.stop()
-        if (transport === local) _state.update { it.copy(autoPlay = false) }
+        _state.update { it.copy(autoPlay = false) }
     }
 
     fun seek(positionMs: Long) = transport.seek(positionMs)
 
     /** 0..100, on the current target. */
-    fun setVolume(volume: Int) {
-        val v = volume.coerceIn(0, 100)
-        when (val t = transport) {
-            is RendererTransport -> t.setVolume(v)
-            else -> {
-                _state.update { it.copy(localVolume = v) }
-                applyLocalVolume()
-            }
-        }
-    }
+    fun setVolume(volume: Int) = transport.setVolume(volume.coerceIn(0, 100))
 
-    /** This device's player only (renderers have their own mute). */
-    fun setMuted(muted: Boolean) {
-        _state.update { it.copy(localMuted = muted) }
-        applyLocalVolume()
-    }
-
-    private fun applyLocalVolume() {
-        val s = _state.value
-        local.setVolume(if (s.localMuted) 0f else s.localVolume / 100f)
-    }
+    fun setMuted(muted: Boolean) = transport.setMuted(muted)
 
     private companion object {
         const val RESTART_MS = 3_000L
