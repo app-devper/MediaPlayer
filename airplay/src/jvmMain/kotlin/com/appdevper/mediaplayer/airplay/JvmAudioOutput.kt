@@ -25,8 +25,6 @@ import org.bytedeco.ffmpeg.global.avutil.av_mallocz
 import org.bytedeco.javacpp.BytePointer
 import org.bytedeco.javacpp.FloatPointer
 import org.bytedeco.javacpp.ShortPointer
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.TimeUnit
 import javax.sound.sampled.AudioFormat
 import javax.sound.sampled.AudioSystem
 import javax.sound.sampled.FloatControl
@@ -39,102 +37,34 @@ import kotlin.math.roundToInt
  * AirPlay audio → the default output: AAC-LC/AAC-ELD through FFmpeg, PCM straight through.
  * [pcmTap] replaces the sound card (tests).
  */
-internal class JvmAudioOutput(private val pcmTap: ((ByteArray) -> Unit)? = null) {
-    private sealed interface Msg {
-        class Format(val codec: AirPlayAudioCodec?) : Msg
-        class Frame(val data: ByteArray) : Msg
-        data object Flush : Msg
-        data object Quit : Msg
-    }
+internal fun jvmAudioOutput(pcmTap: ((ByteArray) -> Unit)? = null) =
+    AudioThread(AudioPipeline(FfmpegAac::open, if (pcmTap != null) TapSink(pcmTap) else LineSink()))
 
-    private val queue = LinkedBlockingQueue<Msg>()
-    private val thread = Thread(::run, "airplay-audio").apply { isDaemon = true; start() }
+/** AAC through FFmpeg, decoded as it's sent. */
+private class FfmpegAac private constructor(private val ctx: AVCodecContext) : AacDecoder {
+    private val packet: AVPacket = av_packet_alloc()
+    private val frame: AVFrame = av_frame_alloc()
+    private val decoded = ArrayDeque<ByteArray>()
 
-    @Volatile private var gain = 1f
-    private var format: AirPlayAudioCodec? = null
-    private var ctx: AVCodecContext? = null
-    private var packet: AVPacket? = null
-    private var frame: AVFrame? = null
-    private var line: SourceDataLine? = null
-
-    fun setFormat(codec: AirPlayAudioCodec?) = queue.offer(Msg.Format(codec))
-
-    fun play(data: ByteArray) {
-        if (queue.size > MAX_QUEUED) queue.removeIf { it is Msg.Frame }
-        queue.offer(Msg.Frame(data))
-    }
-
-    fun flush() = queue.offer(Msg.Flush)
-
-    fun setVolume(gain: Float) {
-        this.gain = gain
-        line?.let(::applyGain)
-    }
-
-    fun release() {
-        queue.offer(Msg.Quit)
-        thread.join(1_000)
-    }
-
-    private fun run() {
-        while (true) {
-            when (val msg = queue.poll(50, TimeUnit.MILLISECONDS)) {
-                is Msg.Format -> configure(msg.codec)
-                is Msg.Frame -> runCatching { onFrame(msg.data) }
-                Msg.Flush -> line?.flush()
-                Msg.Quit -> {
-                    closeDecoder()
-                    line?.close()
-                    return
-                }
-                null -> Unit
-            }
-        }
-    }
-
-    private fun configure(codec: AirPlayAudioCodec?) {
-        closeDecoder()
-        format = codec
-        val config = when (codec) {
-            AirPlayAudioCodec.AAC_LC -> byteArrayOf(0x12, 0x10)
-            AirPlayAudioCodec.AAC_ELD -> byteArrayOf(0xf8.toByte(), 0xe8.toByte(), 0x50, 0x00)
-            else -> return
-        }
-        val decoder = avcodec_find_decoder(AV_CODEC_ID_AAC) ?: return
-        val c = avcodec_alloc_context3(decoder) ?: return
-        c.sample_rate(SAMPLE_RATE)
-        av_channel_layout_default(c.ch_layout(), 2)
-        val extra = BytePointer(av_mallocz((config.size + AV_INPUT_BUFFER_PADDING_SIZE).toLong()))
-        extra.put(config, 0, config.size)
-        c.extradata(extra)
-        c.extradata_size(config.size)
-        if (avcodec_open2(c, decoder, null as AVDictionary?) < 0) {
-            avcodec_free_context(c)
-            return
-        }
-        ctx = c
-        packet = av_packet_alloc()
-        frame = av_frame_alloc()
-    }
-
-    private fun onFrame(data: ByteArray) {
-        when (format) {
-            AirPlayAudioCodec.PCM -> write(data)
-            AirPlayAudioCodec.AAC_LC, AirPlayAudioCodec.AAC_ELD -> decode(data)
-            else -> Unit
-        }
-    }
-
-    private fun decode(data: ByteArray) {
-        val c = ctx ?: return
-        val p = packet ?: return
-        if (av_new_packet(p, data.size) < 0) return
-        p.data().put(data, 0, data.size)
-        val sent = avcodec_send_packet(c, p)
-        av_packet_unref(p)
+    override fun send(frame: ByteArray, ptsUs: Long) {
+        if (av_new_packet(packet, frame.size) < 0) return
+        packet.data().put(frame, 0, frame.size)
+        val sent = avcodec_send_packet(ctx, packet)
+        av_packet_unref(packet)
         if (sent < 0) return
-        val f = frame ?: return
-        while (avcodec_receive_frame(c, f) == 0) write(toS16Interleaved(f))
+        while (avcodec_receive_frame(ctx, this.frame) == 0) decoded += toS16Interleaved(this.frame)
+    }
+
+    override fun drain(out: (ByteArray, Int, Int) -> Unit) {
+        while (decoded.isNotEmpty()) out(decoded.removeFirst(), AudioPipeline.SAMPLE_RATE, 2)
+    }
+
+    override fun flush() = decoded.clear()
+
+    override fun release() {
+        avcodec_free_context(ctx)
+        av_packet_free(packet)
+        av_frame_free(frame)
     }
 
     /** FFmpeg's AAC decoder outputs planar float; the line wants interleaved 16-bit. */
@@ -166,16 +96,53 @@ internal class JvmAudioOutput(private val pcmTap: ((ByteArray) -> Unit)? = null)
         return out
     }
 
-    private fun write(pcm: ByteArray) {
-        pcmTap?.let { return it(pcm) }
-        val l = line ?: openLine() ?: return
+    companion object {
+        fun open(config: ByteArray): AacDecoder? {
+            val decoder = avcodec_find_decoder(AV_CODEC_ID_AAC) ?: return null
+            val c = avcodec_alloc_context3(decoder) ?: return null
+            c.sample_rate(AudioPipeline.SAMPLE_RATE)
+            av_channel_layout_default(c.ch_layout(), 2)
+            val extra = BytePointer(av_mallocz((config.size + AV_INPUT_BUFFER_PADDING_SIZE).toLong()))
+            extra.put(config, 0, config.size)
+            c.extradata(extra)
+            c.extradata_size(config.size)
+            if (avcodec_open2(c, decoder, null as AVDictionary?) < 0) {
+                avcodec_free_context(c)
+                return null
+            }
+            return FfmpegAac(c)
+        }
+    }
+}
+
+/** The default sound output (44.1 kHz stereo, ~200 ms buffered). */
+private class LineSink : PcmSink {
+    @Volatile private var gain = 1f
+    @Volatile private var line: SourceDataLine? = null
+
+    override fun write(pcm: ByteArray, rate: Int, channels: Int) {
+        val l = line ?: open() ?: return
         l.write(pcm, 0, pcm.size)
     }
 
-    private fun openLine(): SourceDataLine? = runCatching {
-        val fmt = AudioFormat(SAMPLE_RATE.toFloat(), 16, 2, true, false)
+    override fun flush() {
+        line?.flush()
+    }
+
+    override fun setVolume(gain: Float) {
+        this.gain = gain
+        line?.let(::applyGain)
+    }
+
+    override fun release() {
+        line?.close()
+        line = null
+    }
+
+    private fun open(): SourceDataLine? = runCatching {
+        val fmt = AudioFormat(AudioPipeline.SAMPLE_RATE.toFloat(), 16, 2, true, false)
         AudioSystem.getSourceDataLine(fmt).apply {
-            open(fmt, SAMPLE_RATE / 5 * 4) // ~200 ms
+            open(fmt, AudioPipeline.SAMPLE_RATE / 5 * 4) // ~200 ms
             applyGain(this)
             start()
         }
@@ -187,18 +154,12 @@ internal class JvmAudioOutput(private val pcmTap: ((ByteArray) -> Unit)? = null)
         val db = if (gain <= 0f) control.minimum else 20f * log10(gain)
         control.value = max(control.minimum, db.coerceAtMost(control.maximum))
     }
+}
 
-    private fun closeDecoder() {
-        ctx?.let { avcodec_free_context(it) }
-        packet?.let { av_packet_free(it) }
-        frame?.let { av_frame_free(it) }
-        ctx = null
-        packet = null
-        frame = null
-    }
-
-    private companion object {
-        const val SAMPLE_RATE = 44_100
-        const val MAX_QUEUED = 50
-    }
+/** Hands the PCM to [tap] instead of a sound card. */
+private class TapSink(private val tap: (ByteArray) -> Unit) : PcmSink {
+    override fun write(pcm: ByteArray, rate: Int, channels: Int) = tap(pcm)
+    override fun flush() {}
+    override fun setVolume(gain: Float) {}
+    override fun release() {}
 }

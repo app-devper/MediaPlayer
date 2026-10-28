@@ -10,7 +10,7 @@ actual class AirPlayPlayer actual constructor() : AirPlayMediaSink {
     actual val videoSize: StateFlow<VideoSize?> = _videoSize.asStateFlow()
 
     private val video = H264Decoder { w, h -> _videoSize.value = VideoSize(w, h) }
-    private val audio = AudioOutput()
+    private val audio = audioOutput()
 
     /** Where mirroring is drawn; null while nothing shows it (decoding pauses, the stream is kept). */
     fun setSurface(surface: Surface?) {

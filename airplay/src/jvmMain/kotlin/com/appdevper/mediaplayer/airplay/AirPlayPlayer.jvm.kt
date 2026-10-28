@@ -22,7 +22,7 @@ actual class AirPlayPlayer actual constructor() : AirPlayMediaSink {
         }
         _frames.value = frame
     }
-    private val audio = JvmAudioOutput()
+    private val audio = jvmAudioOutput()
 
     override fun onVideoFormat(h265: Boolean, width: Int, height: Int) {
         if (_videoSize.value == null) _videoSize.value = VideoSize(width, height)
@@ -40,7 +40,7 @@ actual class AirPlayPlayer actual constructor() : AirPlayMediaSink {
         audio.setFormat(codec)
     }
 
-    override fun onAudio(data: ByteArray, ptsNs: Long) = audio.play(data)
+    override fun onAudio(data: ByteArray, ptsNs: Long) = audio.play(data, ptsNs)
 
     override fun onAudioFlush() {
         audio.flush()
