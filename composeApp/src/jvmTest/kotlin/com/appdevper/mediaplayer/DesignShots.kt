@@ -27,6 +27,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import kotlin.test.assertTrue
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runComposeUiTest
@@ -160,7 +161,14 @@ class DesignShots {
 
     @Test fun homePhoneLight() = shot("1-home-phone-light", 400, 860, dark = false)
     @Test fun homeDesktopDark() = shot("2-home-desktop-dark", 1280, 800, dark = true)
-    @Test fun browsePhoneLight() = shot("3-browse-phone-light", 400, 860, dark = false, start = BrowseRoute("uuid:nas", "0", "Living Room NAS"))
+    @Test fun browsePhoneLight() = shot("3-browse-phone-light", 400, 860, dark = false, setup = { s ->
+        s.play(song, listOf(song), autoPlay = false)
+    }, start = BrowseRoute("uuid:nas", "0", "Living Room NAS"), always = true) {
+        // Something playing: the mini player sits under the search field, not over it.
+        val search = onNodeWithText("Search in Living Room NAS").fetchSemanticsNode().boundsInRoot
+        val mini = onNodeWithContentDescription("Open player").fetchSemanticsNode().boundsInRoot
+        assertTrue(search.bottom <= mini.top, "search $search, mini player $mini")
+    }
     @Test fun remoteDesktopLight() = shot("4-remote-desktop-light", 1280, 860, dark = false, setup = { s ->
         s.setTarget(PlaybackTarget.Renderer(fakeTv))
         s.play(song, listOf(song, song2))
