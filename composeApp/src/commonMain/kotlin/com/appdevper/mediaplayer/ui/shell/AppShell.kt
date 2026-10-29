@@ -1,12 +1,14 @@
 package com.appdevper.mediaplayer.ui.shell
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -138,7 +140,13 @@ fun AppShell(startDestination: Any = HomeRoute) {
                             onSelectTarget = vm::selectTarget,
                             onSearchAgain = { vm.refresh() },
                         )
-                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                        val miniPlayer = state.hasNowPlaying && !onPlayer
+                        // Under the screen, not over it: what a screen keeps at its bottom (Browse's search)
+                        // stays in view. The mini player takes the navigation bar's inset meanwhile.
+                        Box(
+                            Modifier.weight(1f).fillMaxWidth()
+                                .then(if (miniPlayer) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier),
+                        ) {
                             AppNavHost(
                                 nav,
                                 startDestination,
@@ -149,14 +157,13 @@ fun AppShell(startDestination: Any = HomeRoute) {
                                 onDismissAddServer = vm::dismissAddServer,
                                 onForgetServer = vm::forgetServer,
                             )
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = state.hasNowPlaying && !onPlayer,
-                                enter = slideInVertically { it } + fadeIn(),
-                                exit = slideOutVertically { it } + fadeOut(),
-                                modifier = Modifier.align(Alignment.BottomCenter),
-                            ) {
-                                MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause)
-                            }
+                        }
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = miniPlayer,
+                            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
+                            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
+                        ) {
+                            MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause)
                         }
                     }
                 }

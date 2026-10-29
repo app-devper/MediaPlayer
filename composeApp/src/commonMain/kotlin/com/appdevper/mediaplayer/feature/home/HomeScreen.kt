@@ -152,7 +152,7 @@ fun HomeScreen(
                     Icon(AppIcons.ChevronRight, null, Modifier.size(18.dp), tint = c.textTertiary)
                 }
             }
-            Spacer(Modifier.height(120.dp))
+            Spacer(Modifier.height(32.dp))
         }
     }
 }
