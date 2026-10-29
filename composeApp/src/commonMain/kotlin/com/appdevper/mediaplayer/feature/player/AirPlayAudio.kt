@@ -37,6 +37,7 @@ internal fun AirPlayAudio(
     // The sender reports progress now and then; in between it advances with the clock.
     var position by remember { mutableLongStateOf(song.positionNow()) }
     LaunchedEffect(song) {
+        if (song.durationMs <= 0) return@LaunchedEffect // no position to show
         while (true) {
             position = song.positionNow()
             delay(500)

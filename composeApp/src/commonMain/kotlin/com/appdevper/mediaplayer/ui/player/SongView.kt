@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +26,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -40,8 +43,11 @@ import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.ui.formatClock
 
-/** Where a song plays when it isn't this device: on a TV, or from a sender. Said under the title. */
-internal class SongSource(val text: String, val busy: Boolean = false)
+/**
+ * Said under the title: where it plays when that isn't here (on a TV, from a sender), or that it's
+ * loading. [busy] shows a spinner; [live] shows it playing elsewhere (green), not stopped there.
+ */
+internal class SongSource(val text: String, val busy: Boolean = false, val live: Boolean = true)
 
 /**
  * A song (or anything without a picture here), wherever it plays: on this device, on a TV, or from
@@ -85,7 +91,7 @@ internal fun SongView(
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 520.dp),
+            modifier = Modifier.widthIn(max = 520.dp).semantics { heading() },
         )
         detail?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
@@ -132,7 +138,7 @@ private fun SourceLine(source: SongSource) {
         if (source.busy) {
             CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = c.textSecondary)
         } else {
-            Icon(AppIcons.Cast, null, Modifier.size(14.dp), tint = c.success)
+            Icon(AppIcons.Cast, null, Modifier.size(14.dp), tint = if (source.live) c.success else c.textTertiary)
         }
         Text(source.text, style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
     }
@@ -143,7 +149,18 @@ private fun SeekBar(positionMs: Long, durationMs: Long, onSeek: ((Long) -> Unit)
     val c = AppTheme.colors
     var dragging by remember { mutableStateOf<Float?>(null) }
     Column(Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
-        ThinSlider(
+        // Only shown (a sender's music): a plain bar, not a slider that looks greyed out.
+        if (onSeek == null) {
+            LinearProgressIndicator(
+                progress = { if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).height(4.dp),
+                color = c.textPrimary,
+                trackColor = c.trackInactive,
+                strokeCap = StrokeCap.Round,
+                gapSize = 0.dp,
+                drawStopIndicator = {},
+            )
+        } else ThinSlider(
             value = dragging ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f,
             onValueChange = { dragging = it },
             onValueChangeFinished = {

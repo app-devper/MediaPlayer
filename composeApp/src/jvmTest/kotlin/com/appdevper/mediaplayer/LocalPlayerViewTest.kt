@@ -61,10 +61,10 @@ class LocalPlayerViewTest {
             assertEquals(listOf("load:a1@0", "play", "pause"), engine.calls)
 
             // Desktop has no volume keys: mute is here (phones use theirs).
-            onNodeWithContentDescription("Mute (M)").performClick()
+            onNodeWithContentDescription("Mute").performClick()
             waitForIdle()
             assertEquals(0f, engine.gain)
-            onNodeWithContentDescription("Unmute (M)").assertExists()
+            onNodeWithContentDescription("Unmute").assertExists()
         } finally {
             scope.cancel()
         }

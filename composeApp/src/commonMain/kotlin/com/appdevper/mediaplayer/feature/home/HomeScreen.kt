@@ -91,10 +91,11 @@ fun HomeScreen(
         CenteredColumn(maxWidth = 720.dp) {
             Spacer(Modifier.height(8.dp))
             SectionHeader("Media servers") {
+                // With none found, the card below has the search; here it would say it twice.
                 // Searching: says so where the button was, so nothing jumps.
-                if (state.searching) {
+                if (state.servers.isNotEmpty() && state.searching) {
                     CircularProgressIndicator(Modifier.padding(12.dp).size(16.dp), strokeWidth = 2.dp, color = c.textSecondary)
-                } else {
+                } else if (state.servers.isNotEmpty()) {
                     GhostIconButton(AppIcons.Refresh, "Search again", onRefresh, iconSize = 18.dp, tint = c.textSecondary)
                 }
             }

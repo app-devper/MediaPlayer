@@ -149,7 +149,7 @@ private fun VolumeRow(volume: Int, onVolume: (Int) -> Unit, onToggleMute: (() ->
     Row(Modifier.widthIn(max = 400.dp).fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         val silent = local <= 0f
         if (onToggleMute != null) {
-            GhostIconButton(if (silent) AppIcons.VolumeOff else AppIcons.Volume, if (silent) "Unmute (M)" else "Mute (M)", onToggleMute, iconSize = 18.dp, tint = c.textSecondary)
+            GhostIconButton(if (silent) AppIcons.VolumeOff else AppIcons.Volume, if (silent) "Unmute" else "Mute", onToggleMute, iconSize = 18.dp, tint = c.textSecondary)
         } else {
             Icon(AppIcons.Volume, "Volume", Modifier.padding(horizontal = 11.dp).size(18.dp), tint = c.textSecondary)
         }
@@ -173,8 +173,8 @@ private fun UpNext(rows: List<QueueRow>, vm: PlayerViewModel) {
     }
 }
 
-@Composable
 /** A video on this device: the picture with its controls, then what it is and what's next. */
+@Composable
 private fun LocalPlayer(ui: PlayerUi.Local, vm: PlayerViewModel) {
     val c = AppTheme.colors
     val item = ui.entry
@@ -306,7 +306,7 @@ private fun RemoteControls(ui: PlayerUi.Remote, vm: PlayerViewModel) {
         detail = joinDetails(item.artist, item.album),
         source = when (status?.state) {
             TransportState.TRANSITIONING -> SongSource("Loading on ${ui.renderer.name}", busy = true)
-            TransportState.STOPPED, TransportState.NO_MEDIA -> SongSource("Stopped on ${ui.renderer.name}")
+            TransportState.STOPPED, TransportState.NO_MEDIA -> SongSource("Stopped on ${ui.renderer.name}", live = false)
             else -> SongSource("On ${ui.renderer.name}")
         },
         error = ui.error,
