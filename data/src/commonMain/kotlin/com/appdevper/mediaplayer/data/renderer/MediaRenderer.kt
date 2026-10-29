@@ -220,7 +220,7 @@ class MediaRenderer(
     }
 
     private fun command(command: CastCommand, expected: TransportState): SoapReply {
-        if (!send(command)) return SoapReply.Fault(701, "Transition not available")
+        if (model.value.uri == null || !send(command)) return SoapReply.Fault(701, "Transition not available")
         model.update { it.expect(expected) }
         return SoapReply.Ok()
     }

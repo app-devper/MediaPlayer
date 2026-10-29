@@ -98,9 +98,11 @@ class LocalPlayer(
         lastItem = item
         val url = entry.streamUrl
         if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) {
-            unloadNow()
-            // A photo is shown by the photo viewer, not played: reported as playing, from start to end.
-            if (url != null && entry.kind == MediaKind.IMAGE) showingPhoto()
+            // A photo is shown by the photo viewer, not played: reported as playing, from start to end
+            // (one after another, with nothing in between).
+            val photo = url != null && entry.kind == MediaKind.IMAGE
+            if (!photo || _loaded.value != null) unloadNow()
+            if (photo) showingPhoto()
             return@onPlayer
         }
         pausedInBackground = false

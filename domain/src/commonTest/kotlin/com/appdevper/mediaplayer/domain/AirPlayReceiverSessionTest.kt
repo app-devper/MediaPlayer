@@ -6,6 +6,7 @@ import com.appdevper.mediaplayer.testing.FakeEngine
 import com.appdevper.mediaplayer.testing.FakeRenderer
 import com.appdevper.mediaplayer.testing.playbackSession
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
+import com.appdevper.mediaplayer.domain.model.AirPlayNowPlaying
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
@@ -188,6 +189,10 @@ class AirPlayReceiverSessionTest {
         assertEquals(listOf(SenderCommand.PlayPause), airPlay.sentToSender)
         assertEquals(false, playback.nowPlaying.value.playing)
         assertTrue(engine.calls.none { it == "play" })
+        // Skipped on the sender itself: the new song plays.
+        airPlay.activity.value = AirPlayActivity(client = "Mac", audioOnly = true, canControlSender = true, nowPlaying = AirPlayNowPlaying("Next song"))
+        runCurrent()
+        assertEquals(true, playback.nowPlaying.value.playing)
         assertTrue(playback.next())
         runCurrent()
         assertEquals(SenderCommand.Next, airPlay.sentToSender.last())

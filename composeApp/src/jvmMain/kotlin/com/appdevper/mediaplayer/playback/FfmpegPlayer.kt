@@ -208,7 +208,7 @@ class FfmpegPlayer(
 
     fun pause() = synchronized(control) {
         if (paused) return
-        playbackClock.pause(output.bufferedMs(), hasAudio)
+        playbackClock.pause(output::bufferedMs, hasAudio)
         paused = true
         output.pause()
         _status.update { it.copy(playing = false) }
@@ -261,7 +261,7 @@ class FfmpegPlayer(
 
     private fun audioIsClock(): Boolean = playbackClock.audioIsClock(hasAudio)
 
-    private fun playbackClockMs(): Long = playbackClock.ms(output.bufferedMs(), hasAudio)
+    private fun playbackClockMs(): Long = playbackClock.ms(output::bufferedMs, hasAudio)
 
     // region demux
 
@@ -355,6 +355,7 @@ class FfmpegPlayer(
                             synchronized(control) {
                                 if (pendingSeek.get() == null && readSerial == serial.get() && !_status.value.ended) {
                                     _status.update { it.copy(ended = true, playing = false, buffering = false) }
+                                    playbackClock.pause(output::bufferedMs, hasAudio)
                                     paused = true
                                 }
                             }

@@ -87,10 +87,10 @@ class MediaServer(
             val media = library.scan(config.kinds)
             this.library = library
             this.config = config
-            device.start(spec(config)) { routes() }
+            // The content is there before the server is announced.
+            device.start(spec(config), serving = { tree = ContentTree(media, it) }) { routes() }
             running = true
             val baseUrl = device.baseUrl!!
-            this.tree = ContentTree(media, baseUrl)
             systemUpdateId++
             host.onServerStarted(config.name)
             _state.value = ServerState.Running(config.name, baseUrl, tree!!.counts)

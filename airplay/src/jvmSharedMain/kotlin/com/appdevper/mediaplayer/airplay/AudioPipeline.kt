@@ -115,12 +115,16 @@ internal class AudioThread(private val pipeline: AudioPipeline) {
 
     private fun run() {
         while (true) {
-            when (val msg = queue.poll(20, TimeUnit.MILLISECONDS)) {
-                is Msg.Format -> pipeline.setFormat(msg.codec)
-                is Msg.Frame -> runCatching { pipeline.frame(msg.data, msg.ptsUs) }
-                Msg.Flush -> pipeline.flush()
-                Msg.Quit -> return pipeline.release()
-                null -> pipeline.drain()
+            val msg = queue.poll(20, TimeUnit.MILLISECONDS)
+            if (msg == Msg.Quit) return pipeline.release()
+            // A decoder or output that fails costs that message, not the thread (AirPlay audio until restart).
+            runCatching {
+                when (msg) {
+                    is Msg.Format -> pipeline.setFormat(msg.codec)
+                    is Msg.Frame -> pipeline.frame(msg.data, msg.ptsUs)
+                    Msg.Flush -> pipeline.flush()
+                    else -> pipeline.drain()
+                }
             }
         }
     }

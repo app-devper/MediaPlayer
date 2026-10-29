@@ -153,4 +153,20 @@ class DiscoveryTest {
         assertEquals("http://10.0.0.9:9100/avt/control", s.requests.last())
         assertEquals(listOf("TV"), s.names)
     }
+
+    @Test
+    fun aDeviceAnnouncingFromTwoAddressesIsntReadOnEveryAnnouncement() = runTest {
+        val wired = "http://10.0.0.9:9000/d.xml"
+        val wifi = "http://10.0.0.19:9000/d.xml"
+        val s = Setup(this, mapOf(wired to description("NAS"), wifi to description("NAS")))
+        s.controlPoint.start()
+        runCurrent()
+        repeat(3) {
+            s.announce(alive(wired), from = "10.0.0.9")
+            s.announce(alive(wifi), from = "10.0.0.19")
+            runCurrent()
+        }
+        assertEquals(listOf("NAS"), s.names)
+        assertEquals(2, s.requests.count { it.endsWith("/d.xml") }) // each once
+    }
 }

@@ -88,7 +88,6 @@ internal class AirPlayVideoSession(
         val id = "airplay-${++sequence}"
         endJob?.cancel()
         endJob = null
-        videoId = id
         onVideo(id)
         val entry = MediaEntry(
             id = id,
@@ -99,6 +98,8 @@ internal class AirPlayVideoSession(
             mimeType = if (".m3u8" in url) "application/x-mpegURL" else null,
         )
         send(CastCommand.Load(entry, autoPlay = true, startPositionMs = (startSeconds * 1000).toLong().coerceAtLeast(0)))
+        // Its id once the load is in: before, info() would see something else here and drop the sender.
+        videoId = id
         senderVolume?.let(::applyVolume)
     }
 

@@ -76,8 +76,11 @@ internal class LocalDevice(
 
     val location: String? get() = baseUrl?.let { "$it/description.xml" }
 
-    /** Starts [spec]; throws when there's no network or no free port. Not thread-safe: callers hold a lock. */
-    suspend fun start(spec: DeviceSpec, routes: Route.() -> Unit = {}) {
+    /**
+     * Starts [spec]; throws when there's no network or no free port. [serving] gets the base URL once
+     * HTTP is up and before the device is announced. Not thread-safe: callers hold a lock.
+     */
+    suspend fun start(spec: DeviceSpec, serving: (baseUrl: String) -> Unit = {}, routes: Route.() -> Unit = {}) {
         stop(byeBye = true)
         if (!ssdp.ensureStarted()) throw IllegalStateException("Not connected to a local network")
         val ip = ssdp.localIp ?: throw IllegalStateException("No LAN address")
@@ -90,6 +93,7 @@ internal class LocalDevice(
         }
         server = engine
         baseUrl = "http://$ip:$port"
+        serving(baseUrl!!)
         advertiser = SsdpAdvertiser(ssdp, scope, spec.udn, listOf(spec.type) + spec.services.map { it.type }, location!!)
             .also { it.start() }
     }

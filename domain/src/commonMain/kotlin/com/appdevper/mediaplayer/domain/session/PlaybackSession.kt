@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -73,8 +75,12 @@ class PlaybackSession(
     }
 
     init {
-        // New music from the sender plays.
-        scope.launch { sender.activity.collect { if (!it.audioOnly) senderPaused.value = false } }
+        // New music from the sender, or a new song (skipped on the sender itself), plays.
+        scope.launch {
+            sender.activity.map { if (it.audioOnly) it.nowPlaying?.let { song -> song.title to song.artist } ?: (null to null) else null }
+                .distinctUntilChanged()
+                .collect { senderPaused.value = false }
+        }
         // One "ended" for every transport: an item that ends by itself moves the queue on.
         scope.launch {
             current.collectLatest { t ->

@@ -84,7 +84,8 @@ class ControlPoint(
     /** When announcements expire (tests pass virtual time). */
     private val time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) {
-    private class Entry(val device: UpnpDevice, var expiresAt: ComparableTimeMark)
+    /** [direct]: found by asking its address ([addByAddress]), which keeps the location it was asked at. */
+    private class Entry(val device: UpnpDevice, var expiresAt: ComparableTimeMark, val direct: Boolean = false)
 
     private val mutex = Mutex()
     private val entries = LinkedHashMap<String, Entry>()
@@ -238,13 +239,16 @@ class ControlPoint(
         val location = msg.header("LOCATION") ?: return
         val ttl = msg.maxAgeSeconds.coerceIn(60, 7200)
         val known = mutex.withLock {
-            // Only at the same location: a device that moved (another port, a new address) is read
-            // again there, or commands would keep going to where it was.
             var hit = false
-            for (e in entries.values) {
-                if (e.device.location == location) {
+            for ((k, e) in entries) {
+                val sameDevice = k == udn || k.startsWith("$udn/")
+                if (e.device.location == location || sameDevice) {
                     e.expiresAt = time.markNow() + ttl.seconds
-                    hit = true
+                    // Elsewhere: it moved (another port, a new address), so it's read again there, or
+                    // commands would keep going to where it was. Not one found by its address, and a
+                    // location read lately not again: a device announcing from two (Ethernet and
+                    // Wi-Fi) would otherwise be read again on every announcement.
+                    hit = hit || e.device.location == location || e.direct || readLately(location)
                 }
             }
             if (!hit && !pendingLocations.add(location)) hit = true
@@ -254,12 +258,18 @@ class ControlPoint(
         scope.launch { fetchPending(location, ttl) }
     }
 
+    // When each location was last read (under mutex), so one isn't read again within REREAD_SECONDS.
+    private val readAt = HashMap<String, ComparableTimeMark>()
+
+    private fun readLately(location: String) = readAt[location]?.let { (it + REREAD_SECONDS.seconds).hasNotPassedNow() } == true
+
     private suspend fun fetchDescription(location: String, ttl: Int) {
         mutex.withLock { if (!pendingLocations.add(location)) return }
-        fetchPending(location, ttl)
+        fetchPending(location, ttl, direct = true)
     }
 
-    private suspend fun fetchPending(location: String, ttl: Int) {
+    private suspend fun fetchPending(location: String, ttl: Int, direct: Boolean = false) {
+        mutex.withLock { readAt[location] = time.markNow() }
         try {
             val resp = http.get(location)
             if (!resp.status.isSuccess()) return
@@ -270,7 +280,7 @@ class ControlPoint(
                 if (forgotten.keys.any { it.matches(location) }) return
                 val expires = time.markNow() + ttl.seconds
                 // What was at another location under these UDNs moved here.
-                devices.forEach { d -> entries[d.udn] = Entry(d, expires) }
+                devices.forEach { d -> entries[d.udn] = Entry(d, expires, direct) }
                 if (devices.isNotEmpty()) publish()
             }
         } catch (_: Throwable) {
@@ -282,6 +292,7 @@ class ControlPoint(
     }
 
     private suspend fun purgeExpired() = mutex.withLock {
+        readAt.keys.removeAll { !readLately(it) }
         if (entries.values.removeAll { it.expiresAt.hasPassedNow() }) publish()
     }
 
@@ -296,6 +307,7 @@ class ControlPoint(
         const val PROBE_HTTP_TIMEOUT_MS = 3_000L
         const val DIRECT_TTL_SECONDS = 1800
         const val FORGOTTEN_IGNORE_SECONDS = 10
+        const val REREAD_SECONDS = 600
     }
 }
 

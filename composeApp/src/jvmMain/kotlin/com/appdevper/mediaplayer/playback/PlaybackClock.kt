@@ -26,7 +26,7 @@ internal class PlaybackClock(
     }
 
     /** Holds the running clock (not a shown seek target), so frames stay in step after [play]. */
-    @Synchronized fun pause(bufferedMs: Long, hasAudio: Boolean) {
+    @Synchronized fun pause(bufferedMs: () -> Long, hasAudio: Boolean) {
         wallBaseMs = ms(bufferedMs, hasAudio)
         paused = true
     }
@@ -54,16 +54,17 @@ internal class PlaybackClock(
     /** Audio is what's advancing the clock (it's being heard), as opposed to the wall clock. */
     @Synchronized fun audioIsClock(hasAudio: Boolean): Boolean = hasAudio && audioEndMs >= 0 && !audioRanOut
 
-    /** Now, with [bufferedMs] of the written audio not heard yet. */
-    @Synchronized fun ms(bufferedMs: Long, hasAudio: Boolean): Long {
+    /** Now, with [bufferedMs] of the written audio not heard yet (read here, in step with what was written). */
+    @Synchronized fun ms(bufferedMs: () -> Long, hasAudio: Boolean): Long {
         if (!audioIsClock(hasAudio)) return wallMs()
-        if (bufferedMs <= 0 && !paused && nowNs() - audioWrittenAtNs > audioRanOutMs * 1_000_000) {
+        val buffered = bufferedMs()
+        if (buffered <= 0 && !paused && nowNs() - audioWrittenAtNs > audioRanOutMs * 1_000_000) {
             wallBaseMs = audioEndMs
             wallStartNs = nowNs()
             audioRanOut = true
             return wallMs()
         }
-        return (audioEndMs - bufferedMs).coerceAtLeast(0)
+        return (audioEndMs - buffered).coerceAtLeast(0)
     }
 
     private fun wallMs(): Long = if (paused) wallBaseMs else wallBaseMs + (nowNs() - wallStartNs) / 1_000_000
