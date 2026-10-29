@@ -188,9 +188,15 @@ private fun SearchingCard(searching: Boolean, onRefresh: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(if (searching) "Looking for media servers…" else "No media servers found", style = MaterialTheme.typography.titleSmall, color = c.textPrimary)
             Text("NAS boxes, PCs and phones running this app on the same Wi‑Fi show up here.", style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
-            if (!searching) {
-                PillButton("Search again", onRefresh, style = PillStyle.Secondary, icon = AppIcons.Refresh, modifier = Modifier.padding(top = 10.dp))
-            }
+            // There while it searches too (it says so), so the card keeps its size.
+            PillButton(
+                if (searching) "Searching…" else "Search again",
+                onRefresh,
+                enabled = !searching,
+                style = PillStyle.Secondary,
+                icon = AppIcons.Refresh,
+                modifier = Modifier.padding(top = 10.dp),
+            )
         }
     }
 }

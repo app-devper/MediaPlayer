@@ -71,6 +71,29 @@ class LocalPlayerViewTest {
     }
 
     @Test
+    fun theSongControlsStayPutWhileItLoads() = runComposeUiTest {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val engine = FakeEngine()
+        val session = playbackSession(FakeRenderer(), scope, engine, pollIntervalMs = 50)
+        try {
+            session.play(song, listOf(song), autoPlay = false)
+            setContent { AppTheme { PlayerScreen(PlayerViewModel(session)) } }
+            waitForIdle()
+            val before = onNodeWithContentDescription("Play").fetchSemanticsNode().boundsInRoot
+            // Loading (buffering): "Loading" shows under the title, and the buttons stay where they were.
+            engine.facts = engine.facts.copy(playing = true, loading = true)
+            waitUntil(timeoutMillis = 3_000) { onAllNodesWithText("Loading").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(before.top, onNodeWithContentDescription("Pause").fetchSemanticsNode().boundsInRoot.top)
+            // Loaded: still there.
+            engine.facts = engine.facts.copy(loading = false)
+            waitUntil(timeoutMillis = 3_000) { onAllNodesWithText("Loading").fetchSemanticsNodes().isEmpty() }
+            assertEquals(before.top, onNodeWithContentDescription("Pause").fetchSemanticsNode().boundsInRoot.top)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
     fun clickingTheVideoPlaysAndPausesEachTime() {
         // The desktop picture comes from the app's FFmpeg engine; nothing is loaded in it here.
         startKoin { modules(module { single { FfmpegPlaybackEngine() } }) }

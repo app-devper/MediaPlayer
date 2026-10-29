@@ -4,7 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -66,6 +68,8 @@ internal fun SongView(
     durationMs: Long,
     /** Null: the position is shown but can't be moved (a sender's music). */
     onSeek: ((Long) -> Unit)?,
+    /** False: nothing to show a position of (a photo). */
+    showPosition: Boolean = true,
     /** Null: no play button (nothing to play, or a sender that takes no commands). */
     playing: Boolean?,
     onPlayPause: () -> Unit,
@@ -96,18 +100,25 @@ internal fun SongView(
         detail?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.padding(top = 4.dp))
         }
-        source?.let { SourceLine(it) }
-        error?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = c.danger,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 10.dp).semantics { liveRegion = LiveRegionMode.Polite },
-            )
+        // One line, always there: "Loading", where it plays, or what went wrong come and go (on every
+        // load) without moving the position and the buttons under them.
+        Box(Modifier.padding(top = 12.dp).heightIn(min = STATUS_HEIGHT), contentAlignment = Alignment.Center) {
+            when {
+                error != null -> Text(
+                    error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.danger,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+                source != null -> SourceLine(source)
+            }
         }
-        Spacer(Modifier.height(20.dp))
-        if (durationMs > 0 || onSeek != null) SeekBar(positionMs, durationMs, onSeek)
+        Spacer(Modifier.height(12.dp))
+        // There before the duration is known (a sender says it later), so nothing moves when it is.
+        if (showPosition) SeekBar(positionMs, durationMs, onSeek)
         Spacer(Modifier.height(8.dp))
         if (playing != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -131,7 +142,7 @@ internal fun SongView(
 private fun SourceLine(source: SongSource) {
     val c = AppTheme.colors
     Row(
-        Modifier.padding(top = 12.dp).border(1.dp, c.border, Radius.pill).padding(horizontal = 12.dp, vertical = 6.dp),
+        Modifier.border(1.dp, c.border, Radius.pill).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -176,6 +187,9 @@ private fun SeekBar(positionMs: Long, durationMs: Long, onSeek: ((Long) -> Unit)
         }
     }
 }
+
+/** The status line's height: one pill, so it never pushes what's under it. */
+private val STATUS_HEIGHT = 30.dp
 
 /** The artwork's size: big enough to recognise, small enough that the controls stay on a phone screen. */
 private val ARTWORK = 240.dp
