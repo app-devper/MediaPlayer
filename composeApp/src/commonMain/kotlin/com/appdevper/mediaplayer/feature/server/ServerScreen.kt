@@ -55,6 +55,7 @@ import com.appdevper.mediaplayer.designsystem.components.StatusDot
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
 import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
+import com.appdevper.mediaplayer.ui.countOf
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
@@ -166,9 +167,9 @@ private fun StatusCard(state: ServerUiState, onStart: () -> Unit, onStop: () -> 
         }
         if (status is ServerStatus.Running) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CountChip(AppIcons.Film, status.counts.countOf(MediaKind.VIDEO), "videos")
-                CountChip(AppIcons.Music, status.counts.countOf(MediaKind.AUDIO), "songs")
-                CountChip(AppIcons.Image, status.counts.countOf(MediaKind.IMAGE), "photos")
+                CountChip(AppIcons.Film, status.counts.countOf(MediaKind.VIDEO), "video")
+                CountChip(AppIcons.Music, status.counts.countOf(MediaKind.AUDIO), "song")
+                CountChip(AppIcons.Image, status.counts.countOf(MediaKind.IMAGE), "photo")
             }
             Text(status.url, style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
         }
@@ -212,7 +213,7 @@ private fun CountChip(icon: androidx.compose.ui.graphics.vector.ImageVector, cou
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(icon, null, Modifier.size(14.dp), tint = c.textSecondary)
-        Text("$count $label", style = MaterialTheme.typography.labelMedium, color = c.textPrimary)
+        Text(countOf(count, label), style = MaterialTheme.typography.labelMedium, color = c.textPrimary)
     }
 }
 

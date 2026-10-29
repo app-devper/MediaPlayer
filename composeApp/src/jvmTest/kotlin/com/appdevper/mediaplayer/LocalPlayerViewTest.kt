@@ -1,6 +1,10 @@
 package com.appdevper.mediaplayer
 
 import com.appdevper.mediaplayer.testing.FakeEngine
+import com.appdevper.mediaplayer.testing.FakeRenderer
+import com.appdevper.mediaplayer.testing.playbackSession
+import com.appdevper.mediaplayer.feature.player.PlayerScreen
+import com.appdevper.mediaplayer.feature.player.PlayerViewModel
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -41,26 +45,14 @@ class LocalPlayerViewTest {
     private val clip = MediaEntry("v1", "0", "Weekend in Chiang Mai", MediaKind.VIDEO, streamUrl = "http://h/v1.mp4")
 
     @Test
-    fun theSongControlsPlayPauseAndSetTheVolume() = runComposeUiTest {
+    fun aSongOnThisDeviceHasTheSongLayoutsControls() = runComposeUiTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         val engine = FakeEngine()
-        val player = LocalPlayer(engine, scope)
-        val volumes = mutableListOf<String>()
+        val session = playbackSession(FakeRenderer(), scope, engine)
         try {
-            player.load(song, autoPlay = false, startPositionMs = 0)
-            setContent {
-                AppTheme {
-                    LocalPlayerView(
-                        player = player,
-                        title = song.title,
-                        isAudio = true,
-                        volume = 60,
-                        muted = false,
-                        onVolumeChange = { volumes += "volume:$it" },
-                        onMutedChange = { volumes += "muted:$it" },
-                    )
-                }
-            }
+            session.play(song, listOf(song), autoPlay = false)
+            setContent { AppTheme { PlayerScreen(PlayerViewModel(session)) } }
+            onNodeWithText("Khon Kaen Blues").assertExists()
             onNodeWithContentDescription("Play").performClick()
             waitForIdle()
             onNodeWithContentDescription("Pause").performClick()
@@ -68,9 +60,11 @@ class LocalPlayerViewTest {
             onNodeWithContentDescription("Play").assertExists()
             assertEquals(listOf("load:a1@0", "play", "pause"), engine.calls)
 
-            // Desktop's bar has a mute button (phones use their volume keys).
+            // Desktop has no volume keys: mute is here (phones use theirs).
             onNodeWithContentDescription("Mute (M)").performClick()
-            assertEquals(listOf("muted:true"), volumes)
+            waitForIdle()
+            assertEquals(0f, engine.gain)
+            onNodeWithContentDescription("Unmute (M)").assertExists()
         } finally {
             scope.cancel()
         }
@@ -89,7 +83,7 @@ class LocalPlayerViewTest {
                     player.load(clip, autoPlay = true, startPositionMs = 0)
                     setContent {
                         AppTheme {
-                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
+                            LocalPlayerView(player, clip.title, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
                         }
                     }
                     repeat(2) {
@@ -125,7 +119,7 @@ class LocalPlayerViewTest {
                     player.selectSubtitle(SubtitleChoice.File(Subtitle("http://h/v1.srt", "v1.srt")))
                     setContent {
                         AppTheme {
-                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
+                            LocalPlayerView(player, clip.title, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
                         }
                     }
                     waitUntil(timeoutMillis = 2_000) { onAllNodesWithText("Hello there").fetchSemanticsNodes().isNotEmpty() }
@@ -155,7 +149,7 @@ class LocalPlayerViewTest {
                     player.load(clip, autoPlay = false, startPositionMs = 0)
                     setContent {
                         AppTheme {
-                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
+                            LocalPlayerView(player, clip.title, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {})
                         }
                     }
                     val english = TextTrack("0", "English", "en")
@@ -184,7 +178,7 @@ class LocalPlayerViewTest {
                     player.load(clip, autoPlay = false, startPositionMs = 0)
                     setContent {
                         AppTheme {
-                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {}, mouse = false)
+                            LocalPlayerView(player, clip.title, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {}, mouse = false)
                         }
                     }
                     // Touch: a tap on the picture (off the big button in the middle) doesn't play; the button does.

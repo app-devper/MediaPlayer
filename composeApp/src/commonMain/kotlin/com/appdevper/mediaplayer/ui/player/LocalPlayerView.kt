@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.ui.player
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -7,12 +9,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,10 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,20 +54,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.appdevper.mediaplayer.designsystem.components.ThinSlider
 import com.appdevper.mediaplayer.designsystem.icons.AppIcons
-import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.session.LocalPlayer
-import com.appdevper.mediaplayer.platform.AirPlayButton
 import com.appdevper.mediaplayer.platform.VideoSurface
 import com.appdevper.mediaplayer.platform.hidePointer
 import com.appdevper.mediaplayer.platform.pointerIsMouse
-import com.appdevper.mediaplayer.platform.supportsAirPlay
 import com.appdevper.mediaplayer.platform.videoSurfaceHasControls
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
@@ -80,9 +73,9 @@ import kotlinx.coroutines.flow.onStart
 import kotlin.math.roundToInt
 
 /**
- * The app's local player on screen, the same on every platform: the controls for a song; for a video
- * the picture ([VideoSurface]) with controls over it that hide while it plays. Only the picture is
- * platform code (and AVKit's own controls on iOS). The player plays on when this leaves the screen.
+ * A video on the app's local player, the same on every platform: the picture ([VideoSurface]) with
+ * controls over it that hide while it plays (songs use [SongView]). Only the picture is platform code
+ * (and AVKit's own controls on iOS). The player plays on when this leaves the screen.
  *
  * With a [mouse] (desktop: [pointerIsMouse]) a click on the picture plays or pauses, a double-click goes
  * full screen, the pointer hides with the controls, keys are shortcuts (Space, ← →, F, M) and the bar
@@ -92,7 +85,6 @@ import kotlin.math.roundToInt
 internal fun LocalPlayerView(
     player: LocalPlayer,
     title: String,
-    isAudio: Boolean,
     /** 0..100, and muted: the session's local volume. */
     volume: Int,
     muted: Boolean,
@@ -106,7 +98,7 @@ internal fun LocalPlayerView(
     /** The picture brings its own controls (AVKit), so ours don't go over it. */
     surfaceHasControls: Boolean = videoSurfaceHasControls,
 ) {
-    if (!isAudio && surfaceHasControls) {
+    if (surfaceHasControls) {
         Box(modifier.fillMaxSize()) {
             VideoSurface(title, Modifier.fillMaxSize())
             // Above AVKit's own controls.
@@ -133,41 +125,15 @@ internal fun LocalPlayerView(
         }
     }
 
-    val c = AppTheme.colors
-    val content = if (isAudio) c.textPrimary else Color.White
+    val content = Color.White
     var seeking by remember { mutableStateOf(false) }
     val trailing: @Composable RowScope.() -> Unit = {
         if (mouse) {
             VolumeControls(shownVolume, ::toggleMute, { onMutedChange(false); onVolumeChange(it) }, content)
         }
-        // AVKit's controls had the AirPlay button; songs keep one on our bar.
-        if (isAudio && supportsAirPlay) AirPlayButton(Modifier.size(40.dp), tint = content)
     }
 
-    if (isAudio) {
-        // Songs: no picture, the bar is always shown, in theme colors.
-        Column(modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.Bottom) {
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                when {
-                    error != null -> Text(error.orEmpty(), color = c.danger, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    buffering -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = c.textSecondary)
-                }
-            }
-            PlayerControlBar(
-                playing = playing,
-                positionMs = status?.positionMs ?: 0,
-                durationMs = status?.durationMs ?: 0,
-                onPlayPause = ::togglePlay,
-                onSeek = player::seek,
-                content = content,
-                onDraggingChange = { seeking = it },
-                trailing = trailing,
-            )
-        }
-        return
-    }
-
-    // Video: the bar floats over the picture and hides by itself while it plays. Pointer moves, taps and
+    // The bar floats over the picture and hides by itself while it plays. Pointer moves, taps and
     // keys go through a flow, not state, so they don't recompose the player; each starts the timer over.
     val activity = remember { MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
     var controlsVisible by remember { mutableStateOf(true) }

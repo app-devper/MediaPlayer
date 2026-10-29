@@ -28,6 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -77,14 +79,21 @@ private fun TargetPicker(state: ShellUiState, onSelect: (PlaybackTarget) -> Unit
     val c = AppTheme.colors
     val remote = state.target as? PlaybackTarget.Renderer
     Box {
+        // Always says where things play: this device, or the TV (green, as anything playing elsewhere).
         Row(
-            Modifier.interactive({ open = true }, shape = Radius.medium).padding(horizontal = 10.dp, vertical = 6.dp),
+            Modifier.interactive({ open = true }, shape = Radius.medium)
+                .semantics(mergeDescendants = true) { contentDescription = "Play on ${remote?.device?.name ?: "this device"}, change" }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (remote != null) Icon(AppIcons.Cast, null, Modifier.size(18.dp), tint = c.success)
+            if (remote != null) {
+                Icon(AppIcons.Cast, null, Modifier.size(18.dp), tint = c.success)
+            } else {
+                Icon(AppIcons.Phone, null, Modifier.size(18.dp), tint = c.textSecondary)
+            }
             Text(
-                remote?.device?.name ?: "Media Player",
+                remote?.device?.name ?: "This device",
                 style = MaterialTheme.typography.titleLarge,
                 color = c.textPrimary,
                 maxLines = 1,

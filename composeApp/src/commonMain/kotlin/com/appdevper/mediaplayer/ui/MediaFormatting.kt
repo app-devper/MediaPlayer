@@ -30,3 +30,6 @@ fun formatClock(ms: Long): String {
     return if (h > 0) "$h:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
     else "$m:${s.toString().padStart(2, '0')}"
 }
+
+/** "1 item", "3 items": [count] with [one], or [many] for any other number. */
+fun countOf(count: Int, one: String, many: String = one + "s"): String = "$count ${if (count == 1) one else many}"

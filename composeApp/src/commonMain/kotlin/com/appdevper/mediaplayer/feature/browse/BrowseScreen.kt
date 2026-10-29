@@ -46,6 +46,7 @@ import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.ui.countOf
 import com.appdevper.mediaplayer.ui.formatClock
 import com.appdevper.mediaplayer.ui.icon
 import org.koin.compose.viewmodel.koinViewModel
@@ -101,7 +102,7 @@ private fun Header(state: BrowseUiState) {
     val c = AppTheme.colors
     Column(Modifier.padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 12.dp)) {
         Text(state.title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        val count = if (state.query.isBlank()) "${state.all.size} items" else "${state.visible.size} of ${state.all.size} items"
+        val count = if (state.query.isBlank()) countOf(state.all.size, "item") else "${state.visible.size} of ${countOf(state.all.size, "item")}"
         Text(listOf(state.deviceName.takeIf { it != state.title }.orEmpty(), count).filter { it.isNotEmpty() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = c.textTertiary)
     }
 }
@@ -170,7 +171,7 @@ private fun NoMatches(query: String) {
 }
 
 private fun MediaEntry.subtitleLine(): String = buildList {
-    if (isFolder) childCount?.let { add("$it items") }
+    if (isFolder) childCount?.let { add(countOf(it, "item")) }
     if (kind != MediaKind.FOLDER) artist?.let(::add)
     album?.let(::add)
     durationMs?.let { add(formatClock(it)) }
