@@ -80,9 +80,7 @@ import com.appdevper.mediaplayer.ui.joinDetails
 import com.appdevper.mediaplayer.ui.player.LocalPlayerView
 import com.appdevper.mediaplayer.ui.player.SongSource
 import com.appdevper.mediaplayer.ui.player.SongView
-import com.appdevper.mediaplayer.platform.AirPlayButton
 import com.appdevper.mediaplayer.platform.pointerIsMouse
-import com.appdevper.mediaplayer.platform.supportsAirPlay
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Now playing (replaces `FullScreenPlayerActivity`, `ImageActivity` and the remote controls). */
@@ -129,8 +127,6 @@ private fun LocalSong(ui: PlayerUi.Local, vm: PlayerViewModel) {
                 vm.setMuted(true)
             }
         })
-        // AVKit's controls have the AirPlay button for videos; songs have it here.
-        if (supportsAirPlay) AirPlayButton(Modifier.padding(top = 8.dp).size(40.dp), tint = AppTheme.colors.textPrimary)
         UpNext(ui.controls.upNext, vm)
     }
 }
