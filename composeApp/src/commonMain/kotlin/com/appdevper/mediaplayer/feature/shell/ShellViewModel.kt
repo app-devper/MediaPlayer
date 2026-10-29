@@ -4,10 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.MediaDevice
-import com.appdevper.mediaplayer.domain.model.MediaEntry
+import com.appdevper.mediaplayer.domain.model.NowPlaying
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.ServerStatus
-import com.appdevper.mediaplayer.domain.model.TransportState
 import com.appdevper.mediaplayer.domain.repository.DeviceRepository
 import com.appdevper.mediaplayer.domain.session.AirPlayReceiverSession
 import com.appdevper.mediaplayer.domain.session.MediaServerSession
@@ -30,12 +29,8 @@ data class ShellUiState(
     val searching: Boolean = false,
     val serverStatus: ServerStatus = ServerStatus.Stopped,
     val target: PlaybackTarget = PlaybackTarget.Local,
-    val nowPlaying: MediaEntry? = null,
-    /**
-     * Where it plays (this device or a renderer), playing or paused, for the mini player's button.
-     * Null when there's nothing to control here (not started, stopped, or a photo).
-     */
-    val playing: Boolean? = null,
+    /** What plays now, for the mini player and the sidebar; its play/pause is the mini player's button. */
+    val nowPlaying: NowPlaying = NowPlaying.Nothing,
     val airPlay: AirPlayActivity = AirPlayActivity(),
     /** Adding a media server by its address (Home › Media servers). */
     val addServer: AddServerState = AddServerState.Idle,
@@ -43,7 +38,7 @@ data class ShellUiState(
     val savedAddresses: List<String> = emptyList(),
 ) {
     /** Something to show under "Now playing": our own item, or audio a sender plays here. */
-    val hasNowPlaying: Boolean get() = nowPlaying != null || airPlay.audioOnly
+    val hasNowPlaying: Boolean get() = nowPlaying != NowPlaying.Nothing
 }
 
 /** State for the app chrome: sidebar, "Play on" picker and the mini player. */
@@ -68,24 +63,18 @@ class ShellViewModel(
         devices.isSearching,
         server.status,
         session.state,
-        airPlay.activity,
-    ) { devices, searching, server, playback, airPlayActivity ->
+        session.nowPlaying,
+    ) { devices, searching, server, playback, nowPlaying ->
         ShellUiState(
             servers = devices.filter { it.isServer },
             renderers = devices.filter { it.isRenderer },
             searching = searching,
             serverStatus = server,
             target = playback.target,
-            nowPlaying = playback.current,
-            playing = when (playback.playback.status?.state) {
-                TransportState.PLAYING, TransportState.TRANSITIONING -> true
-                TransportState.PAUSED -> false
-                // A renderer can always be told to play.
-                else -> if (playback.target is PlaybackTarget.Renderer) false else null
-            },
-            airPlay = airPlayActivity,
+            nowPlaying = nowPlaying,
         )
-    }.combine(addServer) { state, adding -> state.copy(addServer = adding) }
+    }.combine(airPlay.activity) { state, activity -> state.copy(airPlay = activity) }
+        .combine(addServer) { state, adding -> state.copy(addServer = adding) }
         .combine(devices.savedAddresses) { state, saved -> state.copy(savedAddresses = saved) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShellUiState())
 
@@ -117,7 +106,7 @@ class ShellViewModel(
 
     fun selectTarget(target: PlaybackTarget) = session.setTarget(target)
 
-    /** Play/pause where the current item plays: here or on a renderer. */
+    /** Play/pause where it plays: here, on a renderer, or the sender's music. */
     fun togglePause() = session.togglePause()
 }
 

@@ -20,9 +20,8 @@ import org.bytedeco.ffmpeg.global.avcodec.avcodec_decode_subtitle2
 import org.bytedeco.ffmpeg.global.avcodec.avsubtitle_free
 import org.bytedeco.ffmpeg.global.avutil.AVMEDIA_TYPE_SUBTITLE
 import org.bytedeco.ffmpeg.global.avutil.av_dict_get
-import com.appdevper.mediaplayer.domain.model.SubtitleCue
 import com.appdevper.mediaplayer.domain.model.TextTrack
-import com.appdevper.mediaplayer.domain.model.textAt
+import com.appdevper.mediaplayer.domain.subtitle.CueList
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleFiles
 import com.appdevper.mediaplayer.domain.subtitle.SubtitleParser
 import org.bytedeco.ffmpeg.avformat.AVFormatContext
@@ -133,10 +132,9 @@ class FfmpegPlayer(
 
     /** A text subtitle stream in the file: while selected, decoded on the demux thread as it's read, its cues kept. */
     private class SubtitleStream(val index: Int, val track: TextTrack, val decoder: AVCodecContext, val clock: Clock) {
-        @Volatile var cues: List<SubtitleCue> = emptyList()
-        // Demux thread only: the decode target, reused; and a cue with no end yet, which the next one ends.
+        val cues = CueList(NO_END_MS)
+        // Demux thread only: the decode target, reused.
         val sub = AVSubtitle()
-        var open: SubtitleCue? = null
     }
 
     /** The subtitle stream to read (its index as a track id); the others are discarded, not downloaded. */
@@ -169,12 +167,8 @@ class FfmpegPlayer(
     private val shownSeek = AtomicReference<SeekRequest?>(null)
     // play(), pause(), seek() and the end-of-stream check: one at a time, so none undoes another.
     private val control = Any()
-    // When audio was last written (audio thread only), and whether it has run out: nothing heard and
-    // nothing written for AUDIO_RAN_OUT_MS (audio shorter than the video). Then the wall clock takes
-    // over from the audio's end, instead of the picture standing still. A shorter gap only holds the
-    // clock, so it stays in step when the audio comes back.
-    @Volatile private var audioWrittenAtNs = 0L
-    @Volatile private var audioRanOut = false
+    // What frames are timed against: the audio heard, else the wall clock.
+    private val playbackClock = PlaybackClock(paused = !autoPlay, audioRanOutMs = AUDIO_RAN_OUT_MS)
 
     private class Packet(val pkt: AVPacket?, val serial: Int, val flushTo: Long = -1L)
 
@@ -184,11 +178,6 @@ class FfmpegPlayer(
     @Volatile private var hasAudio = false
     @Volatile private var audioEnded = false
     @Volatile private var videoEnded = false
-    // Audio clock: pts at the end of what was written to the line.
-    @Volatile private var audioWrittenEndMs = -1L
-    // Wall clock for streams without audio.
-    @Volatile private var wallBaseMs = 0L
-    @Volatile private var wallStartNs = System.nanoTime()
 
     private val interrupt = object : AVIOInterruptCB.Callback_Pointer() {
         override fun call(opaque: Pointer?): Int = if (closing) 1 else 0
@@ -211,7 +200,7 @@ class FfmpegPlayer(
         if (!paused) return
         if (_status.value.ended) seek(0)
         paused = false
-        wallStartNs = System.nanoTime()
+        playbackClock.play()
         output.resume()
         // A seek made while paused is loaded now.
         _status.update { it.copy(playing = true, ended = false, buffering = it.buffering || shownSeek.get() != null) }
@@ -219,8 +208,7 @@ class FfmpegPlayer(
 
     fun pause() = synchronized(control) {
         if (paused) return
-        // The running clock (not a shown seek target), so frames stay in step after play().
-        wallBaseMs = playbackClockMs()
+        playbackClock.pause(output::bufferedMs, hasAudio)
         paused = true
         output.pause()
         _status.update { it.copy(playing = false) }
@@ -230,10 +218,7 @@ class FfmpegPlayer(
         val target = positionMs.coerceAtLeast(0)
         val request = SeekRequest(target, serial.incrementAndGet())
         // Until audio from after the seek is heard, frames are timed by the wall clock from the target.
-        audioWrittenEndMs = -1
-        audioRanOut = false
-        wallBaseMs = target
-        wallStartNs = System.nanoTime()
+        playbackClock.seek(target)
         shownSeek.set(request)
         pendingSeek.set(request)
         // Paused, the audio thread won't take the flush marker: drop what's buffered from before now,
@@ -274,35 +259,9 @@ class FfmpegPlayer(
         }
     }
 
-    /** Audio is what's advancing the clock (it's being heard), as opposed to the wall clock. */
-    private fun audioIsClock(): Boolean = hasAudio && audioWrittenEndMs >= 0 && !audioRanOut
+    private fun audioIsClock(): Boolean = playbackClock.audioIsClock(hasAudio)
 
-    /**
-     * What frames are timed against: the audio being heard; when there's none (after a seek, or it ran
-     * out), the wall clock, which runs on from the seek target or from the audio's end.
-     */
-    private fun playbackClockMs(): Long {
-        if (!audioIsClock()) return wallClockMs()
-        val written = audioWrittenEndMs
-        val buffered = output.bufferedMs()
-        if (buffered <= 0 && !paused && System.nanoTime() - audioWrittenAtNs > AUDIO_RAN_OUT_MS * 1_000_000) {
-            // Under the lock, so a write (or seek) in between wins, and pause()/play() see one clock.
-            synchronized(control) {
-                if (audioWrittenEndMs == written && !audioRanOut && !paused) {
-                    wallBaseMs = written
-                    wallStartNs = System.nanoTime()
-                    audioRanOut = true
-                }
-            }
-            return playbackClockMs()
-        }
-        return (written - buffered).coerceAtLeast(0)
-    }
-
-    private fun wallClockMs(): Long = when {
-        paused -> wallBaseMs
-        else -> wallBaseMs + (System.nanoTime() - wallStartNs) / 1_000_000
-    }
+    private fun playbackClockMs(): Long = playbackClock.ms(output::bufferedMs, hasAudio)
 
     // region demux
 
@@ -396,6 +355,7 @@ class FfmpegPlayer(
                             synchronized(control) {
                                 if (pendingSeek.get() == null && readSerial == serial.get() && !_status.value.ended) {
                                     _status.update { it.copy(ended = true, playing = false, buffering = false) }
+                                    playbackClock.pause(output::bufferedMs, hasAudio)
                                     paused = true
                                 }
                             }
@@ -525,31 +485,10 @@ class FfmpegPlayer(
                 pkt.duration() > 0 -> stream.clock.ms(pkt.pts() + pkt.duration())
                 else -> -1L
             }
-            stream.open?.let { open -> if (open.startMs < from && open.endMs > from) replaceCue(stream, open, open.copy(endMs = from)) }
-            val cue = SubtitleCue(from, if (end > from) end else from + NO_END_MS, text)
-            stream.open = cue.takeIf { end <= from }
-            addCue(stream, cue)
+            stream.cues.add(from, end, text)
         } finally {
             avsubtitle_free(sub)
         }
-    }
-
-    /** In start order; mostly an append, since packets come in order. A cue read again (a seek back) isn't added twice. */
-    private fun addCue(stream: SubtitleStream, cue: SubtitleCue) {
-        val cues = stream.cues
-        var at = cues.size
-        while (at > 0 && cues[at - 1].startMs > cue.startMs) at--
-        var i = at - 1
-        while (i >= 0 && cues[i].startMs == cue.startMs) if (cues[i--].text == cue.text) return
-        stream.cues = ArrayList<SubtitleCue>(cues.size + 1).apply {
-            addAll(cues.subList(0, at))
-            add(cue)
-            addAll(cues.subList(at, cues.size))
-        }
-    }
-
-    private fun replaceCue(stream: SubtitleStream, old: SubtitleCue, new: SubtitleCue) {
-        stream.cues = stream.cues.map { if (it === old) new else it }
     }
 
     /** A stream's time base and the file's start, copied out of fmt for the decoder threads. */
@@ -671,7 +610,7 @@ class FfmpegPlayer(
                 if (p.flushTo >= 0) {
                     avcodec_flush_buffers(ctx)
                     output.flush()
-                    audioWrittenEndMs = -1
+                    playbackClock.audioDropped()
                     skipBefore = p.flushTo
                     continue
                 }
@@ -704,12 +643,8 @@ class FfmpegPlayer(
                         output.flush()
                         break
                     }
-                    synchronized(control) {
-                        audioWrittenEndMs = (if (pts >= 0) pts else maxOf(audioWrittenEndMs, 0)) + converted * 1000L / rate
-                        audioWrittenAtNs = System.nanoTime()
-                        audioRanOut = false
-                    }
-                    if (p.serial != serial.get()) { audioWrittenEndMs = -1; break }
+                    playbackClock.audioWritten(pts, converted * 1000L / rate)
+                    if (p.serial != serial.get()) { playbackClock.audioDropped(); break }
                     played(p.serial, playbackClockMs())
                 }
                 if (p.pkt == null && p.serial == serial.get()) audioEnded = true

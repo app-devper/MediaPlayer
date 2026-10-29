@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.data.upnp
 
+import com.appdevper.mediaplayer.data.upnp.host.LocalDevice
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -25,6 +26,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.ComparableTimeMark
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -79,8 +81,11 @@ class ControlPoint(
     private val store: AddressStore = AddressStore.InMemory(),
     /** UDNs of devices this app runs itself (our own renderer, while it runs): never offered. */
     private val ownUdns: () -> Set<String> = { emptySet() },
+    /** When announcements expire (tests pass virtual time). */
+    private val time: TimeSource.WithComparableMarks = TimeSource.Monotonic,
 ) {
-    private class Entry(val device: UpnpDevice, var expiresAt: TimeSource.Monotonic.ValueTimeMark)
+    /** [direct]: found by asking its address ([addByAddress]), which keeps the location it was asked at. */
+    private class Entry(val device: UpnpDevice, var expiresAt: ComparableTimeMark, val direct: Boolean = false)
 
     private val mutex = Mutex()
     private val entries = LinkedHashMap<String, Entry>()
@@ -130,7 +135,7 @@ class ControlPoint(
         val target = ServerAddress.parse(text) ?: return
         mutex.withLock {
             // A probe of it still under way mustn't put it back: its late answers are ignored a while.
-            forgotten[target] = TimeSource.Monotonic.markNow() + FORGOTTEN_IGNORE_SECONDS.seconds
+            forgotten[target] = time.markNow() + FORGOTTEN_IGNORE_SECONDS.seconds
             if (entries.values.removeAll { target.matches(it.device.location) }) publish()
         }
         // Another saved address on the same host (e.g. host and host:port) still wants its devices.
@@ -139,7 +144,7 @@ class ControlPoint(
     }
 
     // Just-forgotten addresses, until when their late answers are ignored (under mutex).
-    private val forgotten = HashMap<ServerAddress, TimeSource.Monotonic.ValueTimeMark>()
+    private val forgotten = HashMap<ServerAddress, ComparableTimeMark>()
 
     /** Asks [address] directly from now on, and keeps it (once, whatever its letter case). */
     private fun keep(address: String) {
@@ -236,9 +241,14 @@ class ControlPoint(
         val known = mutex.withLock {
             var hit = false
             for ((k, e) in entries) {
-                if (k == udn || e.device.location == location) {
-                    e.expiresAt = TimeSource.Monotonic.markNow() + ttl.seconds
-                    hit = true
+                val sameDevice = k == udn || k.startsWith("$udn/")
+                if (e.device.location == location || sameDevice) {
+                    e.expiresAt = time.markNow() + ttl.seconds
+                    // Elsewhere: it moved (another port, a new address), so it's read again there, or
+                    // commands would keep going to where it was. Not one found by its address, and a
+                    // location read lately not again: a device announcing from two (Ethernet and
+                    // Wi-Fi) would otherwise be read again on every announcement.
+                    hit = hit || e.device.location == location || e.direct || readLately(location)
                 }
             }
             if (!hit && !pendingLocations.add(location)) hit = true
@@ -248,12 +258,18 @@ class ControlPoint(
         scope.launch { fetchPending(location, ttl) }
     }
 
+    // When each location was last read (under mutex), so one isn't read again within REREAD_SECONDS.
+    private val readAt = HashMap<String, ComparableTimeMark>()
+
+    private fun readLately(location: String) = readAt[location]?.let { (it + REREAD_SECONDS.seconds).hasNotPassedNow() } == true
+
     private suspend fun fetchDescription(location: String, ttl: Int) {
         mutex.withLock { if (!pendingLocations.add(location)) return }
-        fetchPending(location, ttl)
+        fetchPending(location, ttl, direct = true)
     }
 
-    private suspend fun fetchPending(location: String, ttl: Int) {
+    private suspend fun fetchPending(location: String, ttl: Int, direct: Boolean = false) {
+        mutex.withLock { readAt[location] = time.markNow() }
         try {
             val resp = http.get(location)
             if (!resp.status.isSuccess()) return
@@ -262,8 +278,9 @@ class ControlPoint(
             mutex.withLock {
                 forgotten.values.removeAll { it.hasPassedNow() }
                 if (forgotten.keys.any { it.matches(location) }) return
-                val expires = TimeSource.Monotonic.markNow() + ttl.seconds
-                devices.forEach { d -> entries[d.udn] = Entry(d, expires) }
+                val expires = time.markNow() + ttl.seconds
+                // What was at another location under these UDNs moved here.
+                devices.forEach { d -> entries[d.udn] = Entry(d, expires, direct) }
                 if (devices.isNotEmpty()) publish()
             }
         } catch (_: Throwable) {
@@ -275,6 +292,7 @@ class ControlPoint(
     }
 
     private suspend fun purgeExpired() = mutex.withLock {
+        readAt.keys.removeAll { !readLately(it) }
         if (entries.values.removeAll { it.expiresAt.hasPassedNow() }) publish()
     }
 
@@ -289,6 +307,7 @@ class ControlPoint(
         const val PROBE_HTTP_TIMEOUT_MS = 3_000L
         const val DIRECT_TTL_SECONDS = 1800
         const val FORGOTTEN_IGNORE_SECONDS = 10
+        const val REREAD_SECONDS = 600
     }
 }
 
@@ -314,8 +333,6 @@ internal class ServerAddress private constructor(val text: String, val host: Str
         if (host == null) location == text else hostOf(location).equals(host, ignoreCase = true)
 
     companion object {
-        private val OWN_SERVER_PORTS = listOf(8191, 8192, 8193, 8194)
-
         fun parse(input: String): ServerAddress? {
             val text = input.trim()
             if (text.isEmpty() || text.any { it.isWhitespace() }) return null
@@ -326,7 +343,7 @@ internal class ServerAddress private constructor(val text: String, val host: Str
             val host = text.substringBefore(':')
             val port = text.substringAfter(':', "").takeIf { it.isNotEmpty() }?.let { it.toIntOrNull()?.takeIf { p -> p in 1..65535 } ?: return null }
             if (host.isEmpty() || !host.all { it.isLetterOrDigit() || it == '.' || it == '-' }) return null
-            val ports = port?.let(::listOf) ?: OWN_SERVER_PORTS
+            val ports = port?.let(::listOf) ?: LocalDevice.SERVER_PORTS
             return ServerAddress(text, host, ports.map { "http://$host:$it/description.xml" })
         }
 

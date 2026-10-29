@@ -74,11 +74,8 @@ import com.appdevper.mediaplayer.designsystem.theme.AppTheme
 import com.appdevper.mediaplayer.designsystem.theme.Radius
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
-import com.appdevper.mediaplayer.domain.model.PlaybackState
-import com.appdevper.mediaplayer.domain.model.PlaybackTarget
 import com.appdevper.mediaplayer.domain.model.RepeatMode
 import com.appdevper.mediaplayer.domain.model.TransportState
-import com.appdevper.mediaplayer.domain.session.drives
 import com.appdevper.mediaplayer.ui.LocalFullscreen
 import com.appdevper.mediaplayer.ui.formatClock
 import com.appdevper.mediaplayer.ui.icon
@@ -90,27 +87,20 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun PlayerScreen() {
     val vm = koinViewModel<PlayerViewModel>()
-    val state by vm.uiState.collectAsStateWithLifecycle()
-    val airPlay by vm.airPlay.collectAsStateWithLifecycle()
-    val item = state.current
-    when {
-        airPlay.audioOnly -> AirPlayAudio(
-            airPlay,
-            onPrevious = vm::previous,
-            onPlayPause = vm::senderPlayPause,
-            onNext = vm::next,
-        )
-        item == null -> EmptyState(AppIcons.ListMusic, "Nothing playing", "Pick a video, song or photo from a media server.")
-        state.target is PlaybackTarget.Renderer -> RemoteControls(state, item, vm)
-        item.kind == MediaKind.IMAGE -> PhotoViewer(state, vm)
-        // Its AirPlay video: the sender's queue decides next/previous.
-        else -> LocalPlayer(state, item, vm, senderSkips = airPlay.drives(item))
+    val ui by vm.uiState.collectAsStateWithLifecycle()
+    when (val u = ui) {
+        PlayerUi.Empty -> EmptyState(AppIcons.ListMusic, "Nothing playing", "Pick a video, song or photo from a media server.")
+        is PlayerUi.SenderAudio -> AirPlayAudio(u.audio, onPrevious = vm::previous, onPlayPause = vm::togglePause, onNext = vm::next)
+        is PlayerUi.Remote -> RemoteControls(u, vm)
+        is PlayerUi.Photos -> PhotoViewer(u, vm)
+        is PlayerUi.Local -> LocalPlayer(u, vm)
     }
 }
 
 @Composable
-private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel, senderSkips: Boolean) {
+private fun LocalPlayer(ui: PlayerUi.Local, vm: PlayerViewModel) {
     val c = AppTheme.colors
+    val item = ui.entry
     val subtitles by vm.subtitles.collectAsStateWithLifecycle()
     val textTracks by vm.textTracks.collectAsStateWithLifecycle()
     val isAudio = item.kind == MediaKind.AUDIO
@@ -137,8 +127,8 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                     player = vm.localPlayer,
                     title = item.title,
                     isAudio = isAudio,
-                    volume = state.playback.volume ?: 100,
-                    muted = state.playback.muted,
+                    volume = ui.volume,
+                    muted = ui.muted,
                     onVolumeChange = vm::setVolume,
                     onMutedChange = vm::setMuted,
                     modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
@@ -157,15 +147,14 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
                             subtitles.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = c.danger) }
                         }
                         if (item.subtitles.isNotEmpty() || textTracks.isNotEmpty()) SubtitleMenu(item.subtitles, textTracks, subtitles, vm)
-                        if (!senderSkips) QueueModes(state, vm)
+                        QueueModes(ui.controls.modes, vm)
                         GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, tint = c.textPrimary)
-                        GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = senderSkips || state.hasNext, tint = c.textPrimary)
+                        GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = ui.controls.nextEnabled, tint = c.textPrimary)
                     }
                 }
-                if (state.queue.size > 1) {
+                if (ui.controls.upNext.isNotEmpty()) {
                     item { SectionLabel("Up next") }
-                    // In the order they play (shuffled or not).
-                    items(state.order, key = { state.queue[it].id }) { i -> QueueRow(state.queue[i], i == state.index) { vm.playAt(i) } }
+                    items(ui.controls.upNext, key = { it.entry.id }) { row -> QueueRow(row) { vm.playAt(row.index) } }
                 }
                 item { Spacer(Modifier.height(24.dp)) }
             }
@@ -174,7 +163,9 @@ private fun LocalPlayer(state: PlaybackState, item: MediaEntry, vm: PlayerViewMo
 }
 
 @Composable
-private fun QueueRow(e: MediaEntry, current: Boolean, onClick: () -> Unit) {
+private fun QueueRow(row: QueueRow, onClick: () -> Unit) {
+    val e = row.entry
+    val current = row.current
     ListRow(
         title = e.title,
         subtitle = e.subtitleLine(),
@@ -186,18 +177,19 @@ private fun QueueRow(e: MediaEntry, current: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PhotoViewer(state: PlaybackState, vm: PlayerViewModel) {
-    val pager = rememberPagerState(initialPage = state.index.coerceAtLeast(0)) { state.queue.size }
-    LaunchedEffect(state.index) { if (pager.currentPage != state.index && state.index >= 0) pager.scrollToPage(state.index) }
+private fun PhotoViewer(ui: PlayerUi.Photos, vm: PlayerViewModel) {
+    val photos = ui.photos
+    val pager = rememberPagerState(initialPage = ui.index.coerceAtLeast(0)) { photos.size }
+    LaunchedEffect(ui.index) { if (pager.currentPage != ui.index && ui.index >= 0) pager.scrollToPage(ui.index) }
     LaunchedEffect(pager) {
-        snapshotFlow { pager.settledPage }.collect { if (it != vm.uiState.value.index) vm.playAt(it) }
+        snapshotFlow { pager.settledPage }.collect { if (it != (vm.uiState.value as? PlayerUi.Photos)?.index) vm.playAt(it) }
     }
     Column(Modifier.fillMaxSize()) {
-        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { state.queue[it].id }) { page ->
-            ZoomableImage(state.queue[page].streamUrl.orEmpty(), state.queue[page].title)
+        HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth(), key = { photos[it].id }) { page ->
+            ZoomableImage(photos[page].streamUrl.orEmpty(), photos[page].title)
         }
         Text(
-            "${pager.currentPage + 1} / ${state.queue.size} · ${state.queue.getOrNull(pager.currentPage)?.title.orEmpty()}",
+            "${pager.currentPage + 1} / ${photos.size} · ${photos.getOrNull(pager.currentPage)?.title.orEmpty()}",
             style = MaterialTheme.typography.bodySmall,
             color = AppTheme.colors.textTertiary,
             textAlign = TextAlign.Center,
@@ -231,10 +223,11 @@ private fun ZoomableImage(url: String, title: String) {
 }
 
 @Composable
-private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerViewModel) {
+private fun RemoteControls(ui: PlayerUi.Remote, vm: PlayerViewModel) {
     val c = AppTheme.colors
-    val renderer = (state.target as PlaybackTarget.Renderer).device
-    val status = state.playback.status
+    val item = ui.entry
+    val renderer = ui.renderer
+    val status = ui.status
     var dragging by remember { mutableStateOf<Float?>(null) }
 
     Column(
@@ -265,7 +258,7 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
                 color = c.textSecondary,
             )
         }
-        state.playback.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
+        ui.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
 
         if (item.kind != MediaKind.IMAGE) {
             val duration = (status?.durationMs?.takeIf { it > 0 } ?: item.durationMs ?: 0L)
@@ -290,13 +283,13 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             GhostIconButton(AppIcons.Stop, "Stop", { vm.stop() }, size = 44.dp, iconSize = 20.dp, tint = c.textSecondary)
             GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
-            CircleButton(if (status?.state == TransportState.PLAYING) AppIcons.Pause else AppIcons.Play, "Play/Pause", { vm.togglePause() }, size = 64.dp)
-            GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = state.hasNext, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
+            CircleButton(if (ui.controls.playing) AppIcons.Pause else AppIcons.Play, "Play/Pause", { vm.togglePause() }, size = 64.dp)
+            GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = ui.controls.nextEnabled, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
             Spacer(Modifier.size(44.dp))
         }
-        if (!state.casted && item.kind != MediaKind.IMAGE) Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(state, vm) }
+        if (ui.controls.modes != null) Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(ui.controls.modes, vm) }
 
-        state.playback.volume?.let { vol ->
+        ui.volume?.let { vol ->
             var local by remember(vol) { mutableFloatStateOf(vol.toFloat()) }
             Row(Modifier.widthIn(max = 400.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Volume, "Volume", Modifier.size(18.dp), tint = c.textSecondary)
@@ -311,10 +304,10 @@ private fun RemoteControls(state: PlaybackState, item: MediaEntry, vm: PlayerVie
             }
         }
         PillButton("Play on this device instead", { vm.playHere() }, style = PillStyle.Secondary, icon = AppIcons.Phone)
-        if (state.queue.size > 1) {
+        if (ui.controls.upNext.isNotEmpty()) {
             Column(Modifier.widthIn(max = 640.dp).fillMaxWidth()) {
                 SectionLabel("Up next")
-                state.queue.forEachIndexed { i, e -> QueueRow(e, i == state.index) { vm.playAt(i) } }
+                ui.controls.upNext.forEach { row -> QueueRow(row) { vm.playAt(row.index) } }
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -332,20 +325,17 @@ private fun TransportState.label(): String? = when (this) {
 
 private fun MediaEntry.subtitleLine(): String? = joinDetails(artist, album, durationMs?.let(::formatClock))
 
-/** Shuffle (with more than one item) and repeat (off → all → one), lit while on. Not for something cast here. */
+/** Shuffle (with more than one item) and repeat (off → all → one), lit while on; none where they don't apply. */
 @Composable
-private fun QueueModes(state: PlaybackState, vm: PlayerViewModel) {
-    if (state.casted) return
-    val c = AppTheme.colors
-    if (state.queue.size > 1) {
-        ModeButton(AppIcons.Shuffle, "Shuffle", if (state.shuffle) "On" else "Off", on = state.shuffle, vm::toggleShuffle)
-    }
-    val repeat = when (state.repeat) {
+private fun QueueModes(modes: Modes?, vm: PlayerViewModel) {
+    if (modes == null) return
+    modes.shuffle?.let { on -> ModeButton(AppIcons.Shuffle, "Shuffle", if (on) "On" else "Off", on = on, vm::toggleShuffle) }
+    val repeat = when (modes.repeat) {
         RepeatMode.OFF -> "Off"
         RepeatMode.ALL -> "All"
         RepeatMode.ONE -> "One"
     }
-    ModeButton(if (state.repeat == RepeatMode.ONE) AppIcons.RepeatOne else AppIcons.Repeat, "Repeat", repeat, on = state.repeat != RepeatMode.OFF, vm::cycleRepeat)
+    ModeButton(if (modes.repeat == RepeatMode.ONE) AppIcons.RepeatOne else AppIcons.Repeat, "Repeat", repeat, on = modes.repeat != RepeatMode.OFF, vm::cycleRepeat)
 }
 
 /** A mode button: lit, with a dot under it, while on (not by color alone); says its state. */

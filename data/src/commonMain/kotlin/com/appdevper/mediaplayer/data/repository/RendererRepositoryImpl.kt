@@ -16,11 +16,11 @@ class RendererRepositoryImpl(
     private val controlPoint: ControlPoint,
     private val soap: SoapClient,
 ) : RendererRepository {
-    private val clients = HashMap<String, RendererClient>()
-
+    // Made for each command from what the control point knows now: a renderer that moved (another
+    // port, a new address) is reached where it is.
     private fun client(device: MediaDevice): RendererClient {
         val upnp: UpnpDevice = controlPoint.device(device.id) ?: throw UpnpException("${device.name} is no longer available.")
-        return clients.getOrPut(device.id) { RendererClient(soap, upnp) }
+        return RendererClient(soap, upnp)
     }
 
     override suspend fun load(device: MediaDevice, entry: MediaEntry) = client(device).load(entry.toDidl())

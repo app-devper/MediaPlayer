@@ -2,9 +2,8 @@ package com.appdevper.mediaplayer.domain.session
 
 import com.appdevper.mediaplayer.domain.model.AirPlayActivity
 import com.appdevper.mediaplayer.domain.model.AirPlayStatus
-import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
-import com.appdevper.mediaplayer.domain.model.SenderCommand
+import com.appdevper.mediaplayer.domain.model.Receiver
 import com.appdevper.mediaplayer.domain.repository.AirPlayRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +19,8 @@ import kotlinx.coroutines.launch
 /**
  * This device as an AirPlay receiver: starts/stops it from settings, asks the UI to show the
  * mirrored screen when a sender starts mirroring, plays AirPlay video on the local player, and
- * pauses our own player while a sender mirrors or streams audio.
+ * pauses our own player while a sender mirrors or streams audio. The sender's own controls are
+ * [PlaybackSession]'s (it's given the repository as its [com.appdevper.mediaplayer.domain.model.SenderControl]).
  */
 class AirPlayReceiverSession(
     private val airPlay: AirPlayRepository,
@@ -43,29 +43,17 @@ class AirPlayReceiverSession(
 
     private var started = false
 
-    init {
-        // Next/previous anywhere (our controls, the notification, the lock screen) go to the sender's queue while it drives.
-        playback.senderSkip = { next ->
-            airPlay.activity.value.drives(playback.state.value.current).also { drives ->
-                if (drives) scope.launch { airPlay.sendToSender(if (next) SenderCommand.Next else SenderCommand.Previous) }
-            }
-        }
-    }
-
-    /** Asks the sender to skip or play/pause in its own app; false when it didn't take it (or has none). */
-    suspend fun sendToSender(command: SenderCommand): Boolean = airPlay.sendToSender(command)
-
     fun start() {
         if (started || airPlay.status.value == AirPlayStatus.Unsupported) return
         started = true
+        // AirPlay video goes through the same local player as DLNA casts.
+        airPlay.connect(playback.link(Receiver.AIRPLAY) { _openPlayer.tryEmit(Unit) })
         scope.launch {
             settings.serverSettings
                 .map { s -> if (s.airPlayEnabled) s.name to s.airPlayRequirePin else null }
                 .distinctUntilChanged()
                 .collectLatest { config -> if (config == null) airPlay.stop() else airPlay.start(config.first, config.second) }
         }
-        // AirPlay video goes through the same local player as DLNA casts.
-        scope.launch { airPlay.commands.collect { playback.apply(it) { _openPlayer.tryEmit(Unit) } } }
         scope.launch {
             playback.state.map { it.receiverPlayback() }.distinctUntilChanged().collect(airPlay::publish)
         }
@@ -85,10 +73,3 @@ class AirPlayReceiverSession(
         }
     }
 }
-
-/**
- * The sender, not our queue, decides what's next: its music is playing, or [current] is its AirPlay
- * video. Then next/previous go to the sender ([AirPlayReceiverSession.sendToSender]).
- */
-fun AirPlayActivity.drives(current: MediaEntry?): Boolean =
-    canControlSender && !mirroring && (audioOnly || (videoEntryId != null && current?.id == videoEntryId))

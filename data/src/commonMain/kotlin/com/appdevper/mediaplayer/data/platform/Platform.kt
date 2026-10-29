@@ -27,6 +27,22 @@ interface UdpSocket {
  */
 expect fun openUdpSocket(port: Int, multicastGroup: String?, localIp: String?): UdpSocket
 
+/** The LAN as SSDP sees it: this device's address on it, and UDP sockets. */
+interface Network {
+    /** See [localIpv4Address]. */
+    fun localIpv4Address(): String?
+
+    /** See [openUdpSocket]. */
+    fun openUdpSocket(port: Int, multicastGroup: String?, localIp: String?): UdpSocket
+
+    /** The device's own network. */
+    object Platform : Network {
+        override fun localIpv4Address(): String? = com.appdevper.mediaplayer.data.platform.localIpv4Address()
+        override fun openUdpSocket(port: Int, multicastGroup: String?, localIp: String?): UdpSocket =
+            com.appdevper.mediaplayer.data.platform.openUdpSocket(port, multicastGroup, localIp)
+    }
+}
+
 /** Android needs a WifiManager.MulticastLock to receive multicast. */
 interface MulticastLock {
     fun acquire()

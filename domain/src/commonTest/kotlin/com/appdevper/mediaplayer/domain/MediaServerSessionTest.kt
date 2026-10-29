@@ -1,8 +1,8 @@
 package com.appdevper.mediaplayer.domain
 
+import com.appdevper.mediaplayer.testing.FakeSettings
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.ServerSettings
-import com.appdevper.mediaplayer.domain.repository.SettingsRepository
 import com.appdevper.mediaplayer.domain.session.MediaServerSession
 import com.appdevper.mediaplayer.testing.FakeServer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -14,10 +14,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-private class Settings(autoStart: Boolean) : SettingsRepository {
-    override val serverSettings = MutableStateFlow(ServerSettings("Phone", autoStart, true, true, false, emptyList()))
-    override fun update(transform: (ServerSettings) -> ServerSettings) = serverSettings.update(transform)
-}
+private fun Settings(autoStart: Boolean) = FakeSettings(ServerSettings("Phone", autoStart, true, true, false, emptyList()))
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MediaServerSessionTest {

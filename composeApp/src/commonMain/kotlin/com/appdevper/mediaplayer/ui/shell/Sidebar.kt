@@ -103,7 +103,7 @@ internal fun Sidebar(
         if (state.hasNowPlaying) {
             ListRow(
                 "Now playing",
-                subtitle = if (state.airPlay.audioOnly) state.airPlay.nowPlaying?.title ?: "AirPlay from ${state.airPlay.client}" else state.nowPlaying?.title,
+                subtitle = state.nowPlaying.title,
                 selected = selection == Selection.NowPlaying,
                 onClick = onNowPlaying,
                 leading = { SidebarIcon(AppIcons.ListMusic) },

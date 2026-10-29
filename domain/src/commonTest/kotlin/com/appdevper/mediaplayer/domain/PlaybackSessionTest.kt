@@ -7,6 +7,7 @@ import com.appdevper.mediaplayer.domain.model.MediaDevice
 import com.appdevper.mediaplayer.domain.model.MediaEntry
 import com.appdevper.mediaplayer.domain.model.MediaKind
 import com.appdevper.mediaplayer.domain.model.PlaybackTarget
+import com.appdevper.mediaplayer.domain.model.Receiver
 import com.appdevper.mediaplayer.domain.model.RepeatMode
 import com.appdevper.mediaplayer.domain.model.ServerSettings
 import com.appdevper.mediaplayer.domain.model.TransportState
@@ -281,7 +282,7 @@ class PlaybackSessionTest {
         val engine = FakeEngine()
         val session = playbackSession(FakeRenderer(), backgroundScope, engine)
         session.setRepeat(RepeatMode.ONE)
-        session.play(folder[1], listOf(folder[1]), casted = true)
+        session.play(folder[1], listOf(folder[1]), castBy = Receiver.DLNA)
         runCurrent()
         engine.calls.clear()
         engine.finish()
@@ -305,7 +306,7 @@ class PlaybackSessionTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { session.state.collect { seen += it.playback.status?.positionMs } }
         // A DLNA controller casts here: back to this device, a new item.
         session.setTarget(PlaybackTarget.Local)
-        session.play(folder[3], listOf(folder[3]), casted = true)
+        session.play(folder[3], listOf(folder[3]), castBy = Receiver.DLNA)
         runCurrent()
         assertTrue(42_000L !in seen.drop(1), "the old item's status showed: $seen")
         assertEquals(0, session.state.value.playback.status?.positionMs)

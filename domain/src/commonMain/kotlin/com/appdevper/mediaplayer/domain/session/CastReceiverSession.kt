@@ -1,5 +1,6 @@
 package com.appdevper.mediaplayer.domain.session
 
+import com.appdevper.mediaplayer.domain.model.Receiver
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.repository.CastReceiverRepository
 import com.appdevper.mediaplayer.domain.repository.SettingsRepository
@@ -35,13 +36,13 @@ class CastReceiverSession(
     fun start() {
         if (started) return
         started = true
+        receiver.connect(playback.link(Receiver.DLNA) { _openPlayer.tryEmit(Unit) })
         scope.launch {
             settings.serverSettings
                 .map { if (it.receiverEnabled) it.name else null }
                 .distinctUntilChanged()
                 .collectLatest { name -> if (name == null) receiver.stop() else receiver.start(name) }
         }
-        scope.launch { receiver.commands.collect { playback.apply(it) { _openPlayer.tryEmit(Unit) } } }
         scope.launch {
             playback.state.map { it.receiverPlayback() }.distinctUntilChanged().collect(receiver::publish)
         }

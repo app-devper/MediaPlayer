@@ -24,6 +24,12 @@ import kotlinx.coroutines.cancel
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
 import org.koin.dsl.module
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.geometry.Offset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -157,6 +163,39 @@ class LocalPlayerViewTest {
                     player.selectSubtitle(SubtitleChoice.Track(english))
                     engine.facts = engine.facts.copy(subtitleText = "From the file")
                     waitUntil(timeoutMillis = 2_000) { onAllNodesWithText("From the file").fetchSemanticsNodes().isNotEmpty() }
+                } finally {
+                    scope.cancel()
+                }
+            }
+        } finally {
+            stopKoin()
+        }
+    }
+
+    @Test
+    fun withTouchATapShowsTheControlsAndThePlayButtonPlays() {
+        startKoin { modules(module { single { FfmpegPlaybackEngine() } }) }
+        try {
+            runComposeUiTest {
+                val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+                val engine = FakeEngine()
+                val player = LocalPlayer(engine, scope)
+                try {
+                    player.load(clip, autoPlay = false, startPositionMs = 0)
+                    setContent {
+                        AppTheme {
+                            LocalPlayerView(player, clip.title, isAudio = false, volume = 100, muted = false, onVolumeChange = {}, onMutedChange = {}, mouse = false)
+                        }
+                    }
+                    // Touch: a tap on the picture (off the big button in the middle) doesn't play; the button does.
+                    onNodeWithContentDescription(clip.title).performTouchInput { click(Offset(10f, 10f)) }
+                    waitForIdle()
+                    assertEquals(listOf("load:v1@0"), engine.calls)
+                    onAllNodesWithContentDescription("Play").onFirst().performClick()
+                    waitForIdle()
+                    assertEquals(listOf("load:v1@0", "play"), engine.calls)
+                    // No volume slider on the bar: phones have volume keys.
+                    onAllNodesWithContentDescription("Mute (M)").assertCountEquals(0)
                 } finally {
                     scope.cancel()
                 }

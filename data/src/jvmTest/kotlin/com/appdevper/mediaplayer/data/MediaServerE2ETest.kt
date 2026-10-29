@@ -6,7 +6,6 @@ import com.appdevper.mediaplayer.data.mapper.toDomain
 import com.appdevper.mediaplayer.data.repository.SubtitleRepositoryImpl
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.data.platform.MediaLibrary
-import com.appdevper.mediaplayer.data.platform.localIpv4Address
 import com.appdevper.mediaplayer.data.server.MediaServer
 import com.appdevper.mediaplayer.data.server.ServerConfig
 import com.appdevper.mediaplayer.data.server.ServerState
@@ -27,7 +26,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.Buffer
 import kotlinx.io.RawSource
-import org.junit.Assume.assumeNotNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -59,10 +57,10 @@ class MediaServerE2ETest {
 
     @Test
     fun browseAndStream() = runBlocking {
-        assumeNotNull(localIpv4Address()) // needs a LAN interface
+        // SSDP on an in-memory LAN, HTTP on loopback: no network needed.
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val http = HttpClient()
-        val server = MediaServer(SsdpEngine(scope), scope)
+        val server = MediaServer(SsdpEngine(scope, network = InMemoryLan().host("127.0.0.1")), http, scope)
         try {
             server.start(ServerConfig("Test & Server", "uuid:test-1", setOf(MediaKind.VIDEO, MediaKind.AUDIO)), library)
             val running = assertIs<ServerState.Running>(server.state.value)

@@ -1,6 +1,7 @@
 package com.appdevper.mediaplayer
 
 import com.appdevper.mediaplayer.testing.FakeServer
+import com.appdevper.mediaplayer.testing.FakeSettings
 import com.appdevper.mediaplayer.testing.FakeRenderer
 import com.appdevper.mediaplayer.testing.FakeAirPlay
 import com.appdevper.mediaplayer.testing.FakeReceiver

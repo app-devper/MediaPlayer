@@ -1,6 +1,7 @@
 package com.appdevper.mediaplayer
 
 import com.appdevper.mediaplayer.testing.FakeServer
+import com.appdevper.mediaplayer.testing.FakeSettings
 import com.appdevper.mediaplayer.testing.FakeEngine
 import com.appdevper.mediaplayer.testing.FakeRenderer
 import com.appdevper.mediaplayer.testing.FakeAirPlay
@@ -35,6 +36,11 @@ import com.appdevper.mediaplayer.domain.usecase.BrowseFolderUseCase
 import com.appdevper.mediaplayer.domain.usecase.FilterEntriesUseCase
 import com.appdevper.mediaplayer.feature.browse.BrowseViewModel
 import com.appdevper.mediaplayer.feature.player.PlayerViewModel
+import com.appdevper.mediaplayer.domain.model.TransportState
+import com.appdevper.mediaplayer.domain.model.CastCommand
+import com.appdevper.mediaplayer.domain.model.RepeatMode
+import com.appdevper.mediaplayer.feature.player.Modes
+import com.appdevper.mediaplayer.feature.player.PlayerUi
 import com.appdevper.mediaplayer.feature.server.ServerViewModel
 import com.appdevper.mediaplayer.feature.shell.ShellViewModel
 import com.appdevper.mediaplayer.domain.model.MediaDevice
@@ -48,6 +54,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.test.setMain
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
@@ -84,14 +92,16 @@ class PresentationTest {
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
     private val engine = FakeEngine()
-    private val session = PlaybackSession(FakeRenderer(), LocalPlayer(engine, appScope, subtitleFiles = FakeSubtitles()), appScope)
+    private val renderer = FakeRenderer()
+    private val airPlay = FakeAirPlay(AirPlayStatus.Running("Mac"))
+    private val session = PlaybackSession(renderer, LocalPlayer(engine, appScope, subtitleFiles = FakeSubtitles()), appScope, sender = airPlay)
 
     private fun serverSession(server: FakeServer, settings: FakeSettings) = MediaServerSession(server, settings, appScope).also { it.start() }
 
     private fun receiverSession(settings: FakeSettings = FakeSettings(), receiver: FakeReceiver = FakeReceiver()) =
         CastReceiverSession(receiver, settings, session, appScope)
 
-    private fun airPlaySession(settings: FakeSettings = FakeSettings(), airPlay: FakeAirPlay = FakeAirPlay()) =
+    private fun airPlaySession(settings: FakeSettings = FakeSettings(), airPlay: FakeAirPlay = this.airPlay) =
         AirPlayReceiverSession(airPlay, settings, session, appScope)
 
     @Test
@@ -286,24 +296,24 @@ class PresentationTest {
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
         // Loaded but not started (or stopped): nothing to pause.
         session.play(song, listOf(song), autoPlay = false)
-        assertEquals(null, vm.uiState.value.playing)
+        assertEquals(null, vm.uiState.value.nowPlaying.playing)
 
         // Our player plays on off the player screen: the mini player plays and pauses it.
         vm.togglePause()
-        assertEquals(true, vm.uiState.value.playing)
+        assertEquals(true, vm.uiState.value.nowPlaying.playing)
         vm.togglePause()
-        assertEquals(false, vm.uiState.value.playing)
+        assertEquals(false, vm.uiState.value.nowPlaying.playing)
         assertEquals(listOf("load:a1@0", "play", "pause"), engine.calls)
 
         // Playing on a TV: the same button is the TV's play/pause (the session sends it there).
         vm.selectTarget(PlaybackTarget.Renderer(fakeTv))
-        assertEquals(true, vm.uiState.value.playing) // what the TV reports: it plays
+        assertEquals(true, vm.uiState.value.nowPlaying.playing) // what the TV reports: it plays
     }
 
     @Test
     fun nextAndPreviousGoToTheSenderForItsAirPlayVideo() = runTest {
-        val airPlay = FakeAirPlay(AirPlayStatus.Running("Mac"))
-        val vm = PlayerViewModel(session, airPlaySession(airPlay = airPlay))
+        airPlaySession().start()
+        val vm = PlayerViewModel(session)
         val song = MediaEntry("a1", "0", "Khon Kaen Blues", MediaKind.AUDIO, streamUrl = "http://h/a1.mp3")
         val song2 = MediaEntry("a2", "0", "Lam Phloen", MediaKind.AUDIO, streamUrl = "http://h/a2.mp3")
 
@@ -316,11 +326,15 @@ class PresentationTest {
 
         // The sender's AirPlay video is what plays: its queue (YouTube) decides.
         val video = MediaEntry("airplay-1", "-1", "AirPlay from iPhone", MediaKind.VIDEO, streamUrl = "http://localhost:7000/master.m3u8")
-        session.play(video, listOf(video))
+        airPlay.send(CastCommand.Load(video, autoPlay = true))
         airPlay.activity.value = AirPlayActivity(client = "iPhone", canControlSender = true, videoEntryId = "airplay-1")
         vm.next()
         vm.previous()
         assertEquals(listOf(SenderCommand.Next, SenderCommand.Previous), airPlay.sentToSender)
+        // Its queue, not ours: no shuffle or repeat, and Next is there.
+        val controls = assertIs<PlayerUi.Local>(vm.uiState.value).controls
+        assertEquals(null, controls.modes)
+        assertTrue(controls.nextEnabled)
 
         // Without remote control from that sender, nothing is sent.
         airPlay.activity.value = AirPlayActivity(client = "iPhone", canControlSender = false, videoEntryId = "airplay-1")
@@ -330,7 +344,7 @@ class PresentationTest {
 
     @Test
     fun subtitlesArePickedPerVideoAndKeptWhenThePlayerScreenComesBack() = runTest {
-        val vm = PlayerViewModel(session, airPlaySession())
+        val vm = PlayerViewModel(session)
         val thai = Subtitle("http://h/Movie.th.srt", "Thai", "th")
         val broken = Subtitle("http://h/Movie.broken.srt", "broken")
         val movie = MediaEntry("v1", "0", "Movie", MediaKind.VIDEO, streamUrl = "http://h/v1.mp4", subtitles = listOf(thai, broken))
@@ -345,7 +359,7 @@ class PresentationTest {
         assertEquals(SubtitleState(SubtitleChoice.File(thai)), vm.subtitles.first { !it.loading })
 
         // The player screen closed and opened again: a new ViewModel, the same subtitles.
-        val again = PlayerViewModel(session, airPlaySession())
+        val again = PlayerViewModel(session)
         assertEquals(SubtitleChoice.File(thai), again.subtitles.value.choice)
 
         // A track inside the video: the player shows it, and the file goes.
@@ -358,5 +372,54 @@ class PresentationTest {
         session.next() // another video: its own files, so off again
         assertEquals(SubtitleState(), again.subtitles.value)
     }
-}
 
+    @Test
+    fun thePlayerScreenIsTheSameModelWhereverItPlays() = runTest {
+        val vm = PlayerViewModel(session)
+        assertEquals(PlayerUi.Empty, vm.uiState.value)
+        val songs = (1..4).map { MediaEntry("a$it", "0", "Song $it", MediaKind.AUDIO, streamUrl = "http://h/a$it.mp3") }
+        session.play(songs[0], songs)
+        session.setShuffle(true)
+        val here = assertIs<PlayerUi.Local>(vm.uiState.value).controls
+
+        // On a TV: the same queue, in the same (shuffled) order, and the same Next.
+        session.setTarget(PlaybackTarget.Renderer(fakeTv))
+        val remote = assertIs<PlayerUi.Remote>(vm.uiState.value)
+        assertEquals(here.upNext.map { it.entry.id }, remote.controls.upNext.map { it.entry.id })
+        assertEquals(session.state.value.order, remote.controls.upNext.map { it.index })
+        assertEquals(here.nextEnabled, remote.controls.nextEnabled)
+        assertEquals(Modes(shuffle = true, repeat = RepeatMode.OFF), remote.controls.modes)
+        // Loading on the TV: Play/Pause shows Pause, as tapping it pauses. (The TV is asked every second.)
+        renderer.state = TransportState.TRANSITIONING
+        val loading = withContext(Dispatchers.Default) {
+            withTimeout(5_000) { vm.uiState.first { (it as? PlayerUi.Remote)?.status?.state == TransportState.TRANSITIONING } }
+        }
+        assertTrue(assertIs<PlayerUi.Remote>(loading).controls.playing)
+
+        // A photo here: the viewer.
+        session.setTarget(PlaybackTarget.Local)
+        val photo = MediaEntry("p", "0", "Beach", MediaKind.IMAGE, streamUrl = "http://h/p.jpg")
+        session.play(photo, listOf(photo))
+        assertEquals(PlayerUi.Photos(listOf(photo), 0), vm.uiState.value)
+
+        // A sender's music: its page; play/pause goes to the sender, from here and from the mini player alike.
+        airPlay.activity.value = AirPlayActivity(client = "iPhone", audioOnly = true, canControlSender = true)
+        val audio = assertIs<PlayerUi.SenderAudio>(vm.uiState.value).audio
+        assertEquals(true, audio.playing)
+        vm.togglePause()
+        assertEquals(listOf(SenderCommand.PlayPause), airPlay.sentToSender)
+        assertEquals(false, assertIs<PlayerUi.SenderAudio>(vm.uiState.value).audio.playing)
+    }
+
+    @Test
+    fun theMiniPlayerPlaysAndPausesTheSendersMusic() = runTest {
+        val vm = ShellViewModel(FakeDevices(), serverSession(FakeServer(), FakeSettings()), session, receiverSession(), airPlaySession())
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        airPlay.activity.value = AirPlayActivity(client = "iPhone", audioOnly = true, canControlSender = true)
+        assertEquals(true, vm.uiState.value.nowPlaying.playing) // a play/pause button, not just "open"
+        vm.togglePause()
+        assertEquals(listOf(SenderCommand.PlayPause), airPlay.sentToSender)
+        assertEquals(false, vm.uiState.value.nowPlaying.playing)
+        assertTrue(engine.calls.none { it == "play" }) // our own player stays paused
+    }
+}

@@ -63,10 +63,10 @@ class DesktopDecodingTest {
     fun aacLcBecomesTheSameTone() {
         val frames = encodeAacLc(seconds = 1, hz = 440.0)
         val pcm = Collections.synchronizedList(mutableListOf<ByteArray>())
-        val out = JvmAudioOutput(pcmTap = { pcm += it })
+        val out = jvmAudioOutput(pcmTap = { pcm += it })
         try {
             out.setFormat(AirPlayAudioCodec.AAC_LC)
-            frames.forEach(out::play)
+            frames.forEach { out.play(it, 0) }
             val deadline = System.currentTimeMillis() + 10_000
             while (pcm.sumOf { it.size } < 44_100 * 4 / 2 && System.currentTimeMillis() < deadline) Thread.sleep(20)
             val bytes = synchronized(pcm) { pcm.reduce { a, b -> a + b } }

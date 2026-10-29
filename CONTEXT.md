@@ -42,5 +42,16 @@ name, what it shares, its folders), wherever the change comes from.
 (`AirPlayReceiverSession`) takes mirroring, video and audio. Both play through the playback session
 on the local player.
 
+**Receiver link** (`ReceiverLink`): a receiver's line to the playback session. Its commands apply at
+once. The receiver **owns** the player from its load until something else is picked or cast here,
+or the item moves to a renderer; until then its other commands are refused (volume and mute apply
+whenever this device plays). The session records which receiver cast the item (`castBy`).
+
 **Sender**: the device casting to us. An AirPlay sender that plays its own video or music here
-decides what comes next: our next and previous go to its queue (`SenderCommand`).
+decides what comes next: our next and previous go to its queue (`SenderCommand`). The session reaches
+it through `SenderControl`.
+
+**Now playing** (`NowPlaying`): what plays now and where its controls go, for every screen and the
+system's media controls: nothing, an item of our queue (here or on a renderer), or a sender's music.
+It says whether play/pause applies (not for a photo) and whether the sender decides next and
+previous.

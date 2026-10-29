@@ -1,6 +1,5 @@
 package com.appdevper.mediaplayer.data
 
-import com.appdevper.mediaplayer.data.platform.localIpv4Address
 import com.appdevper.mediaplayer.data.renderer.MediaRenderer
 import com.appdevper.mediaplayer.data.renderer.RendererConfig
 import com.appdevper.mediaplayer.data.upnp.DeviceDescription
@@ -13,6 +12,7 @@ import com.appdevper.mediaplayer.data.upnp.UpnpException
 import com.appdevper.mediaplayer.data.upnp.UpnpTypes
 import com.appdevper.mediaplayer.domain.model.CastCommand
 import com.appdevper.mediaplayer.domain.model.MediaKind
+import com.appdevper.mediaplayer.domain.model.ReceiverLink
 import com.appdevper.mediaplayer.domain.model.ReceiverPlayback
 import com.appdevper.mediaplayer.domain.model.ReceiverStatus
 import com.appdevper.mediaplayer.domain.model.RendererStatus
@@ -37,7 +37,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import org.junit.Assume.assumeNotNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -45,18 +44,28 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-/** Starts the real renderer on the LAN interface and drives it with the app's own DLNA controller client. */
+/** Starts the real renderer and drives it with the app's own DLNA controller client. */
 class MediaRendererE2ETest {
 
     @Test
     fun controlStatusAndEvents() = runBlocking {
-        val ip = localIpv4Address()
-        assumeNotNull(ip) // needs a LAN interface
+        // SSDP on an in-memory LAN, HTTP on loopback: no network needed.
+        val ip = "127.0.0.1"
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val http = HttpClient()
-        val renderer = MediaRenderer(SsdpEngine(scope), http, scope)
+        val renderer = MediaRenderer(SsdpEngine(scope, network = InMemoryLan().host(ip)), http, scope)
         val commands = Channel<CastCommand>(Channel.UNLIMITED)
-        scope.launch { renderer.commands.collect { commands.send(it) } }
+        // The playback session, as far as the renderer sees it: owned from a load until the user plays something else.
+        val link = object : ReceiverLink {
+            override var owns = false
+            override fun send(command: CastCommand): Boolean {
+                if (command is CastCommand.Load) owns = true
+                else if (!owns && command !is CastCommand.SetVolume && command !is CastCommand.SetMute) return false
+                commands.trySend(command)
+                return true
+            }
+        }
+        renderer.connect(link)
         val events = Channel<String>(Channel.UNLIMITED)
         val sink = embeddedServer(CIO, port = 0, host = "0.0.0.0") {
             routing {
@@ -144,6 +153,7 @@ class MediaRendererE2ETest {
             assertEquals(716, bad.code)
 
             // The user plays something else here: the cast item is no longer current, Play brings it back.
+            link.owns = false
             renderer.publish(ReceiverPlayback(load.entry.copy(streamUrl = "http://other/x.mp4"), RendererStatus(TransportState.PLAYING, 0, 0)))
             assertEquals("STOPPED", client.status().state)
             client.play()

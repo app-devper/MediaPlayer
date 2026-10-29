@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.domain.model
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.time.TimeSource
 
 // The AirPlay receiver and what a sender is doing.
@@ -31,6 +33,23 @@ data class AirPlayActivity(
 
 /** What a sender's own controls do in its now-playing app (Music, YouTube, YouTube Music…). */
 enum class SenderCommand { Next, Previous, PlayPause }
+
+/**
+ * The AirPlay sender as playback sees it: what it's doing, and its own controls. The playback
+ * session sends next, previous and play/pause there while the sender decides what plays.
+ */
+interface SenderControl {
+    val activity: StateFlow<AirPlayActivity>
+
+    /** Asks the sender to skip or play/pause ([AirPlayActivity.canControlSender]); false if it didn't. */
+    suspend fun sendToSender(command: SenderCommand): Boolean
+
+    /** No AirPlay (iOS, tests). */
+    object None : SenderControl {
+        override val activity = MutableStateFlow(AirPlayActivity())
+        override suspend fun sendToSender(command: SenderCommand) = false
+    }
+}
 
 /** Song details, cover art and progress an AirPlay audio sender reports. */
 data class AirPlayNowPlaying(

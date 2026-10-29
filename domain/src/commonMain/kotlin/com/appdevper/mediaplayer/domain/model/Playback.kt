@@ -8,7 +8,12 @@ sealed interface PlaybackTarget {
     data class Renderer(val device: MediaDevice) : PlaybackTarget
 }
 
-enum class TransportState { PLAYING, PAUSED, STOPPED, TRANSITIONING, NO_MEDIA, UNKNOWN }
+enum class TransportState {
+    PLAYING, PAUSED, STOPPED, TRANSITIONING, NO_MEDIA, UNKNOWN;
+
+    /** Playing or about to: Play/Pause shows Pause and pauses. */
+    val playing: Boolean get() = this == PLAYING || this == TRANSITIONING
+}
 
 data class RendererStatus(
     val state: TransportState,
@@ -44,10 +49,16 @@ data class PlaybackState(
     val repeat: RepeatMode = RepeatMode.OFF,
     /** The queue's indices in the order they play: in turn, or shuffled with the item that started first. */
     val order: List<Int> = emptyList(),
-    /** Another device cast this (a one-item queue): it ends as the sender expects, without repeat. */
-    val casted: Boolean = false,
+    /** The receiver another device cast this through (a one-item queue); null for our own. */
+    val castBy: Receiver? = null,
 ) {
     val current: MediaEntry? get() = queue.getOrNull(index)
+
+    /** Another device cast this: it ends as the sender expects, without repeat or shuffle. */
+    val casted: Boolean get() = castBy != null
+
+    /** What [current] plays like now: true playing or about to, false paused or stopped, null with no status. */
+    val playing: Boolean? get() = playback.status?.state?.playing
 
     /** Repeat as it applies to this queue. */
     val effectiveRepeat: RepeatMode get() = if (casted) RepeatMode.OFF else repeat

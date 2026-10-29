@@ -70,7 +70,7 @@ val dataModule = module {
         )
     }
     single { ContentDirectoryClient(get()) }
-    single { MediaServer(get(), get(AppScope), get()) }
+    single { MediaServer(get(), get(), get(AppScope), get()) }
     single { MediaRenderer(get(), get(), get(AppScope)) }
 
     // Repositories
@@ -85,6 +85,7 @@ val dataModule = module {
     // AirPlay receiver (null on iOS); the player is also what the UI draws mirroring with.
     single { AirPlayPlayer() }
     single<AirPlayRepository> {
-        AirPlayRepositoryImpl(createAirPlayReceiver(), get(), get(), get(), get(AirPlayMulticast), get(AppScope))
+        val player = get<AirPlayPlayer>()
+        AirPlayRepositoryImpl(createAirPlayReceiver(), player, player::setVolume, get(), get(), get(AirPlayMulticast), get(AppScope))
     }
 }

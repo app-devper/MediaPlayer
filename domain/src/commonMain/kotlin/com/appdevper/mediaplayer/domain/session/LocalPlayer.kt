@@ -97,7 +97,14 @@ class LocalPlayer(
         val sameItem = lastItem == item
         lastItem = item
         val url = entry.streamUrl
-        if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) return@onPlayer unloadNow()
+        if (url == null || (entry.kind != MediaKind.AUDIO && entry.kind != MediaKind.VIDEO)) {
+            // A photo is shown by the photo viewer, not played: reported as playing, from start to end
+            // (one after another, with nothing in between).
+            val photo = url != null && entry.kind == MediaKind.IMAGE
+            if (!photo || _loaded.value != null) unloadNow()
+            if (photo) showingPhoto()
+            return@onPlayer
+        }
         pausedInBackground = false
         stopped = !autoPlay
         subtitlesOfItem.onLoad(sameItem)
@@ -119,8 +126,20 @@ class LocalPlayer(
 
     override fun unload() = onPlayer(::unloadNow)
 
+    private fun showingPhoto() {
+        _status.value = RendererStatus(TransportState.PLAYING, 0, 0)
+        publish()
+    }
+
     private fun unloadNow() {
-        if (_loaded.value == null) return
+        if (_loaded.value == null) {
+            // A photo was shown: no longer.
+            if (_status.value?.state == TransportState.PLAYING) {
+                _status.value = _status.value?.copy(state = TransportState.STOPPED)
+                publish()
+            }
+            return
+        }
         // The last report says stopped, not playing.
         _status.value = _status.value?.copy(state = TransportState.STOPPED, ended = false)
         _error.value = null
@@ -135,7 +154,9 @@ class LocalPlayer(
         engine.unload()
     }
 
-    override fun play() = whenLoaded {
+    override fun play() = whenLoaded(::playNow)
+
+    private fun playNow() {
         val facts = engine.facts()
         when {
             facts.error != null -> {
@@ -159,6 +180,23 @@ class LocalPlayer(
     override fun seek(positionMs: Long) = whenLoaded {
         stopped = false
         engine.seekTo(positionMs.coerceAtLeast(0))
+    }
+
+    /** Pauses while playing or about to, else plays: what the player is doing when it gets there, not when asked. */
+    fun togglePause() = whenLoaded {
+        if (_status.value?.state?.playing == true) engine.pause() else playNow()
+    }
+
+    /**
+     * Back or on by [deltaMs] (← →, a remote): not right onto the end, which would finish it, and a
+     * held key would go on in the next item.
+     */
+    fun seekBy(deltaMs: Long) = whenLoaded {
+        val facts = engine.facts()
+        val to = (facts.positionMs + deltaMs).coerceAtLeast(0)
+        val end = (facts.durationMs - SEEK_END_MARGIN_MS).coerceAtLeast(0)
+        stopped = false
+        engine.seekTo(if (facts.durationMs > 0) to.coerceAtMost(end) else to)
     }
 
     /** Shows [choice] for the loaded item: a file is fetched and read first ([subtitles] says so). */
@@ -243,6 +281,7 @@ class LocalPlayer(
 
     private companion object {
         const val POLL_INTERVAL_MS = 250L
+        const val SEEK_END_MARGIN_MS = 1_000L
     }
 }
 
