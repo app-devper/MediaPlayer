@@ -3,8 +3,6 @@ package com.appdevper.mediaplayer.ui.shell
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -158,13 +156,9 @@ fun AppShell(startDestination: Any = HomeRoute) {
                                 onForgetServer = vm::forgetServer,
                             )
                         }
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = miniPlayer,
-                            enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(),
-                            exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut(),
-                        ) {
-                            MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause)
-                        }
+                        // At once, not grown or shrunk: an animated height moved the whole screen on every
+                        // visit to the player and back.
+                        if (miniPlayer) MiniPlayer(state, onOpen = { nav.navigate(PlayerRoute) { launchSingleTop = true } }, onTogglePause = vm::togglePause)
                     }
                 }
             }

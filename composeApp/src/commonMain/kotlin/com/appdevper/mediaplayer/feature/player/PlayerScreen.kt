@@ -309,6 +309,7 @@ private fun RemoteControls(ui: PlayerUi.Remote, vm: PlayerViewModel) {
         positionMs = status?.positionMs ?: 0,
         durationMs = if (photo) 0 else status?.durationMs?.takeIf { it > 0 } ?: item.durationMs ?: 0,
         onSeek = vm::seek.takeUnless { photo },
+        showPosition = !photo,
         playing = ui.controls.playing,
         onPlayPause = vm::togglePause,
         onPrevious = vm::previous,
