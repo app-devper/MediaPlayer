@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.feature.player
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.appdevper.mediaplayer.domain.model.Subtitle
 import com.appdevper.mediaplayer.domain.model.SubtitleChoice
 import com.appdevper.mediaplayer.domain.model.SubtitleState
@@ -31,19 +33,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,7 +58,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.appdevper.mediaplayer.designsystem.components.CircleButton
 import com.appdevper.mediaplayer.designsystem.components.EmptyState
 import com.appdevper.mediaplayer.designsystem.components.GhostIconButton
 import com.appdevper.mediaplayer.designsystem.components.ListRow
@@ -81,31 +78,110 @@ import com.appdevper.mediaplayer.ui.formatClock
 import com.appdevper.mediaplayer.ui.icon
 import com.appdevper.mediaplayer.ui.joinDetails
 import com.appdevper.mediaplayer.ui.player.LocalPlayerView
+import com.appdevper.mediaplayer.ui.player.SongSource
+import com.appdevper.mediaplayer.ui.player.SongView
+import com.appdevper.mediaplayer.platform.AirPlayButton
+import com.appdevper.mediaplayer.platform.pointerIsMouse
+import com.appdevper.mediaplayer.platform.supportsAirPlay
 import org.koin.compose.viewmodel.koinViewModel
 
 /** Now playing (replaces `FullScreenPlayerActivity`, `ImageActivity` and the remote controls). */
 @Composable
-fun PlayerScreen() {
-    val vm = koinViewModel<PlayerViewModel>()
+fun PlayerScreen(vm: PlayerViewModel = koinViewModel()) {
     val ui by vm.uiState.collectAsStateWithLifecycle()
     when (val u = ui) {
         PlayerUi.Empty -> EmptyState(AppIcons.ListMusic, "Nothing playing", "Pick a video, song or photo from a media server.")
         is PlayerUi.SenderAudio -> AirPlayAudio(u.audio, onPrevious = vm::previous, onPlayPause = vm::togglePause, onNext = vm::next)
         is PlayerUi.Remote -> RemoteControls(u, vm)
         is PlayerUi.Photos -> PhotoViewer(u, vm)
-        is PlayerUi.Local -> LocalPlayer(u, vm)
+        is PlayerUi.Local -> if (u.entry.kind == MediaKind.AUDIO) LocalSong(u, vm) else LocalPlayer(u, vm)
     }
 }
 
+/** A song on this device: the song layout every song uses, with this device's own volume on desktop. */
+@Composable
+private fun LocalSong(ui: PlayerUi.Local, vm: PlayerViewModel) {
+    val item = ui.entry
+    val status by vm.localPlayer.status.collectAsStateWithLifecycle()
+    val error by vm.localPlayer.error.collectAsStateWithLifecycle()
+    SongView(
+        artwork = { Thumbnail(item.thumbnailUrl, AppIcons.Music, size = it, shape = Radius.xLarge) },
+        title = item.title,
+        detail = joinDetails(item.artist, item.album),
+        source = SongSource("Loading", busy = true).takeIf { status?.state == TransportState.TRANSITIONING },
+        error = error,
+        positionMs = status?.positionMs ?: 0,
+        durationMs = status?.durationMs?.takeIf { it > 0 } ?: item.durationMs ?: 0,
+        onSeek = vm::seek,
+        playing = ui.controls.playing,
+        onPlayPause = vm::togglePause,
+        onPrevious = vm::previous,
+        onNext = vm::next,
+        nextEnabled = ui.controls.nextEnabled,
+    ) {
+        ModesRow(ui.controls.modes, vm)
+        // Phones have volume keys; desktop has none, so the volume is here.
+        if (pointerIsMouse) VolumeRow(if (ui.muted) 0 else ui.volume, onVolume = vm::setVolume, onToggleMute = {
+            if (ui.muted || ui.volume == 0) {
+                vm.setMuted(false)
+                if (ui.volume == 0) vm.setVolume(100)
+            } else {
+                vm.setMuted(true)
+            }
+        })
+        // AVKit's controls have the AirPlay button for videos; songs have it here.
+        if (supportsAirPlay) AirPlayButton(Modifier.padding(top = 8.dp).size(40.dp), tint = AppTheme.colors.textPrimary)
+        UpNext(ui.controls.upNext, vm)
+    }
+}
+
+@Composable
+private fun ModesRow(modes: Modes?, vm: PlayerViewModel) {
+    if (modes == null) return
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { QueueModes(modes, vm) }
+}
+
+/** Mute and a slider; [onToggleMute] null: the device has no mute here (a TV's own volume). */
+@Composable
+private fun VolumeRow(volume: Int, onVolume: (Int) -> Unit, onToggleMute: (() -> Unit)? = null) {
+    val c = AppTheme.colors
+    var local by remember(volume) { mutableFloatStateOf(volume.toFloat()) }
+    Row(Modifier.widthIn(max = 400.dp).fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        val silent = local <= 0f
+        if (onToggleMute != null) {
+            GhostIconButton(if (silent) AppIcons.VolumeOff else AppIcons.Volume, if (silent) "Unmute" else "Mute", onToggleMute, iconSize = 18.dp, tint = c.textSecondary)
+        } else {
+            Icon(AppIcons.Volume, "Volume", Modifier.padding(horizontal = 11.dp).size(18.dp), tint = c.textSecondary)
+        }
+        ThinSlider(
+            value = local,
+            onValueChange = { local = it },
+            onValueChangeFinished = { onVolume(local.toInt()) },
+            valueRange = 0f..100f,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** The queue in the order it plays, the current one marked; nothing for a single item. */
+@Composable
+private fun UpNext(rows: List<QueueRow>, vm: PlayerViewModel) {
+    if (rows.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        SectionLabel("Up next")
+        rows.forEach { row -> key(row.entry.id) { QueueRow(row) { vm.playAt(row.index) } } }
+    }
+}
+
+/** A video on this device: the picture with its controls, then what it is and what's next. */
 @Composable
 private fun LocalPlayer(ui: PlayerUi.Local, vm: PlayerViewModel) {
     val c = AppTheme.colors
     val item = ui.entry
     val subtitles by vm.subtitles.collectAsStateWithLifecycle()
     val textTracks by vm.textTracks.collectAsStateWithLifecycle()
-    val isAudio = item.kind == MediaKind.AUDIO
     val fullscreenState = LocalFullscreen.current
-    val fullscreen = fullscreenState.isFullscreen && !isAudio
+    val fullscreen = fullscreenState.isFullscreen
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         // The player stays at this position in both layouts, so going full screen doesn't reload it.
         Box(
@@ -113,27 +189,23 @@ private fun LocalPlayer(ui: PlayerUi.Local, vm: PlayerViewModel) {
                 Modifier.fillMaxSize().background(Color.Black)
             } else {
                 Modifier.widthIn(max = 900.dp).fillMaxWidth().padding(start = 16.dp, top = 16.dp, end = 16.dp)
-                    .then(if (isAudio) Modifier.height(280.dp) else Modifier.aspectRatio(16f / 9f))
+                    .aspectRatio(16f / 9f)
                     .clip(Radius.large)
-                    .background(if (isAudio) c.surfaceSecondary else Color.Black)
+                    .background(Color.Black)
             },
             contentAlignment = Alignment.Center,
         ) {
-            if (isAudio) {
-                Thumbnail(item.thumbnailUrl, AppIcons.Music, size = 160.dp, shape = Radius.large, modifier = Modifier.align(Alignment.TopCenter).padding(top = 20.dp))
-            }
             key(item.id, item.streamUrl) {
                 LocalPlayerView(
                     player = vm.localPlayer,
                     title = item.title,
-                    isAudio = isAudio,
                     volume = ui.volume,
                     muted = ui.muted,
                     onVolumeChange = vm::setVolume,
                     onMutedChange = vm::setMuted,
-                    modifier = if (isAudio) Modifier.fillMaxWidth().height(96.dp).align(Alignment.BottomCenter) else Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize(),
                     fullscreen = fullscreen,
-                    onToggleFullscreen = if (isAudio) null else fullscreenState::toggle,
+                    onToggleFullscreen = fullscreenState::toggle,
                 )
             }
         }
@@ -222,106 +294,39 @@ private fun ZoomableImage(url: String, title: String) {
     )
 }
 
+/** On a TV or speaker: the song layout, with the TV's volume and a way back to this device. */
 @Composable
 private fun RemoteControls(ui: PlayerUi.Remote, vm: PlayerViewModel) {
-    val c = AppTheme.colors
     val item = ui.entry
-    val renderer = ui.renderer
     val status = ui.status
-    var dragging by remember { mutableStateOf<Float?>(null) }
-
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+    val photo = item.kind == MediaKind.IMAGE
+    SongView(
+        artwork = { Thumbnail(item.thumbnailUrl, item.kind.icon(), size = it, shape = Radius.xLarge) },
+        title = item.title,
+        detail = joinDetails(item.artist, item.album),
+        source = when (status?.state) {
+            TransportState.TRANSITIONING -> SongSource("Loading on ${ui.renderer.name}", busy = true)
+            TransportState.STOPPED, TransportState.NO_MEDIA -> SongSource("Stopped on ${ui.renderer.name}", live = false)
+            else -> SongSource("On ${ui.renderer.name}")
+        },
+        error = ui.error,
+        positionMs = status?.positionMs ?: 0,
+        durationMs = if (photo) 0 else status?.durationMs?.takeIf { it > 0 } ?: item.durationMs ?: 0,
+        onSeek = vm::seek.takeUnless { photo },
+        playing = ui.controls.playing,
+        onPlayPause = vm::togglePause,
+        onPrevious = vm::previous,
+        onNext = vm::next,
+        nextEnabled = ui.controls.nextEnabled,
+        onStop = vm::stop,
     ) {
-        Thumbnail(
-            item.thumbnailUrl,
-            item.kind.icon(),
-            size = 260.dp,
-            shape = Radius.xLarge,
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(item.title, style = MaterialTheme.typography.headlineSmall, color = c.textPrimary, textAlign = TextAlign.Center, maxLines = 2)
-        joinDetails(item.artist, item.album)?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = c.textSecondary, textAlign = TextAlign.Center, maxLines = 2)
-        }
-        Row(
-            Modifier.border(1.dp, c.border, Radius.pill).padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(AppIcons.Cast, null, Modifier.size(14.dp), tint = c.success)
-            Text(
-                "Playing on ${renderer.name}" + (status?.state?.label()?.let { " · $it" } ?: ""),
-                style = MaterialTheme.typography.labelMedium,
-                color = c.textSecondary,
-            )
-        }
-        ui.error?.let { Text(it, color = c.danger, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center) }
-
-        if (item.kind != MediaKind.IMAGE) {
-            val duration = (status?.durationMs?.takeIf { it > 0 } ?: item.durationMs ?: 0L)
-            val position = status?.positionMs ?: 0L
-            Column(Modifier.widthIn(max = 520.dp).fillMaxWidth()) {
-                ThinSlider(
-                    value = dragging ?: if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-                    onValueChange = { dragging = it },
-                    onValueChangeFinished = {
-                        dragging?.let { vm.seek((it * duration).toLong()) }
-                        dragging = null
-                    },
-                    enabled = duration > 0,
-                )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(formatClock(position), style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
-                    Text(formatClock(duration), style = MaterialTheme.typography.labelSmall, color = c.textTertiary)
-                }
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            GhostIconButton(AppIcons.Stop, "Stop", { vm.stop() }, size = 44.dp, iconSize = 20.dp, tint = c.textSecondary)
-            GhostIconButton(AppIcons.SkipPrevious, "Previous", { vm.previous() }, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
-            CircleButton(if (ui.controls.playing) AppIcons.Pause else AppIcons.Play, "Play/Pause", { vm.togglePause() }, size = 64.dp)
-            GhostIconButton(AppIcons.SkipNext, "Next", { vm.next() }, enabled = ui.controls.nextEnabled, size = 44.dp, iconSize = 24.dp, tint = c.textPrimary)
-            Spacer(Modifier.size(44.dp))
-        }
-        if (ui.controls.modes != null) Row(verticalAlignment = Alignment.CenterVertically) { QueueModes(ui.controls.modes, vm) }
-
-        ui.volume?.let { vol ->
-            var local by remember(vol) { mutableFloatStateOf(vol.toFloat()) }
-            Row(Modifier.widthIn(max = 400.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(AppIcons.Volume, "Volume", Modifier.size(18.dp), tint = c.textSecondary)
-                Spacer(Modifier.size(10.dp))
-                ThinSlider(
-                    value = local,
-                    onValueChange = { local = it },
-                    onValueChangeFinished = { vm.setVolume(local.toInt()) },
-                    valueRange = 0f..100f,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-        PillButton("Play on this device instead", { vm.playHere() }, style = PillStyle.Secondary, icon = AppIcons.Phone)
-        if (ui.controls.upNext.isNotEmpty()) {
-            Column(Modifier.widthIn(max = 640.dp).fillMaxWidth()) {
-                SectionLabel("Up next")
-                ui.controls.upNext.forEach { row -> QueueRow(row) { vm.playAt(row.index) } }
-            }
-        }
-        Spacer(Modifier.height(24.dp))
+        ModesRow(ui.controls.modes, vm)
+        ui.volume?.let { VolumeRow(it, onVolume = vm::setVolume) }
+        PillButton("Play on this device instead", { vm.playHere() }, style = PillStyle.Secondary, icon = AppIcons.Phone, modifier = Modifier.padding(top = 16.dp))
+        UpNext(ui.controls.upNext, vm)
     }
 }
 
-private fun TransportState.label(): String? = when (this) {
-    TransportState.PLAYING -> "playing"
-    TransportState.PAUSED -> "paused"
-    TransportState.STOPPED -> "stopped"
-    TransportState.TRANSITIONING -> "loading"
-    TransportState.NO_MEDIA -> "idle"
-    TransportState.UNKNOWN -> null
-}
 
 private fun MediaEntry.subtitleLine(): String? = joinDetails(artist, album, durationMs?.let(::formatClock))
 

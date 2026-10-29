@@ -1,5 +1,7 @@
 package com.appdevper.mediaplayer.feature.home
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -28,12 +30,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -42,9 +42,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.appdevper.mediaplayer.designsystem.components.CenteredColumn
@@ -54,7 +54,6 @@ import com.appdevper.mediaplayer.designsystem.components.IconTile
 import com.appdevper.mediaplayer.designsystem.components.OutlineCard
 import com.appdevper.mediaplayer.designsystem.components.PillButton
 import com.appdevper.mediaplayer.designsystem.components.PillStyle
-import com.appdevper.mediaplayer.designsystem.components.SectionLabel
 import com.appdevper.mediaplayer.designsystem.components.StatusDot
 import com.appdevper.mediaplayer.designsystem.components.Thumbnail
 import com.appdevper.mediaplayer.designsystem.components.interactive
@@ -70,7 +69,10 @@ import com.appdevper.mediaplayer.platform.deviceLabel
 import com.appdevper.mediaplayer.ui.icon
 import com.appdevper.mediaplayer.ui.subtitle
 
-/** Landing page: greeting, servers as suggestion cards, "Play on" chips, share card. */
+/**
+ * Landing page, what's used most first: the media servers to browse, where to play, and sharing this
+ * device. No greeting: the servers are the way in.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
@@ -87,27 +89,16 @@ fun HomeScreen(
     // imePadding: room for the keyboard, so what's under a focused field can scroll into view.
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
         CenteredColumn(maxWidth = 720.dp) {
-            Spacer(Modifier.height(48.dp))
-            Icon(AppIcons.Logo, null, Modifier.size(40.dp).align(Alignment.CenterHorizontally), tint = c.textPrimary)
-            Spacer(Modifier.height(16.dp))
-            Text(
-                "What would you like to play?",
-                style = MaterialTheme.typography.displaySmall,
-                color = c.textPrimary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Browse media servers on your Wi‑Fi, then play here or on a TV.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = c.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(28.dp))
-
-            SectionLabel("Media servers")
+            SectionHeader("Media servers") {
+                // With none found, the card below has the search; here it would say it twice.
+                // Searching: says so where the button was, so nothing jumps.
+                if (state.servers.isNotEmpty() && state.searching) {
+                    CircularProgressIndicator(Modifier.padding(12.dp).size(16.dp), strokeWidth = 2.dp, color = c.textSecondary)
+                } else if (state.servers.isNotEmpty()) {
+                    GhostIconButton(AppIcons.Refresh, "Search again", onRefresh, iconSize = 18.dp, tint = c.textSecondary)
+                }
+            }
             if (state.servers.isEmpty()) {
                 SearchingCard(state.searching, onRefresh)
             } else {
@@ -131,7 +122,7 @@ fun HomeScreen(
             AddServerByAddress(state.addServer, onAddServer, onDismissAddServer)
             SavedAddresses(state.savedAddresses, onForgetServer)
 
-            SectionLabel("Play on")
+            SectionHeader("Play on")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TargetChip(AppIcons.Phone, "This device ($deviceLabel)", state.target == PlaybackTarget.Local) { onSelectTarget(PlaybackTarget.Local) }
                 state.renderers.forEach { d ->
@@ -140,8 +131,9 @@ fun HomeScreen(
                 }
             }
 
-            SectionLabel("Share")
+            SectionHeader("Share")
             OutlineCard(onClick = onOpenMyServer, modifier = Modifier.fillMaxWidth()) {
+                val sharing = state.serverStatus is ServerStatus.Running
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     IconTile(AppIcons.Radio, size = 40.dp, shape = Radius.pill)
                     Column(Modifier.weight(1f)) {
@@ -152,12 +144,30 @@ fun HomeScreen(
                             color = c.textTertiary,
                         )
                     }
-                    StatusDot(state.serverStatus is ServerStatus.Running)
+                    // Said, not only shown by the dot's color.
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        StatusDot(sharing)
+                        Text(if (sharing) "On" else "Off", style = MaterialTheme.typography.labelMedium, color = c.textSecondary)
+                    }
                     Icon(AppIcons.ChevronRight, null, Modifier.size(18.dp), tint = c.textTertiary)
                 }
             }
             Spacer(Modifier.height(120.dp))
         }
+    }
+}
+
+/** A section's title, with an action at its end when there's one. */
+@Composable
+private fun SectionHeader(title: String, action: @Composable () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 8.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = AppTheme.colors.textPrimary,
+            modifier = Modifier.weight(1f).padding(start = 2.dp).semantics { heading() },
+        )
+        action()
     }
 }
 

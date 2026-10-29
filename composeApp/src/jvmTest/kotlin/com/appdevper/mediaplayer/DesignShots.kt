@@ -212,7 +212,7 @@ class DesignShots {
     ) {
         onAllNodesWithText("Khon Kaen Blues").assertCountEquals(2) // player + sidebar "Now playing"
         onNodeWithText("Bodyslam · Kraam").assertExists()
-        onNodeWithText("Playing from Worawit's iPhone").assertExists()
+        onNodeWithText("From Worawit's iPhone").assertExists()
         onNodeWithText("4:05").assertExists()
         onNodeWithText("Mirroring Worawit's iPhone").assertDoesNotExist()
         // The sender takes remote control: the buttons go to its app.
