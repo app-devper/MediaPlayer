@@ -11,6 +11,13 @@ exit check that must hold before moving on. Skip a stage only where it says
 so. Branching and PR mechanics are owned by `git-flow` and `pr`; this skill
 only sequences them.
 
+Skills named below live in two places. `.agents/skills/` in this repo holds
+the ones about this repo: `dev-flow`, `git-flow`, `pr`. The generic ones —
+`security-review`, `ui-ux-pro-max` — come from `app-devper/agent-skills`,
+linked into `~/.claude/skills` by its `install.sh`. If a generic skill is
+missing, clone that repo and run the script; never recreate one inside this
+repo, because a same-named copy would be shadowed.
+
 ## 0. Pick the track
 
 | Track | Starts at | Branch from → PR into |
@@ -79,7 +86,7 @@ setting is still High), except `release/*`, which is Medium as stated.
 | Tier | Touches | Review (stage 6) | Approval (stage 7) |
 |---|---|---|---|
 | Low | docs (README), copy, tests only, additive app changes behind a setting that is off by default | `/code-review` | the user's "go" to open the PR covers it |
-| Medium | ordinary app changes (UI, player, domain, data); the process itself (`.claude/skills/*`, `.github/pull_request_template.md`), since it decides how everything else is reviewed; `release/*` (always Medium: everything in it already passed its own PR's review at that PR's tier; the release review checks the bump and that each PR in the changelog went through) | `/code-review` | the user approves the PR before it lands |
+| Medium | ordinary app changes (UI, player, domain, data); the process itself (`.agents/skills/*`, `.github/pull_request_template.md`), since it decides how everything else is reviewed; `release/*` (always Medium: everything in it already passed its own PR's review at that PR's tier; the release review checks the bump and that each PR in the changelog went through) | `/code-review` | the user approves the PR before it lands |
 | High | anything listening on the LAN or parsing what arrives from it (`data/server`, `data/upnp`, `:airplay`, native C/C++), crypto/pairing, file access, `.github/workflows/*`, build/signing config, `hotfix/*` | `/code-review` + `/security-review`, both blocking | the user reviews the risky files themselves (point them to the exact paths) and approves |
 
 ## 4. Build
@@ -126,11 +133,11 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
   pass". Anything not run is said as such ("not checked on iOS device").
 - UI changes are also checked against the design rules: the tokens and
   components in stage 2, contrast ≥ 4.5:1 for text, touch targets ≥ 48dp /
-  44pt, labelled controls. For a wider UI pass, the `ui-ux-pro-max` data
-  lives in another repo on this machine:
-  `python3 /Users/admin/ProjectPos/PortForMe/.agents/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain ux`
-  (or `--stack jetpack-compose`). If that path doesn't exist, use the rules
-  above and say the skill wasn't available.
+  44pt, labelled controls. For a wider UI pass use the shared
+  `ui-ux-pro-max` skill:
+  `python3 ~/.claude/skills/ui-ux-pro-max/scripts/search.py "<query>" --domain ux`
+  (or `--stack jetpack-compose`). If the skill is missing, install
+  `agent-skills` first; until then use the rules above and say so.
 
 **Exit:** everything above is green with its output shown, and the change
 was seen working, not just compiled.
