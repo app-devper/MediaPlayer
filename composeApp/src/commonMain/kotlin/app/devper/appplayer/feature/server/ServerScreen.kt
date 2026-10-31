@@ -126,7 +126,7 @@ fun ServerScreen() {
             Group("About") {
                 SettingRow("Shares") { Text(state.capabilities.sourceDescription, style = MaterialTheme.typography.bodySmall, color = c.textTertiary, modifier = Modifier.widthIn(max = 260.dp)) }
                 Divider()
-                SettingRow("Version") { Text("2.0.0", style = MaterialTheme.typography.bodyMedium, color = c.textTertiary) }
+                SettingRow("Version") { Text("2.1.0", style = MaterialTheme.typography.bodyMedium, color = c.textTertiary) }
             }
             Spacer(Modifier.height(120.dp))
         }
