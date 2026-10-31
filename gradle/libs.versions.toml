@@ -3,8 +3,8 @@ agp = "8.13.2"
 kotlin = "2.4.20"
 compose-multiplatform = "1.11.1"
 
-app-version = "2.0.0"
-app-versionCode = "20"
+app-version = "1.0.0"
+app-versionCode = "1"
 
 android-compileSdk = "36"
 android-minSdk = "24"
