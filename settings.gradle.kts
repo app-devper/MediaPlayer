@@ -1,4 +1,5 @@
 pluginManagement {
+    includeBuild("build-logic")
     repositories {
         mavenCentral()
         google {
@@ -27,4 +28,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MediaPlayer"
 
-include(":composeApp", ":domain", ":data")
+include(":composeApp", ":domain", ":data", ":core:designsystem", ":core:testing", ":airplay")

@@ -11,3 +11,5 @@ captures
 xcuserdata/
 *.xcworkspace/xcuserdata
 iosApp/build
+hs_err_pid*.log
+replay_pid*.log

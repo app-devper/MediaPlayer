@@ -1,26 +1,18 @@
 @file:Suppress("DEPRECATION")
 
+import java.util.Properties
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
-    alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidApplication)
-    alias(libs.plugins.jetbrainsCompose)
-    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.mediaplayer.kmp.application)
+    alias(libs.plugins.mediaplayer.kmp.compose)
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
-    jvmToolchain(17)
-
-    androidTarget()
-    jvm()
-
-    listOf(
-        iosArm64(),
-        iosSimulatorArm64(),
-    ).forEach { target ->
-        target.binaries.framework {
+    targets.withType<KotlinNativeTarget>().configureEach {
+        binaries.framework {
             baseName = "ComposeApp"
             isStatic = true
         }
@@ -30,6 +22,8 @@ kotlin {
         commonMain.dependencies {
             implementation(project(":domain"))
             implementation(project(":data"))
+            implementation(project(":core:designsystem"))
+            implementation(project(":airplay"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)
@@ -58,45 +52,43 @@ kotlin {
             implementation(libs.koin.android)
             implementation(libs.media3.exoplayer)
             implementation(libs.media3.ui)
+            implementation(libs.media3.exoplayer.hls) // AirPlay video (YouTube) is HLS
+            implementation(libs.media3.session) // background playback: notification, lock screen, headset
+            implementation(libs.androidx.lifecycle.process) // videos pause while the app is in the background
         }
 
         jvmMain.dependencies {
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
-            implementation(libs.vlcj)
         }
 
         jvmTest.dependencies {
             implementation(compose.desktop.uiTestJUnit4)
-        }
-
-        commonTest.dependencies {
-            implementation(libs.kotlin.test)
-            implementation(libs.kotlinx.coroutines.test)
+            implementation(project(":core:testing"))
         }
     }
 }
 
 android {
-    namespace = "com.appdevper.mediaplayer"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
-
-    defaultConfig {
-        applicationId = "com.appdevper.appplayer"
-        minSdk = libs.versions.android.minSdk.get().toInt()
-        targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = libs.versions.app.versionCode.get().toInt()
-        versionName = libs.versions.app.version.get()
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
+    namespace = "app.devper.appplayer"
+    defaultConfig.applicationId = "app.devper.appplayer"
 
     packaging {
         resources {
             excludes += setOf("META-INF/INDEX.LIST", "META-INF/io.netty.versions.properties", "META-INF/DEPENDENCIES")
+        }
+    }
+
+    // The release key lives outside the repo (dev-flow stage 8.7). The properties file is named by
+    // APPPLAYER_KEYSTORE_PROPERTIES, else ~/.devper/keystores/appplayer-release.properties. Without
+    // it the release build is unsigned: it still builds, it just cannot be installed or distributed.
+    val keystoreProperties = releaseKeystoreProperties()
+    if (keystoreProperties != null) {
+        signingConfigs.create("release") {
+            storeFile = file(keystoreProperties.getProperty("storeFile"))
+            storePassword = keystoreProperties.getProperty("storePassword")
+            keyAlias = keystoreProperties.getProperty("keyAlias")
+            keyPassword = keystoreProperties.getProperty("keyPassword")
         }
     }
 
@@ -105,21 +97,36 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystoreProperties != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 }
 
+fun releaseKeystoreProperties(): Properties? {
+    val path = System.getenv("APPPLAYER_KEYSTORE_PROPERTIES")
+        ?: "${System.getProperty("user.home")}/.devper/keystores/appplayer-release.properties"
+    val file = File(path)
+    if (!file.isFile) {
+        logger.lifecycle("Android release signing: no keystore properties at $path, the release APK will be unsigned")
+        return null
+    }
+    return Properties().apply { file.inputStream().use { load(it) } }
+}
+
 compose.desktop {
     application {
-        mainClass = "com.appdevper.mediaplayer.MainKt"
+        mainClass = "app.devper.appplayer.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
+            // jdeps' suggestion plus what is loaded at runtime: Ktor's Java client (java.net.http)
+            // and TLS with EC certificates.
+            modules("java.instrument", "java.management", "java.prefs", "jdk.unsupported", "java.net.http", "jdk.crypto.ec")
             packageName = "Media Player"
             packageVersion = libs.versions.app.version.get()
             description = "DLNA / UPnP media player and media server"
             vendor = "appdevper"
             macOS {
-                bundleID = "com.appdevper.mediaplayer"
+                bundleID = "app.devper.appplayer"
                 iconFile.set(project.file("icons/icon.icns"))
             }
             windows {
