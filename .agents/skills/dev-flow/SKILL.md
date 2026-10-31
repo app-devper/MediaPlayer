@@ -230,9 +230,23 @@ Never push to `develop` directly.
 7. **Build artifacts** from that clean `main` checkout:
    ```bash
    ./gradlew :composeApp:packageDistributionForCurrentOS   # .dmg on macOS (.msi/.deb on those OSes)
-   ./gradlew :composeApp:assembleRelease                   # sign with the release key (never committed)
+   ./gradlew :composeApp:assembleRelease                   # signed when the release key is present (below)
    # iOS: Xcode › Product › Archive (needs the multicast entitlement for device builds)
    ```
+   **Android release key.** Never in the repo. The build reads
+   `~/.devper/keystores/appplayer-release.properties` (or the file named by
+   `APPPLAYER_KEYSTORE_PROPERTIES`): `storeFile`, `storePassword`, `keyAlias`,
+   `keyPassword`. Without it `assembleRelease` prints a notice and produces an
+   unsigned APK. The key and that file are backed up in Secret Manager of
+   `devperpos` as `appplayer-release-keystore` (the `.jks`, base64) and
+   `appplayer-release-keystore-properties`; on a new machine:
+   ```bash
+   mkdir -p ~/.devper/keystores && chmod 700 ~/.devper ~/.devper/keystores
+   gcloud secrets versions access latest --secret appplayer-release-keystore --project devperpos | base64 -d > ~/.devper/keystores/appplayer-release.jks
+   gcloud secrets versions access latest --secret appplayer-release-keystore-properties --project devperpos > ~/.devper/keystores/appplayer-release.properties
+   chmod 600 ~/.devper/keystores/appplayer-release.*
+   ```
+   Losing this key means a new applicationId for every future install, so never rotate it casually.
 8. **Publish** the same artifacts two ways:
    - **GitHub release** (every platform; the only channel for Desktop):
      `gh release create vX.Y.Z --title "vX.Y.Z" --notes "<changelog>" <artifacts>`
