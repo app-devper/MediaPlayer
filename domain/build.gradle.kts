@@ -15,5 +15,5 @@ kotlin {
 }
 
 android {
-    namespace = "com.appdevper.mediaplayer.domain"
+    namespace = "app.devper.appplayer.domain"
 }

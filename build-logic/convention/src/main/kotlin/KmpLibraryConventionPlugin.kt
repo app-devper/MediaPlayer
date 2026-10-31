@@ -1,6 +1,6 @@
 import com.android.build.api.dsl.LibraryExtension
-import com.appdevper.mediaplayer.buildlogic.configureAndroid
-import com.appdevper.mediaplayer.buildlogic.configureKotlinMultiplatform
+import app.devper.appplayer.buildlogic.configureAndroid
+import app.devper.appplayer.buildlogic.configureKotlinMultiplatform
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure

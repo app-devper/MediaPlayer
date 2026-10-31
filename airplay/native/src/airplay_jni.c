@@ -1,5 +1,5 @@
 /*
- * JNI bridge for com.appdevper.mediaplayer.airplay.NativeAirPlay (Android and Desktop).
+ * JNI bridge for app.devper.appplayer.airplay.NativeAirPlay (Android and Desktop).
  * Copyright (C) 2026 appdevper. GPL-3.0-or-later (links GPL-3.0 UxPlay code).
  *
  * UxPlay calls back on its own network threads; they are attached to the JVM on first use and
@@ -295,7 +295,7 @@ static bool lookup_methods(JNIEnv *env, jobject obj) {
 }
 
 JNIEXPORT jint JNICALL
-Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject thiz, jstring name, jbyteArray hw_addr,
+Java_app_devper_appplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject thiz, jstring name, jbyteArray hw_addr,
                                                            jstring keyfile, jint width, jint height, jint fps,
                                                            jboolean require_pin, jboolean video, jint log_level,
                                                            jobject callbacks) {
@@ -349,13 +349,13 @@ Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_start(JNIEnv *env, jobject 
 }
 
 JNIEXPORT jint JNICALL
-Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_port(JNIEnv *env, jobject thiz) {
+Java_app_devper_appplayer_airplay_NativeAirPlay_port(JNIEnv *env, jobject thiz) {
     (void) env; (void) thiz;
     return ap_port();
 }
 
 JNIEXPORT void JNICALL
-Java_com_appdevper_mediaplayer_airplay_NativeAirPlay_stop(JNIEnv *env, jobject thiz) {
+Java_app_devper_appplayer_airplay_NativeAirPlay_stop(JNIEnv *env, jobject thiz) {
     (void) thiz;
     ap_stop(); /* joins UxPlay's threads, so no callback runs after this */
     if (listener) {

@@ -12,5 +12,5 @@ kotlin {
 }
 
 android {
-    namespace = "com.appdevper.mediaplayer.testing"
+    namespace = "app.devper.appplayer.testing"
 }

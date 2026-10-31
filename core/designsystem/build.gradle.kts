@@ -19,5 +19,5 @@ kotlin {
 }
 
 android {
-    namespace = "com.appdevper.mediaplayer.designsystem"
+    namespace = "app.devper.appplayer.designsystem"
 }

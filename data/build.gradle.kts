@@ -46,5 +46,5 @@ kotlin {
 }
 
 android {
-    namespace = "com.appdevper.mediaplayer.data"
+    namespace = "app.devper.appplayer.data"
 }

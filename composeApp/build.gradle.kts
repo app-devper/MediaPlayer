@@ -69,8 +69,8 @@ kotlin {
 }
 
 android {
-    namespace = "com.appdevper.mediaplayer"
-    defaultConfig.applicationId = "com.appdevper.appplayer"
+    namespace = "app.devper.appplayer"
+    defaultConfig.applicationId = "app.devper.appplayer"
 
     packaging {
         resources {
@@ -89,7 +89,7 @@ android {
 
 compose.desktop {
     application {
-        mainClass = "com.appdevper.mediaplayer.MainKt"
+        mainClass = "app.devper.appplayer.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             // jdeps' suggestion plus what is loaded at runtime: Ktor's Java client (java.net.http)
@@ -100,7 +100,7 @@ compose.desktop {
             description = "DLNA / UPnP media player and media server"
             vendor = "appdevper"
             macOS {
-                bundleID = "com.appdevper.mediaplayer"
+                bundleID = "app.devper.appplayer"
                 iconFile.set(project.file("icons/icon.icns"))
             }
             windows {

@@ -1,0 +1,103 @@
+package app.devper.appplayer.data
+
+import app.devper.appplayer.data.platform.LocalMedia
+import app.devper.appplayer.data.platform.LocalSubtitle
+import app.devper.appplayer.data.mapper.toDomain
+import app.devper.appplayer.data.repository.SubtitleRepositoryImpl
+import app.devper.appplayer.domain.model.Subtitle
+import app.devper.appplayer.data.platform.MediaLibrary
+import app.devper.appplayer.data.server.MediaServer
+import app.devper.appplayer.data.server.ServerConfig
+import app.devper.appplayer.data.server.ServerState
+import app.devper.appplayer.data.upnp.ContentDirectoryClient
+import app.devper.appplayer.data.upnp.DeviceDescription
+import app.devper.appplayer.domain.model.MediaKind
+import app.devper.appplayer.data.upnp.SoapClient
+import app.devper.appplayer.data.upnp.SsdpEngine
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsBytes
+import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.io.Buffer
+import kotlinx.io.RawSource
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+/** Starts the real DLNA server on the LAN interface and talks to it with the control-point client. */
+class MediaServerE2ETest {
+
+    private val payload = ByteArray(10_000) { (it % 251).toByte() }
+    private val srt = "1\n00:00:01,000 --> 00:00:02,000\nสวัสดี\n".encodeToByteArray()
+
+    private val library = object : MediaLibrary {
+        override suspend fun scan(kinds: Set<MediaKind>) = listOf(
+            LocalMedia(
+                "a", MediaKind.VIDEO, "Clip <1>", null, null, "video/mp4", payload.size.toLong(), 65_000, "1920x1080", "/x/clip.mp4",
+                subtitles = listOf(LocalSubtitle("Clip 1.th.srt", "th", "/x/Clip 1.th.srt")),
+            ),
+            LocalMedia("b", MediaKind.AUDIO, "Song", "Artist", "Album", "audio/mpeg", payload.size.toLong(), 1_000, null, "/x/song.mp3"),
+        ).filter { it.kind in kinds }
+
+        override fun open(media: LocalMedia, offset: Long): RawSource {
+            val buf = Buffer()
+            buf.write(payload, offset.toInt(), payload.size)
+            return buf
+        }
+
+        override fun openSubtitle(subtitle: LocalSubtitle): RawSource = Buffer().apply { write(srt) }
+    }
+
+    @Test
+    fun browseAndStream() = runBlocking {
+        // SSDP on an in-memory LAN, HTTP on loopback: no network needed.
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val http = HttpClient()
+        val server = MediaServer(SsdpEngine(scope, network = InMemoryLan().host("127.0.0.1")), http, scope)
+        try {
+            server.start(ServerConfig("Test & Server", "uuid:test-1", setOf(MediaKind.VIDEO, MediaKind.AUDIO)), library)
+            val running = assertIs<ServerState.Running>(server.state.value)
+
+            val location = "${running.url}/description.xml"
+            val device = DeviceDescription.parse(http.get(location).bodyAsText(), location).single()
+            assertEquals("Test & Server", device.friendlyName)
+            assertTrue(device.isMediaServer)
+
+            val cds = ContentDirectoryClient(SoapClient(http))
+            val root = cds.browseChildren(device, "0").objects
+            assertEquals(listOf("Videos", "Music"), root.map { it.title })
+
+            val videos = cds.browseChildren(device, root[0].id).objects
+            val clip = videos.single()
+            assertEquals("Clip <1>", clip.title)
+            assertEquals(MediaKind.VIDEO, clip.kind)
+            assertEquals(65_000L, clip.durationMs)
+
+            val full = http.get(clip.url!!).bodyAsBytes()
+            assertTrue(full.contentEquals(payload))
+
+            // The sidecar subtitle: listed with the clip (the clip still plays its video), and served.
+            val subtitle = clip.subtitles.single()
+            assertEquals("srt", subtitle.type)
+            assertEquals(Subtitle(subtitle.uri, "Thai", "th"), subtitle.toDomain())
+            assertTrue(SubtitleRepositoryImpl(http).fetch(subtitle.uri).contentEquals(srt))
+            assertEquals(404, http.get(subtitle.uri.replace("/0/", "/1/")).status.value) // only files the scan found
+
+            val partial = http.get(clip.url!!) { header("Range", "bytes=100-199") }
+            assertEquals(206, partial.status.value)
+            assertEquals("bytes 100-199/10000", partial.headers["Content-Range"])
+            assertTrue(partial.bodyAsBytes().contentEquals(payload.copyOfRange(100, 200)))
+        } finally {
+            server.stop()
+            http.close()
+            scope.cancel()
+        }
+    }
+}
