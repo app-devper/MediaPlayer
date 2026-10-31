@@ -60,7 +60,7 @@ kotlin {
 }
 
 android {
-    namespace = "com.appdevper.mediaplayer.airplay"
+    namespace = "app.devper.appplayer.airplay"
     ndkVersion = libs.versions.android.ndk.get()
     defaultConfig {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

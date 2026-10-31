@@ -65,20 +65,20 @@ core:designsystem                  PlaybackSession
   tokens, the icon set and reusable components.
 
 ```
-domain/src/commonMain/kotlin/com/appdevper/mediaplayer/domain/
+domain/src/commonMain/kotlin/app/devper/appplayer/domain/
   model/       Media · Playback · Server · Cast · AirPlay (one file per area)
   repository/  repository interfaces (implemented in :data)
   usecase/     use cases with a rule of their own (no pass-throughs), one per file
   session/     app-wide sessions: PlaybackSession, MediaServerSession, CastReceiverSession, AirPlayReceiverSession;
                LocalPlayer + PlaybackEngine, RendererTransport
 
-data/src/commonMain/kotlin/com/appdevper/mediaplayer/data/
+data/src/commonMain/kotlin/app/devper/appplayer/data/
   upnp/        SSDP, device descriptions, SOAP, DIDL-Lite (control point); host/ = our own devices
   server/      the DLNA media server      renderer/  the DLNA renderer (receive casts)
   repository/  repository implementations   mapper/  Upnp*/Didl* → domain
   platform/    platform I/O behind small interfaces   di/  dataModule
 
-composeApp/src/<platform>Main/kotlin/com/appdevper/mediaplayer/
+composeApp/src/<platform>Main/kotlin/app/devper/appplayer/
   di/          Koin modules + initKoin()
   feature/     home · browse · player · mirror · server · shell  (Screen + ViewModel)
   ui/          domain → UI helpers;  shell/ = routes, nav host, sidebar, top bar, mini player;
@@ -90,7 +90,7 @@ composeApp/src/<platform>Main/kotlin/com/appdevper/mediaplayer/
                (Android media session), IosBackgroundPlayer (iOS lock screen)
   service/     Android services: ServerService (keeps the DLNA server alive)
 
-core/designsystem/src/commonMain/kotlin/com/appdevper/mediaplayer/designsystem/
+core/designsystem/src/commonMain/kotlin/app/devper/appplayer/designsystem/
   theme/       design tokens (colors, type, radii), light & dark
   icons/       outline icon set + logo
   components/  pill buttons, list rows, composer field, thin slider…

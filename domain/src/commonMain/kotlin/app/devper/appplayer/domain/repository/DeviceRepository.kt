@@ -1,0 +1,27 @@
+package app.devper.appplayer.domain.repository
+
+import app.devper.appplayer.domain.model.MediaDevice
+import kotlinx.coroutines.flow.StateFlow
+
+/** Network discovery of media servers and renderers. */
+interface DeviceRepository {
+    val devices: StateFlow<List<MediaDevice>>
+    val isSearching: StateFlow<Boolean>
+    fun start()
+    fun refresh()
+    fun reset()
+    fun device(id: String): MediaDevice?
+
+    /**
+     * Asks [address] directly (a host, host:port or a description URL), for networks or devices where
+     * discovery can't find it (an iPhone without the multicast entitlement). Returns what answered,
+     * which then shows in [devices] and is asked again on later launches; empty if nothing did.
+     */
+    suspend fun addByAddress(address: String): List<MediaDevice>
+
+    /** Addresses added with [addByAddress] that are kept and asked again. */
+    val savedAddresses: StateFlow<List<String>>
+
+    /** Stops asking [address] and drops its servers from [devices] (unless the network announces them). */
+    suspend fun forgetAddress(address: String)
+}

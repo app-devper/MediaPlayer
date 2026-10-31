@@ -1,0 +1,118 @@
+package app.devper.appplayer.feature.shell
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.devper.appplayer.domain.model.AirPlayActivity
+import app.devper.appplayer.domain.model.MediaDevice
+import app.devper.appplayer.domain.model.NowPlaying
+import app.devper.appplayer.domain.model.PlaybackTarget
+import app.devper.appplayer.domain.model.ServerStatus
+import app.devper.appplayer.domain.repository.DeviceRepository
+import app.devper.appplayer.domain.session.AirPlayReceiverSession
+import app.devper.appplayer.domain.session.MediaServerSession
+import app.devper.appplayer.domain.session.CastReceiverSession
+import app.devper.appplayer.domain.session.PlaybackSession
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+data class ShellUiState(
+    val servers: List<MediaDevice> = emptyList(),
+    val renderers: List<MediaDevice> = emptyList(),
+    val searching: Boolean = false,
+    val serverStatus: ServerStatus = ServerStatus.Stopped,
+    val target: PlaybackTarget = PlaybackTarget.Local,
+    /** What plays now, for the mini player and the sidebar; its play/pause is the mini player's button. */
+    val nowPlaying: NowPlaying = NowPlaying.Nothing,
+    val airPlay: AirPlayActivity = AirPlayActivity(),
+    /** Adding a media server by its address (Home › Media servers). */
+    val addServer: AddServerState = AddServerState.Idle,
+    /** Server addresses the user added, which can be removed again. */
+    val savedAddresses: List<String> = emptyList(),
+) {
+    /** Something to show under "Now playing": our own item, or audio a sender plays here. */
+    val hasNowPlaying: Boolean get() = nowPlaying != NowPlaying.Nothing
+}
+
+/** State for the app chrome: sidebar, "Play on" picker and the mini player. */
+class ShellViewModel(
+    private val devices: DeviceRepository,
+    server: MediaServerSession,
+    private val session: PlaybackSession,
+    receiver: CastReceiverSession,
+    airPlay: AirPlayReceiverSession,
+) : ViewModel() {
+
+    /** Another device cast something here (DLNA or AirPlay video): show the player. */
+    val openPlayer: Flow<Unit> = merge(receiver.openPlayer, airPlay.openPlayer)
+
+    /** An iPhone/iPad/Mac started mirroring: show it. */
+    val openMirror: SharedFlow<Unit> = airPlay.openMirror
+
+    private val addServer = MutableStateFlow<AddServerState>(AddServerState.Idle)
+
+    val uiState: StateFlow<ShellUiState> = combine(
+        devices.devices,
+        devices.isSearching,
+        server.status,
+        session.state,
+        session.nowPlaying,
+    ) { devices, searching, server, playback, nowPlaying ->
+        ShellUiState(
+            servers = devices.filter { it.isServer },
+            renderers = devices.filter { it.isRenderer },
+            searching = searching,
+            serverStatus = server,
+            target = playback.target,
+            nowPlaying = nowPlaying,
+        )
+    }.combine(airPlay.activity) { state, activity -> state.copy(airPlay = activity) }
+        .combine(addServer) { state, adding -> state.copy(addServer = adding) }
+        .combine(devices.savedAddresses) { state, saved -> state.copy(savedAddresses = saved) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ShellUiState())
+
+    /** [clear] forgets known devices first (pull-to-refresh / network change). */
+    fun refresh(clear: Boolean = false) = if (clear) devices.reset() else devices.refresh()
+
+    /** Asks [address] directly for a media server (when discovery can't find it). */
+    fun addServer(address: String) {
+        if (addServer.value is AddServerState.Working) return
+        addServer.value = AddServerState.Working
+        adding = viewModelScope.launch {
+            val found = runCatching { devices.addByAddress(address) }.getOrDefault(emptyList())
+            addServer.value = if (found.isEmpty()) AddServerState.NotFound(address.trim()) else AddServerState.Added(found.map { it.name })
+        }
+    }
+
+    fun forgetServer(address: String) {
+        viewModelScope.launch { devices.forgetAddress(address) }
+    }
+
+    /** Cancel, or a fresh start: a search still running stops (it won't add or report anything later). */
+    fun dismissAddServer() {
+        adding?.cancel()
+        adding = null
+        addServer.value = AddServerState.Idle
+    }
+
+    private var adding: Job? = null
+
+    fun selectTarget(target: PlaybackTarget) = session.setTarget(target)
+
+    /** Play/pause where it plays: here, on a renderer, or the sender's music. */
+    fun togglePause() = session.togglePause()
+}
+
+sealed interface AddServerState {
+    data object Idle : AddServerState
+    data object Working : AddServerState
+    data class NotFound(val address: String) : AddServerState
+    data class Added(val names: List<String>) : AddServerState
+}

@@ -1,0 +1,52 @@
+package app.devper.appplayer.domain.session
+
+import app.devper.appplayer.domain.model.CastCommand
+import app.devper.appplayer.domain.model.PlaybackState
+import app.devper.appplayer.domain.model.PlaybackTarget
+import app.devper.appplayer.domain.model.Receiver
+import app.devper.appplayer.domain.model.ReceiverLink
+import app.devper.appplayer.domain.model.ReceiverPlayback
+
+/**
+ * [receiver]'s line to this session: what another device cast through it plays on the local player.
+ * [openPlayer] brings the player on screen (on a load, and on play since it may have been closed).
+ * Until its next load, its other commands are only for what it loaded here, not for something picked,
+ * cast or moved to a renderer since.
+ */
+internal fun PlaybackSession.link(receiver: Receiver, openPlayer: () -> Unit): ReceiverLink = object : ReceiverLink {
+    override val owns: Boolean
+        get() = state.value.let { it.castBy == receiver && it.target == PlaybackTarget.Local }
+
+    override fun send(command: CastCommand): Boolean {
+        val here = state.value.target == PlaybackTarget.Local
+        when (command) {
+            is CastCommand.Load -> {
+                setTarget(PlaybackTarget.Local)
+                play(command.entry, listOf(command.entry), autoPlay = command.autoPlay, startPositionMs = command.startPositionMs, castBy = receiver)
+                openPlayer()
+            }
+            is CastCommand.SetVolume -> if (here) setVolume(command.volume) else return false
+            is CastCommand.SetMute -> if (here) setMuted(command.muted) else return false
+            else -> {
+                if (!owns) return false
+                when (command) {
+                    CastCommand.Play -> {
+                        play()
+                        openPlayer()
+                    }
+                    CastCommand.Pause -> pause()
+                    CastCommand.Stop -> stop()
+                    is CastCommand.Seek -> seek(command.positionMs)
+                    else -> Unit
+                }
+            }
+        }
+        return true
+    }
+}
+
+/** Local playback as reported back to the sending device. */
+internal fun PlaybackState.receiverPlayback(): ReceiverPlayback {
+    val entry = current.takeIf { target == PlaybackTarget.Local }
+    return ReceiverPlayback(entry, playback.status.takeIf { entry != null }, playback.volume ?: 100, playback.muted)
+}
