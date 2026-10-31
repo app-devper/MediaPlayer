@@ -131,6 +131,19 @@ sizes. Without `SHOT_DIR` the test does nothing.
 open iosApp/iosApp.xcodeproj                 # iOS: pick a simulator/device and Run
 ```
 
+### Distributing a build
+
+Releases are tagged `vX.Y.Z` on `main` and published two ways (`dev-flow` stage 8):
+
+* **GitHub release**: the `.dmg` / `.msi` / `.deb`, the Android APK and the iOS archive. This is
+  the only channel for Desktop.
+* **Firebase App Distribution** (project `devperpos`, tester group `testers`): the Android APK and
+  the iOS `.ipa`, so testers get them on their phones from the App Distribution app or e-mail.
+  The app ids are in `dev-flow`; a tester is added once with
+  `firebase appdistribution:testers:add <email> --group-alias testers --project devperpos`.
+
+Store listings (Play Console, App Store Connect) do not exist yet.
+
 ## AirPlay
 
 ### Receiving (Android, Desktop)

@@ -233,10 +233,24 @@ Never push to `develop` directly.
    ./gradlew :composeApp:assembleRelease                   # sign with the release key (never committed)
    # iOS: Xcode › Product › Archive (needs the multicast entitlement for device builds)
    ```
-8. **Publish:** `gh release create vX.Y.Z --title "vX.Y.Z" --notes "<changelog>" <artifacts>`;
-   store uploads (Play Console / App Store Connect) are done by hand.
+8. **Publish** the same artifacts two ways:
+   - **GitHub release** (every platform; the only channel for Desktop):
+     `gh release create vX.Y.Z --title "vX.Y.Z" --notes "<changelog>" <artifacts>`
+   - **Firebase App Distribution** (Android and iOS testers; project `devperpos`, group `testers`):
+     ```bash
+     firebase appdistribution:distribute composeApp/build/outputs/apk/release/composeApp-release.apk \
+       --project devperpos --app 1:1056670356976:android:84aa77dcdc33c0c8a73935 \
+       --groups testers --release-notes "vX.Y.Z: <one line>"
+     firebase appdistribution:distribute <path-to>.ipa \
+       --project devperpos --app 1:1056670356976:ios:3b64c3033bcfb930a73935 \
+       --groups testers --release-notes "vX.Y.Z: <one line>"
+     ```
+     Testers are added once with `firebase appdistribution:testers:add <email> --group-alias testers --project devperpos`.
+     The iOS build must be signed with an ad-hoc or development profile that lists the testers' devices.
+   - Store uploads (Play Console / App Store Connect) stay by hand and come later.
 
-**Exit:** tag `vX.Y.Z` on `main`, a GitHub release built from that commit, and `develop` contains `main`.
+**Exit:** tag `vX.Y.Z` on `main`, a GitHub release built from that commit, the Android and iOS builds
+on App Distribution, and `develop` contains `main`.
 
 ## 9. Hotfix: a shipped build is broken
 

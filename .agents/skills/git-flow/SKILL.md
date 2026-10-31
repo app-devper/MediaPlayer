@@ -27,9 +27,10 @@ CI runs on Linux and does **not** compile iOS. Run the iOS check from
 
 ## What merging `main` does: nothing automatic
 
-There is no deploy target. Merging `main` neither builds, tags nor publishes.
-After a release/hotfix lands, tag `v<app-version>` and build/publish the
-artifacts by hand (`dev-flow` stage 8). Every `release/*` or `hotfix/*` PR
+There is no deploy pipeline. Merging `main` neither builds, tags nor publishes.
+After a release/hotfix lands, tag `v<app-version>` and build the artifacts by
+hand, then publish them as a GitHub release and, for Android and iOS, to
+Firebase App Distribution (`dev-flow` stage 8). Every `release/*` or `hotfix/*` PR
 must bump the version in all places listed in `dev-flow` stage 8.3, so the
 tag and the shipped apps agree.
 
