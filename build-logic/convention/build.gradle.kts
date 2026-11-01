@@ -14,10 +14,6 @@ gradlePlugin {
             id = "mediaplayer.kmp.library"
             implementationClass = "KmpLibraryConventionPlugin"
         }
-        register("kmpApplication") {
-            id = "mediaplayer.kmp.application"
-            implementationClass = "KmpApplicationConventionPlugin"
-        }
         register("kmpCompose") {
             id = "mediaplayer.kmp.compose"
             implementationClass = "KmpComposeConventionPlugin"

@@ -18,6 +18,8 @@ kotlin {
     }
 }
 
-android {
-    namespace = "app.devper.appplayer.designsystem"
+kotlin {
+    android {
+        namespace = "app.devper.appplayer.designsystem"
+    }
 }

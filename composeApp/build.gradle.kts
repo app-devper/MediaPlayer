@@ -1,16 +1,21 @@
 @file:Suppress("DEPRECATION")
 
-import java.util.Properties
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
 
 plugins {
-    alias(libs.plugins.mediaplayer.kmp.application)
+    alias(libs.plugins.mediaplayer.kmp.library)
     alias(libs.plugins.mediaplayer.kmp.compose)
     alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
+    // Shared UI as an Android library; the installable app is :androidApp.
+    android {
+        namespace = "app.devper.appplayer.shared"
+        androidResources { enable = true } // the server notification's status icon lives here
+    }
+
     targets.withType<KotlinNativeTarget>().configureEach {
         binaries.framework {
             baseName = "ComposeApp"
@@ -69,49 +74,6 @@ kotlin {
     }
 }
 
-android {
-    namespace = "app.devper.appplayer"
-    defaultConfig.applicationId = "app.devper.appplayer"
-
-    packaging {
-        resources {
-            excludes += setOf("META-INF/INDEX.LIST", "META-INF/io.netty.versions.properties", "META-INF/DEPENDENCIES")
-        }
-    }
-
-    // The release key lives outside the repo (dev-flow stage 8.7). The properties file is named by
-    // APPPLAYER_KEYSTORE_PROPERTIES, else ~/.devper/keystores/appplayer-release.properties. Without
-    // it the release build is unsigned: it still builds, it just cannot be installed or distributed.
-    val keystoreProperties = releaseKeystoreProperties()
-    if (keystoreProperties != null) {
-        signingConfigs.create("release") {
-            storeFile = file(keystoreProperties.getProperty("storeFile"))
-            storePassword = keystoreProperties.getProperty("storePassword")
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-        }
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            if (keystoreProperties != null) signingConfig = signingConfigs.getByName("release")
-        }
-    }
-}
-
-fun releaseKeystoreProperties(): Properties? {
-    val path = System.getenv("APPPLAYER_KEYSTORE_PROPERTIES")
-        ?: "${System.getProperty("user.home")}/.devper/keystores/appplayer-release.properties"
-    val file = File(path)
-    if (!file.isFile) {
-        logger.lifecycle("Android release signing: no keystore properties at $path, the release APK will be unsigned")
-        return null
-    }
-    return Properties().apply { file.inputStream().use { load(it) } }
-}
 
 compose.desktop {
     application {

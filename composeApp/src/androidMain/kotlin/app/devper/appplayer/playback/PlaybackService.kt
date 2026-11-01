@@ -5,7 +5,6 @@ import android.content.Intent
 import androidx.media3.common.Player
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import app.devper.appplayer.MainActivity
 import org.koin.android.ext.android.inject
 
 /**
@@ -21,7 +20,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         val open = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            this, 0, packageManager.getLaunchIntentForPackage(packageName), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         mediaSession = MediaSession.Builder(this, background.sessionPlayer)
             .setSessionActivity(open)

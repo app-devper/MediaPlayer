@@ -28,4 +28,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "MediaPlayer"
 
-include(":composeApp", ":domain", ":data", ":core:designsystem", ":core:testing", ":airplay")
+include(":androidApp", ":composeApp", ":domain", ":data", ":core:designsystem", ":core:testing", ":airplay", ":airplay:android-native")

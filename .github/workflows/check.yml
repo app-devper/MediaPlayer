@@ -42,7 +42,7 @@ jobs:
             :airplay:jvmTest \
             :data:jvmTest \
             :composeApp:jvmTest \
-            :composeApp:assembleDebug \
+            :androidApp:assembleDebug \
             --stacktrace
 
       - name: Upload test reports on failure

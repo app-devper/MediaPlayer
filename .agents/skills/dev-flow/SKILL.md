@@ -109,7 +109,7 @@ Commit in small conventional commits: `feat(scope): …`, `fix(scope): …`,
 
 ```bash
 # CI gate "Linux (JVM + Android)" (.github/workflows/check.yml)
-./gradlew --parallel :domain:jvmTest :airplay:jvmTest :data:jvmTest :composeApp:jvmTest :composeApp:assembleDebug
+./gradlew --parallel :domain:jvmTest :airplay:jvmTest :data:jvmTest :composeApp:jvmTest :androidApp:assembleDebug
 
 # iOS: CI runs on Linux and never compiles it; check it before every PR that touches shared code
 ./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64
@@ -230,7 +230,7 @@ Never push to `develop` directly.
 7. **Build artifacts** from that clean `main` checkout:
    ```bash
    ./gradlew :composeApp:packageDistributionForCurrentOS   # .dmg on macOS (.msi/.deb on those OSes)
-   ./gradlew :composeApp:assembleRelease                   # signed when the release key is present (below)
+   ./gradlew :androidApp:assembleRelease                   # signed when the release key is present (below)
    # iOS: Xcode › Product › Archive (needs the multicast entitlement for device builds)
    ```
    **Android release key.** Never in the repo. The build reads
@@ -252,7 +252,7 @@ Never push to `develop` directly.
      `gh release create vX.Y.Z --title "vX.Y.Z" --notes "<changelog>" <artifacts>`
    - **Firebase App Distribution** (Android and iOS testers; project `devperpos`, group `testers`):
      ```bash
-     firebase appdistribution:distribute composeApp/build/outputs/apk/release/composeApp-release.apk \
+     firebase appdistribution:distribute androidApp/build/outputs/apk/release/androidApp-release.apk \
        --project devperpos --app 1:1056670356976:android:84aa77dcdc33c0c8a73935 \
        --groups testers --release-notes "vX.Y.Z: <one line>"
      firebase appdistribution:distribute <path-to>.ipa \
