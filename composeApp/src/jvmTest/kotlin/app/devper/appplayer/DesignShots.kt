@@ -68,7 +68,7 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.Paint
-import org.jetbrains.skia.Shader
+import org.jetbrains.skia.Rect
 import org.jetbrains.skia.Surface
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
@@ -232,12 +232,11 @@ class DesignShots {
         assertEquals(listOf(SenderCommand.Next, SenderCommand.Previous, SenderCommand.PlayPause), music.sentToSender)
     }
 
-    /** A gradient JPEG standing in for cover art from the sender. */
+    /** A two-tone JPEG standing in for cover art from the sender (plain fills: the gradient API moves between Skiko releases). */
     private fun cover(): ByteArray {
         val surface = Surface.makeRasterN32Premul(300, 300)
-        surface.canvas.drawPaint(Paint().apply {
-            shader = Shader.makeLinearGradient(0f, 0f, 300f, 300f, intArrayOf(0xffe8505b.toInt(), 0xff2d1b69.toInt()))
-        })
+        surface.canvas.clear(0xffe8505b.toInt())
+        surface.canvas.drawRect(Rect.makeXYWH(0f, 150f, 300f, 150f), Paint().apply { color = 0xff2d1b69.toInt() })
         return surface.makeImageSnapshot().encodeToData(EncodedImageFormat.JPEG)!!.bytes
     }
 
