@@ -318,8 +318,9 @@ class FfmpegPlayerTest {
         p.selectSubtitleStream("1")
         val tracks = withTimeout(10_000) { p.textTracks.first { it.isNotEmpty() } }
         assertEquals(listOf(TextTrack("1", "Thai", "tha")), tracks)
-        // Cues are read ahead of playback, as the file is read.
-        withTimeout(10_000) { while (p.subtitleText("1", 1_500) == null) kotlinx.coroutines.delay(20) }
+        // Cues are read ahead of playback, as the file is read: wait for the later one, or a slow
+        // runner asserts the 2.5 s cue before the reader has reached it.
+        withTimeout(10_000) { while (p.subtitleText("1", 2_600) == null) kotlinx.coroutines.delay(20) }
         assertEquals("สวัสดี\nครับ", p.subtitleText("1", 1_500))
         assertEquals("Second", p.subtitleText("1", 2_600))
         assertEquals(null, p.subtitleText("1", 500))
