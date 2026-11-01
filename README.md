@@ -125,7 +125,7 @@ sizes. Without `SHOT_DIR` the test does nothing.
 
 ```bash
 ./gradlew :composeApp:run                    # desktop
-./gradlew :composeApp:installDebug           # Android device/emulator
+./gradlew :androidApp:installDebug           # Android device/emulator
 ./gradlew :composeApp:packageDistributionForCurrentOS   # .dmg / .msi / .deb
 ./gradlew jvmTest                            # all tests: domain, data (incl. end-to-end server), presentation
 open iosApp/iosApp.xcodeproj                 # iOS: pick a simulator/device and Run

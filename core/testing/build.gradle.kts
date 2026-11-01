@@ -11,6 +11,8 @@ kotlin {
     }
 }
 
-android {
-    namespace = "app.devper.appplayer.testing"
+kotlin {
+    android {
+        namespace = "app.devper.appplayer.testing"
+    }
 }
