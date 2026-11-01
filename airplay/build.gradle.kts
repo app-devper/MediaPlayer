@@ -32,9 +32,19 @@ kotlin {
     applyDefaultHierarchyTemplate {
         common {
             group("jvmShared") {
-                withAndroidTarget()
+                // withCompilations { it.platformType == org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.androidJvm } only matches the Kotlin plugin's own Android target; AGP's KMP
+                // library target is matched by its platform type.
+                withCompilations { it.platformType == org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.androidJvm }
                 withJvm()
             }
+        }
+    }
+
+    android {
+        namespace = "app.devper.appplayer.airplay"
+        // On-device tests of the MediaCodec pipeline (./gradlew :airplay:connectedAndroidDeviceTest).
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         }
     }
 
@@ -42,8 +52,11 @@ kotlin {
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
         }
-        // On-device tests of the MediaCodec pipeline (./gradlew :airplay:connectedDebugAndroidTest).
-        androidInstrumentedTest.dependencies {
+        androidMain.dependencies {
+            // libmediaplayer_airplay.so, built by CMake in a plain Android library module.
+            implementation(project(":airplay:android-native"))
+        }
+        getByName("androidDeviceTest").dependencies {
             implementation(libs.androidx.test.runner)
             implementation(libs.androidx.test.ext.junit)
             implementation(libs.kotlin.test)
@@ -59,21 +72,6 @@ kotlin {
     }
 }
 
-android {
-    namespace = "app.devper.appplayer.airplay"
-    ndkVersion = libs.versions.android.ndk.get()
-    defaultConfig {
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        externalNativeBuild { cmake { arguments += listOf("-DAIRPLAY_BUILD_PROBE=OFF", "-DANDROID_STL=c++_static") } }
-    }
-    externalNativeBuild {
-        cmake {
-            path = file("native/CMakeLists.txt")
-            version = libs.versions.cmake.get()
-        }
-    }
-}
 
 // --- Desktop: build the JNI library for this machine and bundle it as a resource -------------
 

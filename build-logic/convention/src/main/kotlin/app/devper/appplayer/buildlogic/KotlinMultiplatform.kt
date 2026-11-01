@@ -1,10 +1,9 @@
 package app.devper.appplayer.buildlogic
 
-import com.android.build.api.dsl.ApplicationExtension
-import com.android.build.api.dsl.CompileOptions
-import com.android.build.api.dsl.LibraryExtension
+import com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryTarget
+import org.gradle.api.plugins.ExtensionAware
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.gradle.api.GradleException
-import org.gradle.api.JavaVersion
 import org.gradle.api.Project
 import org.gradle.api.artifacts.MinimalExternalModuleDependency
 import org.gradle.api.artifacts.VersionCatalog
@@ -27,7 +26,7 @@ internal fun VersionCatalog.library(alias: String): Provider<MinimalExternalModu
 internal fun Project.configureKotlinMultiplatform() {
     extensions.configure<KotlinMultiplatformExtension> {
         jvmToolchain(17)
-        androidTarget()
+        // androidTarget() is created by com.android.kotlin.multiplatform.library
         jvm()
         iosArm64()
         iosSimulatorArm64()
@@ -42,21 +41,13 @@ internal fun Project.configureKotlinMultiplatform() {
     }
 }
 
-// Separate overloads (instead of AGP's CommonExtension<*, *, …>) so an AGP upgrade that changes
-// CommonExtension's type parameters doesn't break every module.
-internal fun Project.configureAndroid(android: LibraryExtension) = with(android) {
-    compileSdk = libs.version("android-compileSdk").toInt()
-    defaultConfig.minSdk = libs.version("android-minSdk").toInt()
-    compileOptions { useJava17() }
-}
-
-internal fun Project.configureAndroid(android: ApplicationExtension) = with(android) {
-    compileSdk = libs.version("android-compileSdk").toInt()
-    defaultConfig.minSdk = libs.version("android-minSdk").toInt()
-    compileOptions { useJava17() }
-}
-
-private fun CompileOptions.useJava17() {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+/** The Android target of the AGP KMP library plugin: SDK levels from the catalog, Java 17 bytecode. */
+internal fun Project.configureAndroidLibrary() {
+    extensions.configure<KotlinMultiplatformExtension> {
+        (this as ExtensionAware).extensions.configure<KotlinMultiplatformAndroidLibraryTarget>("android") {
+            compileSdk = libs.version("android-compileSdk").toInt()
+            minSdk = libs.version("android-minSdk").toInt()
+            compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+        }
+    }
 }

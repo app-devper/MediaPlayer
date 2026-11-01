@@ -14,6 +14,8 @@ kotlin {
     }
 }
 
-android {
-    namespace = "app.devper.appplayer.domain"
+kotlin {
+    android {
+        namespace = "app.devper.appplayer.domain"
+    }
 }

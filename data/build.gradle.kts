@@ -11,7 +11,7 @@ kotlin {
     applyDefaultHierarchyTemplate {
         common {
             group("jvmShared") {
-                withAndroidTarget()
+                withCompilations { it.platformType == org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType.androidJvm }
                 withJvm()
             }
         }
@@ -45,6 +45,8 @@ kotlin {
     }
 }
 
-android {
-    namespace = "app.devper.appplayer.data"
+kotlin {
+    android {
+        namespace = "app.devper.appplayer.data"
+    }
 }
