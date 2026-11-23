@@ -227,7 +227,7 @@ Never push to `develop` directly.
    git tag -a vX.Y.Z -m "vX.Y.Z" HEAD   # HEAD = the "release: vX.Y.Z (#n)" squash commit
    git push origin vX.Y.Z
    ```
-7. **Build artifacts** from that clean `main` checkout:
+7. **Build and deploy:** build the artifacts from the tagged `main` checkout:
    ```bash
    ./gradlew :composeApp:packageDistributionForCurrentOS   # .dmg on macOS (.msi/.deb on those OSes)
    ./gradlew :androidApp:assembleRelease                   # signed when the release key is present (below)
@@ -247,7 +247,7 @@ Never push to `develop` directly.
    chmod 600 ~/.devper/keystores/appplayer-release.*
    ```
    Losing this key means a new applicationId for every future install, so never rotate it casually.
-8. **Publish** the same artifacts two ways:
+   Then publish the same artifacts two ways:
    - **GitHub release** (every platform; the only channel for Desktop):
      `gh release create vX.Y.Z --title "vX.Y.Z" --notes "<changelog>" <artifacts>`
    - **Firebase App Distribution** (Android and iOS testers; project `devperpos`, group `testers`):
@@ -262,6 +262,14 @@ Never push to `develop` directly.
      Testers are added once with `firebase appdistribution:testers:add <email> --group-alias testers --project devperpos`.
      The iOS build must be signed with an ad-hoc or development profile that lists the testers' devices.
    - Store uploads (Play Console / App Store Connect) stay by hand and come later.
+8. **Check:**
+   ```bash
+   gh release view vX.Y.Z --json tagName,assets -q '.tagName, .assets[].name'   # the artifacts built in step 7
+   ```
+   and each `appdistribution:distribute` run in step 7 ended with
+   `uploaded new release X.Y.Z (<versionCode>) successfully` and
+   `distributed to testers/groups successfully` — the CLI has no command to
+   list releases, so that output (or the App Distribution console) is the proof.
 
 **Exit:** tag `vX.Y.Z` on `main`, a GitHub release built from that commit, the Android and iOS builds
 on App Distribution, and `develop` contains `main`.
@@ -276,7 +284,7 @@ this order:
 2. release step 3: the **patch** version bump, on the hotfix branch;
 3. stage 7 up to opening the PR into `main` (titled `fix(scope): …`), only
    after the user says so and has looked at the fix;
-4. release steps 5–8: land, tag, build, publish.
+4. release steps 5–8: land, tag, build and deploy, check.
 
 Urgency shortens the wait, not the steps.
 
