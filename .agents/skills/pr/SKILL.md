@@ -49,6 +49,9 @@ This repo follows **git flow** (see the `git-flow` skill): feature PRs target
    gh pr checks <number> --required                         # "Linux (JVM + Android)" pass?
    gh pr merge <number> --squash --delete-branch
    ```
+   - Right after a push the first command can exit at once with "no checks
+     reported": the run has not registered yet. Run it again after a few
+     seconds.
    - Required check failed → stop, do not merge, and show the failing step:
      `gh run list --branch <headRefName> -L 1 --json databaseId -q '.[0].databaseId'`
      gives the run id for `gh run view <id> --log-failed`.

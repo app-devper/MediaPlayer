@@ -1,6 +1,6 @@
 ---
 name: dev-flow
-description: End-to-end delivery flow for app-devper/MediaPlayer (KMP DLNA player + media server for Android, iOS, Desktop): from an idea or bug through shaping, design, test-first build, verify, review, a PR into develop, a release PR into main, tag, GitHub release and back-merge. Names the skill to use at each stage. Use when starting any change, when unsure what comes next, or when asked to ship, release or hotfix.
+description: End-to-end delivery flow for app-devper/MediaPlayer (KMP DLNA player + media server for Android, iOS, Desktop): from an idea or bug through shaping, design, test-first build, verify, review, a PR into develop, a release PR into main, back-merge, tag, build and GitHub release, check. Names the skill to use at each stage. Use when starting any change, when unsure what comes next, or when asked to ship, release or hotfix.
 ---
 
 # dev-flow: idea → release for MediaPlayer
@@ -267,7 +267,9 @@ Never push to `develop` directly.
    gh release view vX.Y.Z --json tagName,assets -q '.tagName, .assets[].name'   # the artifacts built in step 7
    ```
    and each `appdistribution:distribute` run in step 7 ended with
-   `uploaded new release X.Y.Z (<versionCode>) successfully` and
+   `uploaded new release X.Y.Z (<versionCode>) successfully`
+   (`uploaded update to existing release …` when the same build is
+   distributed again) and
    `distributed to testers/groups successfully` — the CLI has no command to
    list releases, so that output (or the App Distribution console) is the proof.
 
